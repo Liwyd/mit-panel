@@ -138,6 +138,7 @@ async def update_a_panel(db: Session, panel_input: PanelInput) -> bool:
             )
             return False
 
+
 async def get_all_users_from_panel(
     admin_username: str, db: Session
 ) -> tuple[ResponseModel, list[ClientsOutput]]:
@@ -175,13 +176,21 @@ async def get_all_users_from_panel(
                     flow=client.get("flow"),
                 )
             )
+
+        admin_users = crud.get_all_users_from_sanaei_table(db)
+        allowed_usernames = {
+            user.username for user in admin_users if user.owner == admin_username
+        }
+
+        filtered_clients = [c for c in clients if c.username in allowed_usernames]
+
         return (
             ResponseModel(
                 success=True,
                 message="Users retrieved successfully",
-                data=clients,
+                data=filtered_clients,
             ),
-            clients,
+            filtered_clients,
         )
 
     elif panel.panel_type == "marzban":
@@ -319,6 +328,8 @@ async def add_new_user(
                 },
             )
         admin_check.reduce_usage(user_input.total, user_input.total)
+
+        crud.add_user_in_sanaei_table(db, user_input.email, admin_username)
         return ResponseModel(
             success=True,
             message="User added successfully",
@@ -625,7 +636,7 @@ async def reset_a_user_usage(
             usage_traffic = user_info.total
         else:
             usage_traffic = usage_user_traffic
-            
+
         if not reset_usage:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -801,6 +812,7 @@ async def delete_a_user(admin_username: str, uuid: str, db: Session) -> bool:
             f"User {user_info['email']} deleted by admin {admin_username}, traffic returned: {round(traffic / (1024 ** 3), 2)} GB"
         )
 
+        crud.remove_user_from_sanaei_table(db, user_info["email"])
         return ResponseModel(
             success=True,
             message="User deleted successfully",

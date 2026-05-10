@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.db.model import Admins, Panels, News
+from backend.db.model import Admins, Panels, News, SanaeiUsers
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
 
@@ -169,3 +169,25 @@ def delete_news(db: Session, id: int) -> None:
     if news:
         db.delete(news)
         db.commit()
+
+
+def add_user_in_sanaei_table(db: Session, username: str, owner: str) -> None:
+    sanaei = SanaeiUsers(username=username, owner=owner)
+    db.add(sanaei)
+    db.commit()
+    db.refresh(sanaei)
+
+
+def remove_user_from_sanaei_table(db: Session, username: str) -> None:
+    sanaei_user = db.query(SanaeiUsers).filter(SanaeiUsers.username == username).first()
+    if sanaei_user:
+        db.delete(sanaei_user)
+        db.commit()
+
+
+def get_user_from_sanaei_table(db: Session, username: str) -> SanaeiUsers | None:
+    return db.query(SanaeiUsers).filter(SanaeiUsers.username == username).first()
+
+
+def get_all_users_from_sanaei_table(db: Session) -> list[SanaeiUsers] | None:
+    return db.query(SanaeiUsers).all()
