@@ -1,6 +1,6 @@
 [project]
 name = "whale-panel"
-version = "2.5.18"
+version = "2.6.18"
 description = "A comprehensive admin dashboard system for managing X-UI panels with role-based access control (SuperAdmin and Admin roles)."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn",
     "pydantic-settings==2.9.1",
     "requests==2.32.3",
+    "httpx",
     "SQLAlchemy==2.0.39",
     "alembic==1.15.1",
     "Dependencies",
@@ -19,6 +20,5 @@ dependencies = [
     "python-jose[cryptography]",
     "bcrypt",
     "python-multipart",
-    "py3xui",
 
 ]
