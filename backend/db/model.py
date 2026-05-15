@@ -31,6 +31,7 @@ class Panels(Base):
     sub_url = Column(String, nullable=True)
     username = Column(String, nullable=False)
     password = Column(String, nullable=False)
+    token = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
 
 
