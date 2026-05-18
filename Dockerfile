@@ -11,15 +11,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN sh -c '\
-    if [ -f .env ]; then \
-        cp .env frontend/.env; \
-    else \
-        echo "URLPATH=dashboard" > frontend/.env; \
-    fi' \
-    && cd frontend \
-    && npm ci \
-    && npm run build
+RUN cd frontend && npm ci && npm run build
 
 FROM python:3.12-slim
 
