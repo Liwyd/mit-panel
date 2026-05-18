@@ -117,7 +117,9 @@ case "$1" in
         ;;
     update)
         echo "Updating Whale Panel..."
+        docker compose down
         docker compose pull
+        docker compose build --no-cache
         docker compose up -d
         echo "Update complete!"
         docker compose logs -f

@@ -1,18 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "Installing frontend dependencies..."
-cd /app/frontend
-npm install
-
-echo "Building frontend..."
-npm run build
-
-echo "Installing backend dependencies..."
-cd /app
-uv sync
-
-
 echo "Running migrations..."
 cd /app/backend
 uv run alembic upgrade head
