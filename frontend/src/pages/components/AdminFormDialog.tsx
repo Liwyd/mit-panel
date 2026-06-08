@@ -255,6 +255,15 @@ export function AdminFormDialog({
     const currentPanelType = panels.find(p => p.name === watch('panel'))?.panel_type
     const shouldShowInboundFields = watch('panel') && panelRequiresInboundFields(currentPanelType)
 
+    // Ensure expiry input can be cleared to `null` (No Expiry)
+    const expiryRegister = register('expiry_date', {
+        setValueAs: (v: any) => {
+            if (v === '' || v === undefined || v === null) return null
+            const n = Number(v)
+            return Number.isNaN(n) ? null : Math.floor(n)
+        },
+    })
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -437,7 +446,19 @@ export function AdminFormDialog({
                             step={1}
                             placeholder="Enter number of days (e.g. 10)"
                             disabled={isSubmitting}
-                            {...register('expiry_date', { valueAsNumber: true })}
+                            {...expiryRegister}
+                            onChange={(e) => {
+                                // Preserve react-hook-form's onChange
+                                try {
+                                    expiryRegister.onChange && expiryRegister.onChange(e)
+                                } catch (err) {
+                                    // ignore
+                                }
+                                // If user clears the input, explicitly set null
+                                if ((e.target as HTMLInputElement).value === '') {
+                                    setValue('expiry_date', null)
+                                }
+                            }}
                         />
                         {errors.expiry_date && (
                             <p className="text-sm text-destructive">{errors.expiry_date.message}</p>
