@@ -8,14 +8,14 @@ import os
 import json
 import threading
 
-DATA_DIR = os.environ.get("WALPANEL_DATA_DIR", "/app/data")
+DATA_DIR = os.environ.get("MITPANEL_DATA_DIR", "/app/data")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 LOGO_PATH = os.path.join(DATA_DIR, "logo")
 
 _lock = threading.Lock()
 
 DEFAULTS = {
-    "login_title": "Nexra Panel",
+    "login_title": "MIT Panel",
     "telegram_bot_token": "",
     "telegram_chat_id": "",
     "backup_enabled": False,
@@ -60,7 +60,7 @@ def update_settings(patch: dict) -> dict:
 def get_public_branding() -> dict:
     data = _read()
     return {
-        "login_title": data.get("login_title") or "Nexra Panel",
+        "login_title": data.get("login_title") or "MIT Panel",
         "has_logo": os.path.exists(LOGO_PATH),
     }
 

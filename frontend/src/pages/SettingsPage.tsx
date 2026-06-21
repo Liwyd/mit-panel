@@ -368,7 +368,7 @@ export function SettingsPage() {
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Login page title</label>
                             <Input
-                                placeholder="Nexra Panel"
+                                placeholder="MIT Panel"
                                 value={settings?.login_title ?? ''}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                     settings && setSettings({ ...settings, login_title: e.target.value })

@@ -1,8 +1,8 @@
 services:
-  nexra-panel:
+  mit-panel:
     build: .
-    image: nexra-panel:latest
-    container_name: nexra-panel
+    image: mit-panel:latest
+    container_name: mit-panel
     restart: always
     volumes:
       - ./data:/app/data

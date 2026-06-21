@@ -17,7 +17,7 @@ export function LoginPage() {
     const navigate = useNavigate()
     const [serverError, setServerError] = useState<string | null>(null)
     const [branding, setBranding] = useState<{ login_title: string; has_logo: boolean }>({
-        login_title: 'Nexra Panel',
+        login_title: 'MIT Panel',
         has_logo: false,
     })
 

@@ -825,7 +825,7 @@ wheels = [
 ]
 
 [[package]]
-name = "walpanel"
+name = "mit-panel"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

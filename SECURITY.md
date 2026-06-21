@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-The following version of **Whale Panel** are currently supported with security updates:
+The following version of **MIT Panel** are currently supported with security updates:
 
 | Version | Supported |
 | ------- | --------- |
@@ -16,8 +16,8 @@ We strongly recommend upgrading to the latest stable release.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in **Whale Panel**, please report it responsibly.
+If you discover a security vulnerability in **MIT Panel**, please report it responsibly.
 
 ---
 
-Thank you for helping keep Whale Panel secure.
+Thank you for helping keep MIT Panel secure.

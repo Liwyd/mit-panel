@@ -410,7 +410,7 @@ export function getLogoUrl(bust = false): string {
 export const settingsAPI = {
     getBranding: async (): Promise<BrandingInfo> => {
         const response = await api.get<ResponseModel<BrandingInfo>>(`/dashboard/branding`)
-        return response.data.data || { login_title: 'Nexra Panel', has_logo: false }
+        return response.data.data || { login_title: 'MIT Panel', has_logo: false }
     },
 
     getSettings: async (): Promise<PanelSettings> => {

@@ -312,7 +312,7 @@ async def get_panel_inbounds(
 @router.get("/backup", description="Download database backup")
 async def download_backup(admin: dict = Depends(get_current_superadmin)):
     """Download the current database as a backup file"""
-    db_path = "/app/data/walpanel.db"
+    db_path = "/app/data/mitpanel.db"
     if not os.path.exists(db_path):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -324,7 +324,7 @@ async def download_backup(admin: dict = Depends(get_current_superadmin)):
 
     return FileResponse(
         path=db_path,
-        filename="walpanel.db",
+        filename="mitpanel.db",
         media_type="application/octet-stream",
     )
 
@@ -347,7 +347,7 @@ async def restore_backup(
             },
         )
 
-    db_path = "/app/data/walpanel.db"
+    db_path = "/app/data/mitpanel.db"
     try:
         restore_database(db_path, file)
         return ResponseModel(

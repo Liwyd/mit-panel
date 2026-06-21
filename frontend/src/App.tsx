@@ -88,7 +88,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                     }`}
             >
                 <div className="flex items-center justify-between p-4 border-b">
-                    <span className="font-semibold text-lg">Nexra Panel</span>
+                    <span className="font-semibold text-lg">MIT Panel</span>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -120,7 +120,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                     >
                         <Menu className="h-5 w-5" />
                     </Button>
-                    <span className="font-semibold">Nexra Panel</span>
+                    <span className="font-semibold">MIT Panel</span>
                 </header>
 
                 <main className="flex-1 overflow-y-auto overflow-x-hidden">

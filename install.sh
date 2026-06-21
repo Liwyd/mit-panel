@@ -2,9 +2,9 @@
 
 set -e
 
-INSTALL_DIR="/opt/whale-panel"
-REPO_URL="https://raw.githubusercontent.com/primeZdev/whale-panel/main"
-DOCKER_IMAGE="primezdev/whale-panel:latest"
+INSTALL_DIR="/opt/mit-panel"
+REPO_URL="https://raw.githubusercontent.com/liwyd/mit-panel/main"
+DOCKER_IMAGE="liwyd/mit-panel:latest"
 
 print_status() { echo "[*] $1"; }
 print_success() { echo -e "\033[32m[OK] $1\033[0m"; }
@@ -79,7 +79,7 @@ pull_and_run() {
     print_status "Pulling Docker image..."
     docker pull "$DOCKER_IMAGE"
     
-    print_status "Starting Whale Panel..."
+    print_status "Starting MIT Panel..."
     docker compose up -d
     
     trap 'show_info; exit 0' INT
@@ -99,24 +99,24 @@ show_info() {
     echo -e "\033[32m  Panel URL: http://$IP:$PORT/$URLPATH/login\033[0m"
     echo ""
     echo "  Commands:"
-    echo "    whale-panel update"
-    echo "    whale-panel stop"
-    echo "    whale-panel start"
-    echo "    whale-panel logs"
+    echo "    mit-panel update"
+    echo "    mit-panel stop"
+    echo "    mit-panel start"
+    echo "    mit-panel logs"
     echo ""
 }
 
 install_command() {
-    cat > /usr/local/bin/whale-panel << 'SCRIPT'
+    cat > /usr/local/bin/mit-panel << 'SCRIPT'
 #!/bin/bash
-cd /opt/whale-panel
+cd /opt/mit-panel
 
 case "$1" in
     edit-env)
         nano .env
         ;;
     update)
-        echo "Updating Whale Panel..."
+        echo "Updating MIT Panel..."
         docker compose down
         docker compose pull
         docker compose build --no-cache
@@ -126,15 +126,15 @@ case "$1" in
         ;;
     stop)
         docker compose down
-        echo "Whale Panel stopped"
+        echo "MIT Panel stopped"
         ;;
     start)
         docker compose up -d
-        echo "Whale Panel started"
+        echo "MIT Panel started"
         ;;
     restart)
         docker compose restart
-        echo "Whale Panel restarted"
+        echo "MIT Panel restarted"
         docker compose logs -f
         ;;
     logs)
@@ -142,20 +142,20 @@ case "$1" in
         ;;
     uninstall)
         docker compose down
-        rm -rf /opt/whale-panel
-        rm -f /usr/local/bin/whale-panel
-        echo "Whale Panel uninstalled"
+        rm -rf /opt/mit-panel
+        rm -f /usr/local/bin/mit-panel
+        echo "MIT Panel uninstalled"
         ;;
     *)
-        echo "Usage: whale-panel {edit-env|update|start|stop|restart|logs|uninstall}"
+        echo "Usage: mit-panel {edit-env|update|start|stop|restart|logs|uninstall}"
         ;;
 esac
 SCRIPT
-    chmod +x /usr/local/bin/whale-panel
+    chmod +x /usr/local/bin/mit-panel
 }
 
 main() {
-    echo "Whale Panel Installer"
+    echo "MIT Panel Installer"
     echo ""
     check_root
     install_docker

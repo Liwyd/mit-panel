@@ -11,7 +11,7 @@ from backend.api import roter_list
 
 
 app = FastAPI(
-    title="WalPanel",
+    title="MIT Panel",
 )
 
 app.add_middleware(

@@ -7,7 +7,7 @@ import httpx
 
 from backend.utils.settings_store import get_settings
 
-DB_PATH = os.path.join(os.environ.get("WALPANEL_DATA_DIR", "/app/data"), "walpanel.db")
+DB_PATH = os.path.join(os.environ.get("MITPANEL_DATA_DIR", "/app/data"), "mitpanel.db")
 
 
 async def send_backup_to_telegram(settings: dict | None = None):
@@ -26,11 +26,11 @@ async def send_backup_to_telegram(settings: dict | None = None):
     try:
         with open(DB_PATH, "rb") as db_file:
             files = {
-                "document": (f"walpanel-{stamp}.db", db_file, "application/octet-stream")
+                "document": (f"mitpanel-{stamp}.db", db_file, "application/octet-stream")
             }
             data = {
                 "chat_id": chat_id,
-                "caption": f"\U0001f433 Nexra Panel backup — {stamp}",
+                "caption": f"\U0001f433 MIT Panel backup — {stamp}",
             }
             async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(url, data=data, files=files)

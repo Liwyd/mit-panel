@@ -16,7 +16,7 @@ def get_ads_from_github() -> dict:
         return ads_cache
 
     try:
-        url = "https://raw.githubusercontent.com/primeZdev/whale-panel/main/media/ads.json"
+        url = "https://raw.githubusercontent.com/liwyd/mit-panel/main/media/ads.json"
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         ads_data = response.json()

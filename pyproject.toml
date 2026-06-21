@@ -1,7 +1,7 @@
 [project]
-name = "whale-panel"
+name = "mit-panel"
 version = "2.9.30"
-description = "A comprehensive admin dashboard system for managing X-UI panels with role-based access control (SuperAdmin and Admin roles)."
+description = "MIT Panel - A comprehensive admin dashboard system for managing VPN panels (Marzban, 3x-ui, Tx-ui, Guard) with role-based access control."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
