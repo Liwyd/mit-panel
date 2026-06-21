@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,3 +44,11 @@ async def serve_frontend(path_name: str = ""):
     if index_html_path.exists():
         return FileResponse(index_html_path)
     return {"error": "Frontend build not found"}
+
+
+@app.on_event("startup")
+async def _start_background_tasks():
+    # Periodic Telegram backup (configurable from Settings)
+    from backend.services.backup_scheduler import backup_scheduler
+
+    asyncio.create_task(backup_scheduler())

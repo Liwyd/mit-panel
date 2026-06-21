@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 import os
 
 from backend.schema.output import ResponseModel, AdminOutput, PanelOutput
-from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput, NewsInput
+from backend.schema._input import (
+    AdminInput,
+    AdminUpdateInput,
+    PanelInput,
+    NewsInput,
+    SettingsInput,
+)
 from backend.db import crud
 from backend.db.engin import get_db
 from backend.services import create_new_panel, update_a_panel
@@ -13,6 +19,8 @@ from backend.utils.logger import logger, get_10_logs
 from backend.utils.backup import restore_database
 from backend.auth.auth import get_current_superadmin
 from backend.utils.system import get_system_info
+from backend.utils.settings_store import get_settings, update_settings, save_logo
+from backend.utils.telegram import send_backup_to_telegram
 
 router = APIRouter(prefix="/superadmin", tags=["superadmin"])
 
@@ -478,3 +486,59 @@ async def get_system_info_endpoint(
 
     system_info = get_system_info()
     return JSONResponse(content={"success": True, "data": system_info})
+
+
+@router.get("/settings", description="Get panel settings")
+async def get_panel_settings(admin: dict = Depends(get_current_superadmin)):
+    return ResponseModel(
+        success=True,
+        message="Settings retrieved successfully",
+        data=get_settings(),
+    )
+
+
+@router.put("/settings", description="Update panel settings", response_model=ResponseModel)
+async def update_panel_settings(
+    payload: SettingsInput,
+    admin: dict = Depends(get_current_superadmin),
+):
+    data = update_settings(payload.model_dump(exclude_unset=True))
+    logger.info("Panel settings updated")
+    return ResponseModel(
+        success=True,
+        message="Settings updated successfully",
+        data=data,
+    )
+
+
+@router.post(
+    "/settings/logo", description="Upload login logo", response_model=ResponseModel
+)
+async def upload_login_logo(
+    file: UploadFile = File(...),
+    admin: dict = Depends(get_current_superadmin),
+):
+    content = await file.read()
+    if not content or not (file.content_type or "").startswith("image/"):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"success": False, "message": "Only image files are allowed"},
+        )
+    save_logo(content)
+    logger.info("Login logo updated")
+    return ResponseModel(success=True, message="Logo updated successfully")
+
+
+@router.post(
+    "/settings/telegram/test",
+    description="Send a test backup to Telegram",
+    response_model=ResponseModel,
+)
+async def test_telegram_backup(admin: dict = Depends(get_current_superadmin)):
+    ok, message = await send_backup_to_telegram()
+    if ok:
+        return ResponseModel(success=True, message=message)
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"success": False, "message": message},
+    )

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from backend.db import crud
@@ -7,6 +8,11 @@ from backend.auth import get_current_admin
 from backend.schema.output import AdminOutput, ResponseModel, PanelOutput
 from backend.services import get_all_users_from_panel
 from backend.utils import get_ads_from_github
+from backend.utils.settings_store import (
+    get_public_branding,
+    get_logo_path,
+    logo_media_type,
+)
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -49,3 +55,23 @@ async def read_dashboard_data(
                 "users": users,
             },
         )
+
+
+@router.get("/branding", description="Public branding for the login page")
+async def get_branding():
+    return ResponseModel(
+        success=True,
+        message="Branding retrieved successfully",
+        data=get_public_branding(),
+    )
+
+
+@router.get("/logo", description="Custom login logo (if set)")
+async def get_login_logo():
+    path = get_logo_path()
+    if not path:
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "message": "No logo set"},
+        )
+    return FileResponse(path, media_type=logo_media_type())

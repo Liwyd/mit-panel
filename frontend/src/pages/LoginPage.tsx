@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, LoginFormData } from '@/types'
-import { authAPI } from '@/lib/api'
+import { authAPI, settingsAPI, getLogoUrl } from '@/lib/api'
 import { setToken, getDecodedToken, isTokenValid } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,10 +11,19 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AlertCircle, Loader2 } from 'lucide-react'
+import logo from '@/assets/logo.png'
 
 export function LoginPage() {
     const navigate = useNavigate()
     const [serverError, setServerError] = useState<string | null>(null)
+    const [branding, setBranding] = useState<{ login_title: string; has_logo: boolean }>({
+        login_title: 'Nexra Panel',
+        has_logo: false,
+    })
+
+    useEffect(() => {
+        settingsAPI.getBranding().then(setBranding).catch(() => { })
+    }, [])
 
     useEffect(() => {
         // If already logged in, redirect to dashboard
@@ -68,7 +77,20 @@ export function LoginPage() {
 
             <Card className="w-full max-w-sm">
                 <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl text-center">whale panel</CardTitle>
+                    <div className="flex justify-center py-2">
+                        <img
+                            src={branding.has_logo ? getLogoUrl() : logo}
+                            alt={branding.login_title}
+                            className={
+                                branding.has_logo
+                                    ? 'w-44 h-auto'
+                                    : 'w-44 h-auto [filter:brightness(0.55)_saturate(1.4)] dark:[filter:none]'
+                            }
+                        />
+                    </div>
+                    {branding.login_title && (
+                        <CardTitle className="text-xl text-center">{branding.login_title}</CardTitle>
+                    )}
                     <CardDescription className="text-center">
                         Login to your admin panel
                     </CardDescription>

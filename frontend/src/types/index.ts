@@ -50,7 +50,7 @@ export const adminSchema = z.object({
     inbound_id: z
         .string()
         .regex(
-            /^\d+(,\d+)*$/,
+            /^(\d+(,\d+)*)?$/,
             'Inbound IDs must be like: 1,2,3'
         )
         .optional()

@@ -4,7 +4,7 @@ import {
     Users,
     Settings,
     LogOut,
-    Github,
+    Zap,
     Sun,
     Moon,
     Server,
@@ -110,10 +110,10 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                 <Button
                     variant="ghost"
                     className="w-full justify-start gap-3"
-                    onClick={() => window.open('https://github.com/primeZdev/whale-panel', '_blank')}
+                    onClick={() => navigate('/login')}
                 >
-                    <Github className="h-4 w-4" />
-                    <span>GitHub</span>
+                    <Zap className="h-4 w-4" />
+                    <span>Finance (Coming Soon)</span>
                 </Button>
 
                 <Button

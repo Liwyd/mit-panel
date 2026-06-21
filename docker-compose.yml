@@ -1,7 +1,8 @@
 services:
-  whale-panel:
-    image: primezdev/whale-panel:latest
-    container_name: whale-panel
+  nexra-panel:
+    build: .
+    image: nexra-panel:latest
+    container_name: nexra-panel
     restart: always
     volumes:
       - ./data:/app/data

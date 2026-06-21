@@ -385,3 +385,66 @@ export const userAPI = {
         }
     },
 }
+
+// Settings API
+export interface PanelSettings {
+    login_title: string
+    telegram_bot_token: string
+    telegram_chat_id: string
+    backup_enabled: boolean
+    backup_interval_hours: number
+    has_logo: boolean
+}
+
+export interface BrandingInfo {
+    login_title: string
+    has_logo: boolean
+}
+
+export function getLogoUrl(bust = false): string {
+    const prefix = import.meta.env.VITE_URL_PREFIX || 'dashboard'
+    const base = `/${prefix}/dashboard/logo`
+    return bust ? `${base}?t=${Date.now()}` : base
+}
+
+export const settingsAPI = {
+    getBranding: async (): Promise<BrandingInfo> => {
+        const response = await api.get<ResponseModel<BrandingInfo>>(`/dashboard/branding`)
+        return response.data.data || { login_title: 'Nexra Panel', has_logo: false }
+    },
+
+    getSettings: async (): Promise<PanelSettings> => {
+        const response = await api.get<ResponseModel<PanelSettings>>(`/superadmin/settings`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to fetch settings')
+        }
+        return response.data.data!
+    },
+
+    updateSettings: async (data: Partial<PanelSettings>): Promise<PanelSettings> => {
+        const response = await api.put<ResponseModel<PanelSettings>>(`/superadmin/settings`, data)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to update settings')
+        }
+        return response.data.data!
+    },
+
+    uploadLogo: async (file: File): Promise<void> => {
+        const formData = new FormData()
+        formData.append('file', file)
+        const response = await api.post<ResponseModel<void>>(`/superadmin/settings/logo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to upload logo')
+        }
+    },
+
+    testTelegram: async (): Promise<string> => {
+        const response = await api.post<ResponseModel<void>>(`/superadmin/settings/telegram/test`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to send test backup')
+        }
+        return response.data.message || 'Test backup sent'
+    },
+}

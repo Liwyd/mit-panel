@@ -1,102 +1,97 @@
 <div align="center">
-  <a>
-    <img width="150px" src="./media/whale-panel.png" alt="OV-Panel Logo">
-  </a>
+  <img width="160px" src="./media/nexra-logo.png" alt="Nexra Panel" />
 
+  # Nexra Panel
 
-  # **Whale Panel**
+  **A multi-panel admin manager for Marzban, 3x-ui, Tx-ui and Guard — with role-based access, a unified dashboard, custom login branding, and automatic Telegram backups.**
+
   <p align="center">
-    <a href="https://t.me/primez_dev" target="_blank">
-      <img src="https://img.shields.io/badge/Telegram-Channel-blue?style=for-the-badge&logo=telegram" alt="Telegram Channel">
+    <a href="https://t.me/NexraTunnel" target="_blank">
+      <img src="https://img.shields.io/badge/Telegram-%40NexraTunnel-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Channel" />
     </a>
-  <p align="center" dir="rtl">
+    <img src="https://img.shields.io/badge/license-MIT-3DA639?style=for-the-badge" alt="MIT License" />
+    <img src="https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Ready" />
   </p>
 </div>
 
-
-
-
+---
 
 ## 🎯 Overview
 
-A comprehensive admin dashboard system for managing X-UI panels with role-based access control (SuperAdmin and Admin roles).
+Nexra Panel is a self-hosted dashboard for managing the **admins** of your VPN panels from one place. Create sub-admins with traffic and expiry limits, monitor usage, and manage users across multiple panels with role-based access (**SuperAdmin** / **Admin**).
 
 ---
 
-## ⛓️‍💥 Supported Panels
+## ⛓️ Supported panels
 
-- [x] **3x-ui**  
-- [x] **Tx-ui**   
-- [x] **Marzban**  
-- [x] **Guard**  
-- [ ] **S-ui**   
+- [x] **Marzban**
+- [x] **3x-ui**
+- [x] **Tx-ui**
+- [x] **Guard**
+- [ ] **S-ui**
+
+---
 
 ## ✨ Features
 
 | Feature | Description |
 |---------|-------------|
-| 🔐 **Role-Based Access** | SuperAdmin & Admin roles with granular permissions |
-| 📊 **Unified Dashboard** | Monitor all panels from a single interface |
-| 👥 **User Management** | Create, edit, and manage users across panels |
-| 📈 **Traffic Monitoring** | Real-time traffic statistics and limits |
-| 🔄 **Auto Sync** | Automatic synchronization with X-UI panels |
-| 🌙 **Dark/Light Mode** | Beautiful UI with theme support |
-| 🐳 **Docker Ready** | One-command deployment |
+| 🔐 **Role-based access** | SuperAdmin & Admin roles with granular permissions |
+| 📊 **Unified dashboard** | Monitor all your panels from a single interface |
+| 👥 **Admin & user management** | Create, edit and limit admins/users across panels |
+| 📈 **Traffic & quota** | Per-admin traffic budgets, with automatic return-on-delete |
+| 🎨 **Custom branding** | Set the login page **title and logo** right from Settings |
+| 💾 **Telegram backups** | Auto-send the database to a Telegram chat on a schedule |
+| 📱 **PWA** | Install on a phone home screen with a custom name & icon |
+| 🌙 **Dark / Light mode** | Theme-aware UI |
+| 🐳 **Docker ready** | One-command deployment |
 
 ---
 
-
-## ⚡ Quick Start
-
-### One-Line Install
+## ⚡ Quick start
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/primeZdev/whale-panel/main/install.sh)
+git clone https://github.com/MHBehzadian/nexra-panel.git
+cd nexra-panel
+cp .env.example .env        # set ADMIN_USERNAME / ADMIN_PASSWORD / JWT_SECRET_KEY / PORT
+docker compose up -d --build
 ```
 
+Then open:
 
-## 🔄 Management Commands
-
-After installation, use these commands:
-
-| Command | Description |
-|---------|-------------|
-| `whale-panel update` | Pull latest image & restart |
-| `whale-panel edit-env` | Edit .env file |
-| `whale-panel start` | Start the panel |
-| `whale-panel stop` | Stop the panel |
-| `whale-panel restart` | Restart the panel |
-| `whale-panel logs` | View live logs |
-| `whale-panel uninstall` | Remove completely |
-
----
-### Manual Installation
-
-```bash
-git clone https://github.com/primeZdev/whale-panel.git
-cd whale-panel
-cp .env.example .env  # Configure your settings
-docker compose up -d
 ```
+http://<your-server>:<PORT>/<URLPATH>/login
+```
+
+(default `URLPATH` is `dashboard`).
+
+> **HTTPS:** put Nexra Panel behind a reverse proxy (Nginx/Caddy) pointed at the panel port, or set `SSL_KEYFILE` / `SSL_CERTFILE` in `.env`.
 
 ---
 
-## 💰 Support
+## ⚙️ Settings
 
-If you find this project helpful, consider supporting me:
-) [Donate](https://nowpayments.io/donation/primeZdev)
+From **Settings** (SuperAdmin) you can:
+
+- **Login branding** — change the login page **title** and **upload a logo**.
+- **Telegram backup** — enable automatic backups and set the **bot token**, **numeric chat id** and **interval (hours)**; a **Send test backup now** button lets you verify it instantly.
+
+The backup is the panel database (`walpanel.db`), sent as a document to your Telegram chat.
+
+---
+
+## 📣 Telegram
+
+Channel & updates: **[@NexraTunnel](https://t.me/NexraTunnel)**
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to open issues or submit pull requests.
+Issues and pull requests are welcome.
 
 ---
 
+## 📄 Credits & license
 
-<div align="center">
-  <sub>Built with ❤️ by <a href="https://t.me/primez_dev">PrimeZ</a></sub>
-</div>
-
-[![Stargazers over time](https://starchart.cc/primeZdev/whale-panel.svg?variant=adaptive)](https://starchart.cc/primeZdev/whale-panel)  
+Nexra Panel is built on top of [whale-panel](https://github.com/primeZdev/whale-panel) by primeZdev, and is released under the **MIT License** (see [LICENSE](./LICENSE)). The original copyright notice is retained as required by the license.

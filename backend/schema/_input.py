@@ -69,3 +69,11 @@ class NewsInput(BaseModel):
     news: str = Field(
         max_length=250, description="News content must be 250 characters or less"
     )
+
+
+class SettingsInput(BaseModel):
+    login_title: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    backup_enabled: Optional[bool] = None
+    backup_interval_hours: Optional[int] = None

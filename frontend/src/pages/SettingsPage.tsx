@@ -9,8 +9,12 @@ import {
     RotateCcw,
     Eye,
     Plus,
+    Image as ImageIcon,
+    Send,
+    Save,
+    Loader2,
 } from 'lucide-react'
-import { superadminAPI } from '@/lib/api'
+import { superadminAPI, settingsAPI, getLogoUrl, type PanelSettings } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,9 +59,75 @@ export function SettingsPage() {
     const [showNewsDialog, setShowNewsDialog] = useState(false)
     const [showAddNewsDialog, setShowAddNewsDialog] = useState(false)
 
+    // Settings (branding + telegram backup)
+    const [settings, setSettings] = useState<PanelSettings | null>(null)
+    const [savingSettings, setSavingSettings] = useState(false)
+    const [uploadingLogo, setUploadingLogo] = useState(false)
+    const [testingTelegram, setTestingTelegram] = useState(false)
+    const [logoVersion, setLogoVersion] = useState(0)
+
     useEffect(() => {
         fetchNews()
+        fetchSettings()
     }, [])
+
+    const fetchSettings = async () => {
+        try {
+            const data = await settingsAPI.getSettings()
+            setSettings(data)
+        } catch (err: any) {
+            console.error('Failed to fetch settings:', err)
+        }
+    }
+
+    const handleSaveSettings = async () => {
+        if (!settings) return
+        try {
+            setSavingSettings(true)
+            const data = await settingsAPI.updateSettings({
+                login_title: settings.login_title,
+                telegram_bot_token: settings.telegram_bot_token,
+                telegram_chat_id: settings.telegram_chat_id,
+                backup_enabled: settings.backup_enabled,
+                backup_interval_hours: Number(settings.backup_interval_hours) || 6,
+            })
+            setSettings(data)
+            alert('Settings saved successfully')
+        } catch (err: any) {
+            alert(err?.message || 'Failed to save settings')
+        } finally {
+            setSavingSettings(false)
+        }
+    }
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+        try {
+            setUploadingLogo(true)
+            await settingsAPI.uploadLogo(file)
+            setLogoVersion((v) => v + 1)
+            await fetchSettings()
+            alert('Logo updated successfully')
+        } catch (err: any) {
+            alert(err?.message || 'Failed to upload logo')
+        } finally {
+            setUploadingLogo(false)
+            event.target.value = ''
+        }
+    }
+
+    const handleTestTelegram = async () => {
+        try {
+            setTestingTelegram(true)
+            const message = await settingsAPI.testTelegram()
+            alert(message)
+        } catch (err: any) {
+            alert(err?.message || 'Failed to send test backup')
+        } finally {
+            setTestingTelegram(false)
+        }
+    }
 
     const fetchNews = async () => {
         try {
@@ -282,6 +352,140 @@ export function SettingsPage() {
                         </div>
                     </CardContent>
                 </Card>
+            </div>
+
+            {/* Branding + Telegram Backup */}
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* Branding */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <ImageIcon className="h-5 w-5 text-cyan-500" />
+                            Login Branding
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Login page title</label>
+                            <Input
+                                placeholder="Nexra Panel"
+                                value={settings?.login_title ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, login_title: e.target.value })
+                                }
+                                disabled={!settings}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Login logo</label>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                {settings?.has_logo && (
+                                    <img
+                                        src={getLogoUrl(true) + '&v=' + logoVersion}
+                                        alt="logo"
+                                        className="h-12 w-auto rounded border bg-muted p-1"
+                                    />
+                                )}
+                                <Button
+                                    onClick={() => document.getElementById('logo-file-input')?.click()}
+                                    disabled={uploadingLogo}
+                                    variant="outline"
+                                >
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                                </Button>
+                                <Input
+                                    id="logo-file-input"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleLogoUpload}
+                                    className="hidden"
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                PNG/JPG. Shown on the login page.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Telegram Backup */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Send className="h-5 w-5 text-sky-500" />
+                            Telegram Backup
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={!!settings?.backup_enabled}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, backup_enabled: e.target.checked })
+                                }
+                            />
+                            Enable automatic backup
+                        </label>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Bot token</label>
+                            <Input
+                                placeholder="123456:ABC-DEF..."
+                                value={settings?.telegram_bot_token ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, telegram_bot_token: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Chat ID (numeric)</label>
+                            <Input
+                                placeholder="123456789"
+                                value={settings?.telegram_chat_id ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, telegram_chat_id: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Interval (hours)</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={settings?.backup_interval_hours ?? 6}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, backup_interval_hours: Number(e.target.value) })
+                                }
+                            />
+                        </div>
+                        <Button
+                            onClick={handleTestTelegram}
+                            disabled={testingTelegram}
+                            variant="outline"
+                            className="w-full"
+                        >
+                            <Send className="mr-2 h-4 w-4" />
+                            {testingTelegram ? 'Sending...' : 'Send test backup now'}
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="flex justify-end">
+                <Button
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings || !settings}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                    {savingSettings ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                    )}
+                    {savingSettings ? 'Saving...' : 'Save Settings'}
+                </Button>
             </div>
 
             {/* Logs Modal */}
