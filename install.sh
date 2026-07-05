@@ -78,7 +78,40 @@ hide_cursor() { tput civis 2>/dev/null; }
 
 running() { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
 exists()  { docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
-installed() { [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; }
+installed() {
+    # Check standard install dir first
+    if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then return 0; fi
+    # Check if container exists anywhere
+    if exists; then return 0; fi
+    return 1
+}
+
+# Find the source directory of the running/existing container
+find_source_dir() {
+    # 1. Check standard install dir
+    if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+        echo "$INSTALL_DIR"
+        return
+    fi
+    # 2. Inspect container for compose working directory label
+    local dir
+    dir=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+        echo "$dir"
+        return
+    fi
+    # 3. Try compose project config_files label
+    dir=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}' 2>/dev/null || true)
+    if [ -n "$dir" ]; then
+        dir=$(dirname "$dir")
+        if [ -d "$dir" ]; then
+            echo "$dir"
+            return
+        fi
+    fi
+    # 4. Fallback to install dir
+    echo "$INSTALL_DIR"
+}
 
 get_ip() { curl -s --connect-timeout 4 ifconfig.me 2>/dev/null || echo "SERVER_IP"; }
 
@@ -193,10 +226,12 @@ show_done() {
 }
 
 install_cli() {
-    cat > /usr/local/bin/mit-panel << 'EOF'
+    local src
+    src=$(find_source_dir)
+    cat > /usr/local/bin/mit-panel << EOF
 #!/bin/bash
-cd /opt/mit-panel
-case "${1:-}" in
+cd "$src"
+case "\${1:-}" in
     update)
         echo "Updating..."
         docker compose down
@@ -214,28 +249,30 @@ case "${1:-}" in
     status)  docker compose ps ;;
     uninstall)
         read -p "Are you sure? (y/N): " c
-        if [ "$c" = "y" ] || [ "$c" = "Y" ]; then
+        if [ "\$c" = "y" ] || [ "\$c" = "Y" ]; then
             docker compose down -v
-            rm -rf /opt/mit-panel
             rm -f /usr/local/bin/mit-panel
             echo "Uninstalled"
         fi
         ;;
-    *) bash /opt/mit-panel/.tui.sh ;;
+    *) bash "$src/.tui.sh" ;;
 esac
 EOF
     chmod +x /usr/local/bin/mit-panel
-    cp "$0" "$INSTALL_DIR/.tui.sh" 2>/dev/null || true
-    chmod +x "$INSTALL_DIR/.tui.sh" 2>/dev/null || true
+    cp "$0" "$src/.tui.sh" 2>/dev/null || true
+    chmod +x "$src/.tui.sh" 2>/dev/null || true
 }
 
 # ── Actions ─────────────────────────────────────────────────────────────────────
 action_update() {
+    local src
+    src=$(find_source_dir)
     title "updating"
-    cd "$INSTALL_DIR"
+    cd "$src"
     spin "Pulling latest" &
     SPIN_PID=$!
     curl -fsSL "$REPO_URL/docker-compose.yml" -o docker-compose.yml
+    curl -fsSL "$REPO_URL/.env.example" -o .env.example
     curl -fsSL "$REPO_URL/entrypoint.sh" -o entrypoint.sh
     chmod +x entrypoint.sh
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
@@ -272,7 +309,7 @@ action_stop() {
     if ! running; then warn "Already stopped"; sleep 0.5; return; fi
     ask "Stop panel? ${D}[Y/n]${R}"; input c
     [[ "$c" =~ ^[nN] ]] && return
-    cd "$INSTALL_DIR"
+    cd "$(find_source_dir)"
     spin "Stopping" &
     SPIN_PID=$!
     docker compose down >/dev/null 2>&1
@@ -285,7 +322,7 @@ action_stop() {
 action_start() {
     title "start"
     if running; then warn "Already running"; sleep 0.5; return; fi
-    cd "$INSTALL_DIR"
+    cd "$(find_source_dir)"
     spin "Starting" &
     SPIN_PID=$!
     docker compose up -d >/dev/null 2>&1
@@ -297,7 +334,7 @@ action_start() {
 
 action_restart() {
     title "restart"
-    cd "$INSTALL_DIR"
+    cd "$(find_source_dir)"
     spin "Restarting" &
     SPIN_PID=$!
     docker compose restart >/dev/null 2>&1
@@ -309,16 +346,18 @@ action_restart() {
 
 action_logs() {
     title "logs (ctrl+c to exit)"
-    cd "$INSTALL_DIR"
+    cd "$(find_source_dir)"
     docker compose logs -f --tail=50
 }
 
 action_env() {
+    local src
+    src=$(find_source_dir)
     while true; do
         title "settings"
-        local u=$(env_get ADMIN_USERNAME "admin")
-        local p=$(env_get PORT "8000")
-        local pp=$(env_get URLPATH "dashboard")
+        local u=$(grep "^ADMIN_USERNAME=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "admin")
+        local p=$(grep "^PORT=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "8000")
+        local pp=$(grep "^URLPATH=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "dashboard")
 
         printf "  ${DM}%-10s${R} ${C}%s${R}\n" "username" "$u"
         printf "  ${DM}%-10s${R} ${C}%s${R}\n" "password" "••••••••"
@@ -338,11 +377,39 @@ action_env() {
         pad
 
         case "$c" in
-            1) ask "new username"; input v; [ -n "$v" ] && env_set ADMIN_USERNAME "$v" && ok "Updated"; sleep 0.3 ;;
-            2) ask "new password"; secret v; [ -n "$v" ] && env_set ADMIN_PASSWORD "$v" && ok "Updated"; sleep 0.3 ;;
-            3) ask "new port"; input v; [ -n "$v" ] && env_set PORT "$v" && ok "Updated"; sleep 0.3 ;;
-            4) ask "new url path"; input v; [ -n "$v" ] && env_set URLPATH "$v" && ok "Updated"; sleep 0.3 ;;
-            5) ${EDITOR:-nano} "$INSTALL_DIR/.env"; sleep 0.3 ;;
+            1)
+                ask "new username"; input v
+                if [ -n "$v" ]; then
+                    sed -i "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${v}|" "$src/.env"
+                    ok "Updated"
+                fi
+                sleep 0.3
+                ;;
+            2)
+                ask "new password"; secret v
+                if [ -n "$v" ]; then
+                    sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${v}|" "$src/.env"
+                    ok "Updated"
+                fi
+                sleep 0.3
+                ;;
+            3)
+                ask "new port"; input v
+                if [ -n "$v" ]; then
+                    sed -i "s|^PORT=.*|PORT=${v}|" "$src/.env"
+                    ok "Updated"
+                fi
+                sleep 0.3
+                ;;
+            4)
+                ask "new url path"; input v
+                if [ -n "$v" ]; then
+                    sed -i "s|^URLPATH=.*|URLPATH=${v}|" "$src/.env"
+                    ok "Updated"
+                fi
+                sleep 0.3
+                ;;
+            5) ${EDITOR:-nano} "$src/.env"; sleep 0.3 ;;
             0) return ;;
         esac
 
@@ -350,7 +417,7 @@ action_env() {
             pad
             ask "restart now? ${D}[Y/n]${R}"; input r
             if [[ ! "$r" =~ ^[nN] ]]; then
-                cd "$INSTALL_DIR"
+                cd "$src"
                 spin "Restarting" &
                 SPIN_PID=$!
                 docker compose restart >/dev/null 2>&1
@@ -364,15 +431,20 @@ action_env() {
 }
 
 action_uninstall() {
+    local src
+    src=$(find_source_dir)
     title "uninstall"
     warn "All data will be deleted"
     ask "Continue? ${D}[y/N]${R}"; input c
     [[ ! "$c" =~ ^[yY] ]] && return
-    cd "$INSTALL_DIR"
+    cd "$src"
     spin "Removing" &
     SPIN_PID=$!
     docker compose down -v >/dev/null 2>&1
-    rm -rf "$INSTALL_DIR"
+    # Only remove /opt/mit-panel if that's where we are
+    if [ "$src" = "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+    fi
     rm -f /usr/local/bin/mit-panel
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
     printf "\r\033[K"
@@ -387,8 +459,12 @@ menu_installed() {
         if exists; then st="${Y}●${R} stopped"; else st="${RD}●${R} offline"; fi
     fi
 
+    local src
+    src=$(find_source_dir)
+
     title "menu"
     printf "  ${DM}status${R}   %b\n" "$st"
+    printf "  ${DM}path${R}     ${C}${src}${R}\n"
     pad
     line
     pad
@@ -414,17 +490,36 @@ menu_installed() {
 }
 
 menu_fresh() {
-    title "welcome"
-    pad
-    printf "  ${DM}MIT Panel is not installed yet.${R}\n"
-    pad
-    line
-    pad
-    printf "  ${C}${B}1${R}   Install\n"
-    printf "  ${RD}${B}0${R}   Exit\n"
-    pad
-    ask "select"; input c
-    [ "$c" = "1" ] && do_install
+    # If container exists but we couldn't detect source, show migrate option
+    if exists; then
+        title "detected"
+        pad
+        printf "  ${DM}Existing mit-panel container found.${R}\n"
+        pad
+        line
+        pad
+        printf "  ${C}${B}1${R}   Manage existing panel\n"
+        printf "  ${C}${B}2${R}   Fresh install (new)\n"
+        printf "  ${RD}${B}0${R}   Exit\n"
+        pad
+        ask "select"; input c
+        case "$c" in
+            1) return ;;  # Will show installed menu on next loop
+            2) do_install ;;
+        esac
+    else
+        title "welcome"
+        pad
+        printf "  ${DM}MIT Panel is not installed yet.${R}\n"
+        pad
+        line
+        pad
+        printf "  ${C}${B}1${R}   Install\n"
+        printf "  ${RD}${B}0${R}   Exit\n"
+        pad
+        ask "select"; input c
+        [ "$c" = "1" ] && do_install
+    fi
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────────
