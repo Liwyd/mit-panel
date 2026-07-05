@@ -84,11 +84,11 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-background border-r transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed inset-y-0 left-0 z-50 w-64 bg-background border-r-3 border-foreground transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
-                <div className="flex items-center justify-between p-4 border-b">
-                    <span className="font-semibold text-lg">MIT Panel</span>
+                <div className="flex items-center justify-between p-4 border-b-2 border-foreground">
+                    <span className="font-bold text-lg uppercase tracking-wider">MIT Panel</span>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -103,7 +103,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Desktop Sidebar - Hidden on mobile */}
-            <aside className="hidden md:flex w-64 border-r bg-muted/30 flex-col flex-shrink-0">
+            <aside className="hidden md:flex w-64 border-r-3 border-foreground bg-muted/30 flex-col flex-shrink-0">
                 <div className="flex-1 overflow-y-auto">
                     <Sidebar />
                 </div>
@@ -112,7 +112,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
                 {/* Mobile Header with Menu Button */}
-                <header className="md:hidden flex items-center gap-3 p-4 border-b bg-background sticky top-0 z-30">
+                <header className="md:hidden flex items-center gap-3 p-4 border-b-2 border-foreground bg-background sticky top-0 z-30">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -120,7 +120,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                     >
                         <Menu className="h-5 w-5" />
                     </Button>
-                    <span className="font-semibold">MIT Panel</span>
+                    <span className="font-bold uppercase tracking-wider">MIT Panel</span>
                 </header>
 
                 <main className="flex-1 overflow-y-auto overflow-x-hidden">

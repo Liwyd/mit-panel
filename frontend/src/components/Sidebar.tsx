@@ -79,7 +79,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
 
     return (
         <div className="flex flex-col h-full">
-            <nav className="flex-1 space-y-2 p-4">
+            <nav className="flex-1 space-y-3 p-4">
                 {filteredItems.map((item) => {
                     const Icon = item.icon
                     const isActive = location.pathname === item.href
@@ -90,7 +90,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                             variant={isActive ? 'default' : 'ghost'}
                             className={cn(
                                 'w-full justify-start gap-3',
-                                isActive && 'bg-primary'
+                                isActive && 'bg-primary animate-neo-pop'
                             )}
                             onClick={() => {
                                 navigate(item.href)
@@ -104,7 +104,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                 })}
             </nav>
 
-            <div className="border-t p-4 space-y-2">
+            <div className="border-t-2 border-foreground p-4 space-y-3">
                 <ThemeToggleButton />
 
                 <Button
