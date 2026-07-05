@@ -319,6 +319,7 @@ menu_installed() {
         5) action_logs ;;
         6) action_env ;;
         7) action_uninstall ;;
+        0) exit 0 ;;
     esac
 }
 
@@ -341,6 +342,7 @@ menu_fresh() {
         case "$c" in
             1) return ;;
             2) do_install ;;
+            0) exit 0 ;;
         esac
     else
         echo ""
@@ -356,7 +358,10 @@ menu_fresh() {
         echo ""
         read -r -p "  Choose [0]: " c </dev/tty
         c=${c:-0}
-        [ "$c" = "1" ] && do_install
+        case "$c" in
+            1) do_install ;;
+            0) exit 0 ;;
+        esac
     fi
 }
 
