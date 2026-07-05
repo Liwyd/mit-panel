@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import { getToken, removeToken } from './auth'
+import { formatApiError } from './errors'
 
 let apiClient: AxiosInstance | null = null
 
@@ -46,11 +47,18 @@ function getBaseURL(): string {
     apiClient.interceptors.response.use(
         (response) => response,
         (error: AxiosError) => {
-            // Handle 401 Unauthorized
+            // Handle 401 Unauthorized — but NOT for the login request itself,
+            // so the login page can show "wrong username/password" inline.
             if (error.response?.status === 401) {
-                removeToken()
-                window.location.href = '/login'
+                const reqUrl = error.config?.url || ''
+                if (!reqUrl.includes('/login')) {
+                    removeToken()
+                    const prefix = import.meta.env.VITE_URL_PREFIX || 'dashboard'
+                    window.location.href = `/${prefix}/login`
+                }
             }
+            // Surface a human-readable "Error <code> — <reason>" everywhere
+            error.message = formatApiError(error)
             return Promise.reject(error)
         }
     )

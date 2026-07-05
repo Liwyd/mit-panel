@@ -145,12 +145,6 @@ class APIService:
             "note": "",
             "on_hold_expire_duration": 0,
             "on_hold_timeout": None,
-            "next_plan": {
-                "data_limit": 0,
-                "expire": 0,
-                "add_remaining_traffic": False,
-                "fire_on_either": True,
-            },
         }
 
         response = self.session.post(
