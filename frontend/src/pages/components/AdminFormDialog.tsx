@@ -276,7 +276,7 @@ export function AdminFormDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive font-bold">
+                        <div className="flex items-gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive">
                             <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
                         </div>
@@ -474,7 +474,7 @@ export function AdminFormDialog({
                                 {...register('update_return_traffic')}
                                 className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm font-bold uppercase tracking-wider">Update Return Traffic</span>
+                            <span className="text-sm">Update Return Traffic</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -484,7 +484,7 @@ export function AdminFormDialog({
                                 {...register('delete_return_traffic')}
                                 className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm font-bold uppercase tracking-wider">Delete Return Traffic</span>
+                            <span className="text-sm">Delete Return Traffic</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -495,7 +495,7 @@ export function AdminFormDialog({
                                 {...register('is_active')}
                                 className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm font-bold uppercase tracking-wider">Active</span>
+                            <span className="text-sm">Active</span>
                         </label>
                     </div>
                 </form>

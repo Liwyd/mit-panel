@@ -87,7 +87,7 @@ def remove_admin(db: Session, admin_id: int) -> bool:
 
 
 def reduce_admin_traffic(db: Session, admin: Admins, used_traffic) -> None:
-    admin.traffic -= used_traffic
+    admin.traffic = max(admin.traffic - used_traffic, 0)
     db.commit()
 
 

@@ -9,7 +9,7 @@ export default {
         extend: {
             fontFamily: {
                 rubik: ['Rubik', 'sans-serif'],
-                bangers: ['Bangers', 'cursive'],
+                outfit: ['Outfit', 'sans-serif'],
             },
             colors: {
                 border: 'hsl(var(--border))',
@@ -52,15 +52,15 @@ export default {
                 sm: 'calc(var(--radius) - 4px)',
             },
             borderWidth: {
-                '3': '3px',
+                '3': '2px',
             },
             boxShadow: {
-                'neo': '5px 5px 0px 0px hsl(var(--foreground))',
-                'neo-sm': '3px 3px 0px 0px hsl(var(--foreground))',
-                'neo-lg': '8px 8px 0px 0px hsl(var(--foreground))',
-                'neo-red': '5px 5px 0px 0px hsl(0 85% 57%)',
-                'neo-hover': '7px 7px 0px 0px hsl(var(--foreground))',
-                'neo-active': '2px 2px 0px 0px hsl(var(--foreground))',
+                'neo': '4px 4px 0px 0px hsl(var(--foreground))',
+                'neo-sm': '2px 2px 0px 0px hsl(var(--foreground))',
+                'neo-lg': '6px 6px 0px 0px hsl(var(--foreground))',
+                'neo-red': '4px 4px 0px 0px hsl(0 55% 72%)',
+                'neo-hover': '5px 5px 0px 0px hsl(var(--foreground))',
+                'neo-active': '1px 1px 0px 0px hsl(var(--foreground))',
             },
             keyframes: {
                 'accordion-down': {

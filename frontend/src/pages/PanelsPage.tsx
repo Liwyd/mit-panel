@@ -91,8 +91,8 @@ export function PanelsPage() {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="neo-card p-8 flex items-center gap-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-3 border-foreground border-t-transparent"></div>
-                    <span className="font-bold uppercase tracking-wider text-sm">Loading...</span>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-foreground border-t-transparent"></div>
+                    <span className="font-medium text-sm">Loading...</span>
                 </div>
             </div>
         )
@@ -102,13 +102,13 @@ export function PanelsPage() {
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Page Title */}
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-wider">Panels Management</h1>
-                <p className="text-muted-foreground font-medium">Manage your proxy panels</p>
+                <h1 className="text-2xl md:text-3xl font-semibold">Panels Management</h1>
+                <p className="text-muted-foreground text-sm">Manage your proxy panels</p>
             </div>
 
             {/* Error Message */}
             {error && (
-                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive border-2 border-destructive font-bold">
+                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive border-2 border-destructive">
                     {error}
                 </div>
             )}

@@ -4,7 +4,6 @@ import {
     Users,
     Settings,
     LogOut,
-    Zap,
     Sun,
     Moon,
     Server,
@@ -104,17 +103,8 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                 })}
             </nav>
 
-            <div className="border-t-2 border-foreground p-4 space-y-3">
+            <div className="border-t border-border p-4 space-y-3">
                 <ThemeToggleButton />
-
-                <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3"
-                    onClick={() => navigate('/login')}
-                >
-                    <Zap className="h-4 w-4" />
-                    <span>Finance (Coming Soon)</span>
-                </Button>
 
                 <Button
                     variant="ghost"

@@ -230,8 +230,8 @@ export function SettingsPage() {
     return (
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-wider">Settings</h1>
-                <p className="text-muted-foreground font-medium">Manage database, logs, and ...</p>
+                <h1 className="text-2xl md:text-3xl font-semibold">Settings</h1>
+                <p className="text-muted-foreground text-sm">Manage database, logs, and ...</p>
             </div>
 
             {/* 4 Main Boxes */}

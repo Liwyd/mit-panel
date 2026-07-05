@@ -4,52 +4,52 @@
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 7%;
+        --background: 0 0% 98%;
+        --foreground: 0 0% 12%;
         --card: 0 0% 100%;
-        --card-foreground: 0 0% 7%;
+        --card-foreground: 0 0% 12%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 7%;
-        --muted: 0 0% 96%;
-        --muted-foreground: 0 0% 40%;
-        --accent: 0 85% 57%;
+        --popover-foreground: 0 0% 12%;
+        --muted: 0 0% 95%;
+        --muted-foreground: 0 0% 45%;
+        --accent: 0 55% 72%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 84% 60%;
+        --destructive: 0 55% 62%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 88%;
-        --input: 0 0% 88%;
-        --primary: 0 85% 57%;
+        --border: 0 0% 90%;
+        --input: 0 0% 90%;
+        --primary: 0 55% 72%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 93%;
-        --secondary-foreground: 0 0% 10%;
-        --ring: 0 85% 57%;
+        --secondary: 0 0% 94%;
+        --secondary-foreground: 0 0% 15%;
+        --ring: 0 55% 72%;
         --radius: 1rem;
-        --neo-border: 3px;
-        --neo-shadow: 5px 5px 0px 0px;
+        --neo-border: 2px;
+        --neo-shadow: 4px 4px 0px 0px;
     }
 
     .dark {
-        --background: 0 0% 10%;
-        --foreground: 0 0% 93%;
-        --card: 0 0% 14%;
-        --card-foreground: 0 0% 93%;
-        --popover: 0 0% 14%;
-        --popover-foreground: 0 0% 93%;
-        --muted: 0 0% 18%;
+        --background: 0 0% 13%;
+        --foreground: 0 0% 88%;
+        --card: 0 0% 16%;
+        --card-foreground: 0 0% 88%;
+        --popover: 0 0% 16%;
+        --popover-foreground: 0 0% 88%;
+        --muted: 0 0% 20%;
         --muted-foreground: 0 0% 55%;
-        --accent: 0 75% 50%;
+        --accent: 0 45% 58%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 72% 51%;
+        --destructive: 0 45% 55%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 22%;
-        --input: 0 0% 22%;
-        --primary: 0 75% 50%;
+        --border: 0 0% 24%;
+        --input: 0 0% 24%;
+        --primary: 0 45% 58%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 18%;
-        --secondary-foreground: 0 0% 93%;
-        --ring: 0 75% 50%;
-        --neo-border: 3px;
-        --neo-shadow: 5px 5px 0px 0px;
+        --secondary: 0 0% 20%;
+        --secondary-foreground: 0 0% 88%;
+        --ring: 0 45% 58%;
+        --neo-border: 2px;
+        --neo-shadow: 4px 4px 0px 0px;
     }
 }
 
@@ -62,23 +62,17 @@
     body {
         @apply bg-background text-foreground overflow-x-hidden;
         max-width: 100vw;
-        font-family: 'Rubik', sans-serif;
+        font-family: 'Outfit', 'Rubik', sans-serif;
+        letter-spacing: 0.01em;
     }
 
-    /* English text uses Bangers */
-    [lang="en"], .en, :where(:not([dir="rtl"])) {
-        font-family: 'Bangers', cursive;
-    }
-
-    /* Bold/heading elements use Bangers for English */
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Bangers', cursive;
-        letter-spacing: 0.03em;
+        font-family: 'Outfit', 'Rubik', sans-serif;
+        letter-spacing: -0.01em;
     }
 
-    /* Persian content keeps Rubik */
     [dir="rtl"], [lang="fa"] {
-        font-family: 'Rubik', sans-serif;
+        font-family: 'Rubik', 'Outfit', sans-serif;
     }
 
     .dark body {
@@ -89,7 +83,6 @@
 }
 
 @layer components {
-    /* Neobrutalism base styles */
     .neo-border {
         border: var(--neo-border) solid hsl(var(--foreground));
     }
@@ -107,34 +100,32 @@
     }
 
     .neo-card:hover {
-        transform: translate(-2px, -2px);
-        box-shadow: 7px 7px 0px 0px hsl(var(--foreground));
+        transform: translate(-1px, -1px);
+        box-shadow: 5px 5px 0px 0px hsl(var(--foreground));
     }
 
     .neo-btn {
         border: var(--neo-border) solid hsl(var(--foreground));
         box-shadow: var(--neo-shadow) hsl(var(--foreground));
         border-radius: var(--radius);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        font-weight: 500;
         transition: transform 0.1s ease, box-shadow 0.1s ease;
         cursor: pointer;
     }
 
     .neo-btn:hover {
-        transform: translate(-2px, -2px);
-        box-shadow: 7px 7px 0px 0px hsl(var(--foreground));
+        transform: translate(-1px, -1px);
+        box-shadow: 5px 5px 0px 0px hsl(var(--foreground));
     }
 
     .neo-btn:active {
         transform: translate(2px, 2px);
-        box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
+        box-shadow: 1px 1px 0px 0px hsl(var(--foreground));
     }
 
     .neo-input {
         border: var(--neo-border) solid hsl(var(--foreground));
-        box-shadow: 4px 4px 0px 0px hsl(var(--foreground));
+        box-shadow: 3px 3px 0px 0px hsl(var(--foreground));
         border-radius: var(--radius);
         background-color: hsl(var(--background));
         transition: transform 0.1s ease, box-shadow 0.1s ease;
@@ -143,17 +134,15 @@
     .neo-input:focus {
         outline: none;
         border-color: hsl(var(--primary));
-        box-shadow: 4px 4px 0px 0px hsl(var(--primary));
+        box-shadow: 3px 3px 0px 0px hsl(var(--primary));
     }
 
     .neo-badge {
         border: 2px solid hsl(var(--foreground));
         border-radius: 9999px;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 0.75rem;
         padding: 0.125rem 0.625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
     }
 
     .neo-table {
@@ -165,29 +154,26 @@
     .neo-table th {
         background-color: hsl(var(--primary));
         color: hsl(var(--primary-foreground));
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        font-weight: 600;
         font-size: 0.75rem;
     }
 
     .neo-table td {
-        border-bottom: 2px solid hsl(var(--border));
+        border-bottom: 1px solid hsl(var(--border));
     }
 
     .neo-dialog-overlay {
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(4px);
     }
 
     .neo-dialog {
         border: var(--neo-border) solid hsl(var(--foreground));
-        box-shadow: 8px 8px 0px 0px hsl(var(--foreground));
+        box-shadow: 6px 6px 0px 0px hsl(var(--foreground));
         border-radius: var(--radius);
         background-color: hsl(var(--background));
     }
 
-    /* Wiggle animation */
     @keyframes wiggle {
         0%, 100% { transform: rotate(0deg); }
         25% { transform: rotate(-2deg); }
@@ -198,7 +184,6 @@
         animation: wiggle 0.3s ease-in-out;
     }
 
-    /* Pop animation */
     @keyframes neo-pop {
         0% { transform: scale(0.95); opacity: 0; }
         50% { transform: scale(1.02); }
@@ -210,10 +195,9 @@
     }
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -221,15 +205,14 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-foreground/30 rounded;
+    @apply bg-foreground/20 rounded;
     border: 2px solid hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    @apply bg-foreground/50;
+    @apply bg-foreground/30;
 }
 
-/* Marquee container */
 .marquee-container {
     width: 100%;
     overflow: hidden;

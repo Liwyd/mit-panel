@@ -24,16 +24,16 @@ export function UserMenu() {
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">
-                    <div className="w-9 h-9 rounded-full bg-primary border-2 border-foreground shadow-neo-sm flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-8 h-8 rounded-full bg-primary border-2 border-foreground shadow-neo-sm flex items-center justify-center text-white text-sm font-medium">
                         {username?.charAt(0).toUpperCase() || 'U'}
                     </div>
-                    <span className="hidden sm:inline text-sm font-bold uppercase tracking-wider">{username}</span>
+                    <span className="hidden sm:inline text-sm font-medium">{username}</span>
                     <ChevronDown className="h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-48">
-                <div className="px-3 py-2 text-sm font-bold uppercase tracking-wider">{username}</div>
+                <div className="px-3 py-2 text-sm font-semibold">{username}</div>
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem
