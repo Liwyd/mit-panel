@@ -90,7 +90,10 @@ export function PanelsPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <div className="neo-card p-8 flex items-center gap-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-3 border-foreground border-t-transparent"></div>
+                    <span className="font-bold uppercase tracking-wider text-sm">Loading...</span>
+                </div>
             </div>
         )
     }
@@ -99,13 +102,13 @@ export function PanelsPage() {
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Page Title */}
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Panels Management</h1>
-                <p className="text-muted-foreground">Manage your proxy panels</p>
+                <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-wider">Panels Management</h1>
+                <p className="text-muted-foreground font-medium">Manage your proxy panels</p>
             </div>
 
             {/* Error Message */}
             {error && (
-                <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
+                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive border-2 border-destructive font-bold">
                     {error}
                 </div>
             )}
@@ -337,7 +340,7 @@ function MobilePanelCard({
     onToggleStatus,
 }: PanelDetailsRowProps) {
     return (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border-2 border-foreground rounded-xl overflow-hidden shadow-neo-sm">
             {/* Compact View */}
             <button
                 onClick={onToggle}
