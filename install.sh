@@ -1,7 +1,4 @@
 #!/bin/bash
-# MIT Panel - Installer & Manager
-# https://github.com/liwyd/mit-panel
-
 set -e
 
 INSTALL_DIR="/opt/mit-panel"
@@ -9,7 +6,6 @@ REPO_URL="https://raw.githubusercontent.com/liwyd/mit-panel/main"
 CONTAINER="mit-panel"
 DATA="$INSTALL_DIR/data"
 
-# ── Helpers ─────────────────────────────────────────────────────────────────────
 running() { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
 exists()  { docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
 installed() {
@@ -45,7 +41,6 @@ ensure_docker() {
     echo "  Docker installed."
 }
 
-# ── Install ─────────────────────────────────────────────────────────────────────
 do_install() {
     ensure_docker
 
@@ -141,7 +136,6 @@ EOF
     chmod +x "$SRC/.tui.sh" 2>/dev/null || true
 }
 
-# ── Actions ─────────────────────────────────────────────────────────────────────
 action_update() {
     local SRC
     SRC=$(find_source_dir)
@@ -225,7 +219,7 @@ action_env() {
     local P=$(grep "^PORT=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "8000")
     local PP=$(grep "^URLPATH=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "dashboard")
     echo "  Username:  $U"
-    echo "  Password:  ********"
+    echo "  Password:  ****"
     echo "  Port:      $P"
     echo "  URL Path:  $PP"
     echo ""
@@ -287,7 +281,6 @@ action_uninstall() {
     echo "  Uninstalled."
 }
 
-# ── Menu ────────────────────────────────────────────────────────────────────────
 menu_installed() {
     local STATUS="running"
     if ! running; then
@@ -367,7 +360,6 @@ menu_fresh() {
     fi
 }
 
-# ── Main ────────────────────────────────────────────────────────────────────────
 main() {
     if [[ $EUID -ne 0 ]]; then
         echo "  Error: This script must be run as root."
