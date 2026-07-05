@@ -47,6 +47,31 @@ MIT Panel is a self-hosted dashboard for managing the **admins** of your VPN pan
 
 ## Quick start
 
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liwyd/mit-panel/main/install.sh | sudo bash
+```
+
+This will:
+- Install Docker (if not present)
+- Download all required files
+- Build and start the panel
+- Set up the `mit-panel` CLI command for easy management
+
+After installation, use `mit-panel` to manage your panel:
+
+```bash
+mit-panel           # Show management menu
+mit-panel update    # Update to latest version
+mit-panel restart   # Restart the panel
+mit-panel logs      # View container logs
+mit-panel stop      # Stop the panel
+mit-panel start     # Start the panel
+```
+
+### Manual install
+
 ```bash
 git clone https://github.com/liwyd/mit-panel.git
 cd mit-panel
