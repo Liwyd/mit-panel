@@ -51,14 +51,12 @@ do_install() {
 
     echo ""
     echo "--- Preparing ---"
-    mkdir -p "$DATA"
 
-    echo "  Downloading files..."
-    curl -fsSL "$REPO_URL/docker-compose.yml" -o "$INSTALL_DIR/docker-compose.yml"
-    curl -fsSL "$REPO_URL/.env.example" -o "$INSTALL_DIR/.env.example"
-    curl -fsSL "$REPO_URL/entrypoint.sh" -o "$INSTALL_DIR/entrypoint.sh"
-    chmod +x "$INSTALL_DIR/entrypoint.sh"
-    echo "  Files downloaded."
+    echo "  Cloning repository..."
+    git clone --quiet "https://github.com/liwyd/mit-panel.git" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    mkdir -p "$DATA"
+    echo "  Repository cloned."
 
     echo ""
     echo "--- Configuration ---"
@@ -73,17 +71,16 @@ do_install() {
     URLPATH=${URLPATH:-dashboard}
 
     JWT_SECRET=$(openssl rand -hex 32)
-    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-    sed -i "s/^ADMIN_USERNAME=.*/ADMIN_USERNAME=$USER/" "$INSTALL_DIR/.env"
-    sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$PASS/" "$INSTALL_DIR/.env"
-    sed -i "s/^PORT=.*/PORT=$PORT/" "$INSTALL_DIR/.env"
-    sed -i "s/^URLPATH=.*/URLPATH=$URLPATH/" "$INSTALL_DIR/.env"
-    sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"$JWT_SECRET\"|" "$INSTALL_DIR/.env"
+    cp .env.example .env
+    sed -i "s/^ADMIN_USERNAME=.*/ADMIN_USERNAME=$USER/" .env
+    sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$PASS/" .env
+    sed -i "s/^PORT=.*/PORT=$PORT/" .env
+    sed -i "s/^URLPATH=.*/URLPATH=$URLPATH/" .env
+    sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"$JWT_SECRET\"|" .env
     echo "  Configuration saved."
 
     echo ""
     echo "--- Building ---"
-    cd "$INSTALL_DIR"
     echo "  Building Docker image (this takes a while)..."
     docker compose build --no-cache >/dev/null 2>&1
     echo "  Image built."
@@ -117,10 +114,8 @@ cd "$SRC"
 case "\${1:-}" in
     update)
         echo "Updating..."
+        git pull
         docker compose down
-        curl -fsSL https://raw.githubusercontent.com/liwyd/mit-panel/main/docker-compose.yml -o docker-compose.yml
-        curl -fsSL https://raw.githubusercontent.com/liwyd/mit-panel/main/entrypoint.sh -o entrypoint.sh
-        chmod +x entrypoint.sh
         docker compose build --no-cache
         docker compose up -d
         echo "Done."
@@ -156,12 +151,22 @@ action_update() {
     echo "  Updating MIT Panel"
     echo "========================================"
     echo ""
-    echo "  Downloading latest files..."
-    curl -fsSL "$REPO_URL/docker-compose.yml" -o docker-compose.yml
-    curl -fsSL "$REPO_URL/.env.example" -o .env.example
-    curl -fsSL "$REPO_URL/entrypoint.sh" -o entrypoint.sh
-    chmod +x entrypoint.sh
-    echo "  Files updated."
+    echo "  Pulling latest source code..."
+    if [ -d .git ]; then
+        git pull --quiet 2>/dev/null || {
+            echo "  git pull failed, re-cloning..."
+            cd /
+            rm -rf "$SRC"
+            git clone --quiet "https://github.com/liwyd/mit-panel.git" "$SRC"
+            cd "$SRC"
+        }
+    else
+        cd /
+        rm -rf "$SRC"
+        git clone --quiet "https://github.com/liwyd/mit-panel.git" "$SRC"
+        cd "$SRC"
+    fi
+    echo "  Source code updated."
 
     if running; then
         echo "  Stopping container..."
