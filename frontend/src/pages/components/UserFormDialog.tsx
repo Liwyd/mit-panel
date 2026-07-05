@@ -117,8 +117,8 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user }: UserFormDia
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive">
-                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive">
+                            <AlertCircle className="h-4 w-4 flex-shrink-0" />
                             <p>{serverError}</p>
                         </div>
                     )}

@@ -51,11 +51,11 @@ export function LoginPage() {
     }
 
     return (
-        <div className="fixed inset-0 z-0 bg-background flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-0 bg-background flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:22px_22px] opacity-50" />
 
             <main className="w-full max-w-md relative animate-neo-pop">
-                <div className="neo-card p-8">
+                <div className="neo-card p-6 sm:p-8">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
                         <span className="text-xs font-medium text-muted-foreground">
@@ -67,11 +67,11 @@ export function LoginPage() {
                         <img
                             src={branding.has_logo ? getLogoUrl() : logo}
                             alt={branding.login_title}
-                            className="w-32 h-auto"
+                            className="w-28 sm:w-32 h-auto"
                         />
                     </div>
 
-                    <h1 className="text-2xl font-semibold mb-2">
+                    <h1 className="text-xl sm:text-2xl font-semibold mb-2">
                         Sign In
                     </h1>
                     <p className="text-sm text-muted-foreground mb-6">
@@ -84,7 +84,7 @@ export function LoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">
                                 Username

@@ -509,7 +509,7 @@ export function SettingsPage() {
                             <RotateCcw className="mr-2 h-4 w-4" />
                             {logsLoading ? 'Refreshing...' : 'Refresh Logs'}
                         </Button>
-                        <div className="bg-muted p-4 rounded-xl max-h-96 overflow-y-auto border-2 border-foreground">
+                        <div className="bg-muted p-4 rounded-xl max-h-96 overflow-y-auto border-2 border-foreground break-all">
                             {logs.length > 0 ? (
                                 <pre className="text-xs whitespace-pre-wrap font-mono">
                                     {logs.join('\n')}

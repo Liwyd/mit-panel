@@ -60,10 +60,13 @@
 
     html,
     body {
-        @apply bg-background text-foreground overflow-x-hidden;
+        @apply bg-background text-foreground;
         max-width: 100vw;
+        overflow-x: hidden;
         font-family: 'Outfit', 'Rubik', sans-serif;
         letter-spacing: 0.01em;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -148,7 +151,7 @@
     .neo-table {
         border: var(--neo-border) solid hsl(var(--foreground));
         border-radius: var(--radius);
-        overflow: hidden;
+        overflow: visible;
     }
 
     .neo-table th {
@@ -195,6 +198,16 @@
     }
 }
 
+@layer utilities {
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+}
+
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -211,6 +224,20 @@
 
 ::-webkit-scrollbar-thumb:hover {
     @apply bg-foreground/30;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-neo-pop,
+    .animate-wiggle,
+    .animate-spin,
+    .animate-pulse {
+        animation: none !important;
+    }
+    .neo-card,
+    .neo-btn,
+    .neo-input {
+        transition: none !important;
+    }
 }
 
 .marquee-container {

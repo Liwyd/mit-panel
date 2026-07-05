@@ -451,7 +451,7 @@ export function DashboardPage() {
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     type="text"
-                                    placeholder="Search users by email or username..."
+                                    placeholder="Search..."
                                     value={searchQuery}
                                     onChange={(e) => {
                                         setSearchQuery(e.target.value)
@@ -977,11 +977,10 @@ function MobileUserCard({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2 pt-1">
                         <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 min-w-[80px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onToggleStatus()
@@ -993,7 +992,6 @@ function MobileUserCard({
                         <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 min-w-[80px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onResetUsage()
@@ -1006,7 +1004,6 @@ function MobileUserCard({
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex-1 min-w-[80px]"
                                 onClick={(e) => {
                                     e.stopPropagation()
                                     navigator.clipboard.writeText(buildSubUrl(subUrl, user.sub_id))
@@ -1021,7 +1018,6 @@ function MobileUserCard({
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex-1 min-w-[80px]"
                                 onClick={(e) => {
                                     e.stopPropagation()
                                     onShowQr(user)
@@ -1034,7 +1030,6 @@ function MobileUserCard({
                         <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 min-w-[80px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onEdit()
@@ -1046,7 +1041,6 @@ function MobileUserCard({
                         <Button
                             size="sm"
                             variant="destructive"
-                            className="flex-1 min-w-[80px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onDelete()

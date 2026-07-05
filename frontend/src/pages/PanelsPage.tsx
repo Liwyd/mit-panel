@@ -386,11 +386,10 @@ function MobilePanelCard({
                         </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1">
+                    <div className="grid grid-cols-3 gap-2 pt-1">
                         <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onToggleStatus()
@@ -406,7 +405,6 @@ function MobilePanelCard({
                         <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onEdit()
@@ -418,7 +416,6 @@ function MobilePanelCard({
                         <Button
                             size="sm"
                             variant="destructive"
-                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onDelete()
