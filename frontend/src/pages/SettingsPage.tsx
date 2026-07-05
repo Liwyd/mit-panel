@@ -230,8 +230,8 @@ export function SettingsPage() {
     return (
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
-                <p className="text-muted-foreground">Manage database, logs, and ...</p>
+                <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-wider">Settings</h1>
+                <p className="text-muted-foreground font-medium">Manage database, logs, and ...</p>
             </div>
 
             {/* 4 Main Boxes */}
@@ -251,7 +251,7 @@ export function SettingsPage() {
                         <Button
                             onClick={handleDownloadBackup}
                             disabled={backupLoading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-full"
                         >
                             <Download className="mr-2 h-4 w-4" />
                             {backupLoading ? 'Downloading...' : 'Download Backup'}
@@ -275,7 +275,8 @@ export function SettingsPage() {
                             <Button
                                 onClick={() => document.getElementById('restore-file-input')?.click()}
                                 disabled={restoreLoading}
-                                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                                className="w-full"
+                                variant="secondary"
                             >
                                 <Upload className="mr-2 h-4 w-4" />
                                 {restoreLoading ? 'Restoring...' : 'Select Backup File'}
@@ -310,7 +311,8 @@ export function SettingsPage() {
                                 setShowLogsModal(true)
                             }}
                             disabled={logsLoading}
-                            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                            className="w-full"
+                            variant="outline"
                         >
                             <Eye className="mr-2 h-4 w-4" />
                             {logsLoading ? 'Loading...' : 'Show Logs'}
@@ -337,14 +339,15 @@ export function SettingsPage() {
                                     setShowNewsDialog(true)
                                 }}
                                 disabled={newsLoading}
-                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                className="flex-1"
+                                variant="outline"
                             >
                                 <Eye className="mr-2 h-4 w-4" />
                                 {newsLoading ? 'Loading...' : 'Show News'}
                             </Button>
                             <Button
                                 onClick={() => setShowAddNewsDialog(true)}
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                className="flex-1"
                             >
                                 <Plus className="mr-2 h-4 w-4" />
                                 Create News
@@ -477,7 +480,6 @@ export function SettingsPage() {
                 <Button
                     onClick={handleSaveSettings}
                     disabled={savingSettings || !settings}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
                     {savingSettings ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -502,12 +504,12 @@ export function SettingsPage() {
                             onClick={fetchLogs}
                             disabled={logsLoading}
                             size="sm"
-                            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                            className="w-full"
                         >
                             <RotateCcw className="mr-2 h-4 w-4" />
                             {logsLoading ? 'Refreshing...' : 'Refresh Logs'}
                         </Button>
-                        <div className="bg-muted p-4 rounded-md max-h-96 overflow-y-auto border">
+                        <div className="bg-muted p-4 rounded-xl max-h-96 overflow-y-auto border-2 border-foreground">
                             {logs.length > 0 ? (
                                 <pre className="text-xs whitespace-pre-wrap font-mono">
                                     {logs.join('\n')}
@@ -535,7 +537,7 @@ export function SettingsPage() {
                                 {news.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="p-3 bg-muted rounded-md border flex items-start justify-between gap-3"
+                                        className="p-3 bg-muted rounded-xl border-2 border-foreground flex items-start justify-between gap-3"
                                     >
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm break-words">{item.message}</p>
@@ -596,7 +598,6 @@ export function SettingsPage() {
                             <Button
                                 onClick={handleAddNews}
                                 disabled={addingNews || !newNewsMessage.trim()}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
                             >
                                 <Plus className="mr-2 h-4 w-4" />
                                 {addingNews ? 'Creating...' : 'Create News'}
@@ -620,7 +621,7 @@ export function SettingsPage() {
                         <AlertDialogAction
                             onClick={handleDeleteNews}
                             disabled={deletingNews}
-                            className="bg-red-600 hover:bg-red-700 text-white">
+                            className="bg-destructive">
                             <Trash2 className="mr-2 h-4 w-4" />
                             {deletingNews ? 'Deleting...' : 'Delete'}
                         </AlertDialogAction>

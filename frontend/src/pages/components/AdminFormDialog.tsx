@@ -276,7 +276,7 @@ export function AdminFormDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                        <div className="flex items-gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive font-bold">
                             <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
                         </div>
@@ -347,7 +347,7 @@ export function AdminFormDialog({
                                     Loading inbounds...
                                 </div>
                             ) : marzbanInbounds ? (
-                                <div className="space-y-3 p-3 border rounded-md">
+                                <div className="space-y-3 p-3 border-2 border-foreground rounded-xl">
                                     {Object.entries(marzbanInbounds).map(([protocol, tags]) => (
                                         <div key={protocol} className="space-y-2">
                                             <div className="font-medium text-sm capitalize">{protocol}</div>
@@ -359,7 +359,7 @@ export function AdminFormDialog({
                                                             checked={selectedInbounds[protocol]?.includes(tag) || false}
                                                             onChange={() => toggleInbound(protocol, tag)}
                                                             disabled={isSubmitting}
-                                                            className="rounded border border-input"
+                                                            className="rounded border-2 border-foreground"
                                                         />
                                                         <span className="text-sm">{tag}</span>
                                                     </label>
@@ -472,9 +472,9 @@ export function AdminFormDialog({
                                 type="checkbox"
                                 disabled={isSubmitting}
                                 {...register('update_return_traffic')}
-                                className="rounded border border-input"
+                                className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm">Update Return Traffic</span>
+                            <span className="text-sm font-bold uppercase tracking-wider">Update Return Traffic</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -482,9 +482,9 @@ export function AdminFormDialog({
                                 type="checkbox"
                                 disabled={isSubmitting}
                                 {...register('delete_return_traffic')}
-                                className="rounded border border-input"
+                                className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm">Delete Return Traffic</span>
+                            <span className="text-sm font-bold uppercase tracking-wider">Delete Return Traffic</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -493,9 +493,9 @@ export function AdminFormDialog({
                                 disabled={isSubmitting}
                                 defaultChecked
                                 {...register('is_active')}
-                                className="rounded border border-input"
+                                className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm">Active</span>
+                            <span className="text-sm font-bold uppercase tracking-wider">Active</span>
                         </label>
                     </div>
                 </form>

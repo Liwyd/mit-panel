@@ -259,17 +259,4 @@ export interface DashboardData {
         disk_total: number
         disk_used: number
     }
-    ads?: {
-        title?: string
-        text?: string
-        link?: string
-        button?: string
-    }
-}
-
-export interface AdsData {
-    title?: string
-    text?: string
-    link?: string
-    button?: string
 }

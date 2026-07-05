@@ -11,7 +11,6 @@ import {
     Trash2,
     RotateCcw,
     UserX,
-    ExternalLink,
     Server,
     Clock,
     Wifi,
@@ -194,7 +193,10 @@ export function DashboardPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <div className="neo-card p-8 flex items-center gap-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-3 border-foreground border-t-transparent"></div>
+                    <span className="font-bold uppercase tracking-wider text-sm">Loading...</span>
+                </div>
             </div>
         )
     }
@@ -203,13 +205,13 @@ export function DashboardPage() {
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Page Title */}
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
-                <p className="text-muted-foreground">Welcome back!</p>
+                <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-wider">Dashboard</h1>
+                <p className="text-muted-foreground font-medium">Welcome back!</p>
             </div>
 
             {/* Error Message */}
             {error && (
-                <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
+                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive border-2 border-destructive font-bold">
                     {error}
                 </div>
             )}
@@ -410,41 +412,6 @@ export function DashboardPage() {
                 </div>
             )}
 
-            {/* Advertisement Card */}
-            {dashboardData?.ads && dashboardData.ads.text && (
-                <Card className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-950/20 dark:to-orange-950/20 border-yellow-200 dark:border-yellow-800 relative">
-                    <CardContent className="p-4 pt-8">
-                        <a
-                            href={dashboardData.ads.link || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block group"
-                        >
-                            <div className="flex flex-col gap-2" dir="rtl">
-                                <div className="flex-1 min-w-0" dir="rtl">
-                                    {dashboardData.ads.title && (
-                                        <h3 className="font-bold text-yellow-900 dark:text-yellow-100 text-sm mb-1 group-hover:text-yellow-700 dark:group-hover:text-yellow-200 transition-colors" dir="rtl">
-                                            {dashboardData.ads.title}
-                                        </h3>
-                                    )}
-                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors" dir="rtl">
-                                        {dashboardData.ads.text}
-                                    </p>
-                                    {dashboardData.ads.button && (
-                                        <div className="mt-3 flex justify-start">
-                                            <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105" dir="rtl">
-                                                <ExternalLink className="h-4 w-4" />
-                                                {dashboardData.ads.button}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </a>
-                    </CardContent>
-                </Card>
-            )}
-
             {/* Users Table */}
             {dashboardData?.users && (
                 <Card>
@@ -473,7 +440,7 @@ export function DashboardPage() {
                                     setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'online')
                                     setCurrentPage(1)
                                 }}
-                                className="h-10 w-auto rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                className="h-11 w-auto rounded-lg border-3 border-foreground bg-background px-3 text-sm font-bold shadow-neo-sm focus-visible:outline-none focus-visible:border-primary"
                             >
                                 <option value="all">All</option>
                                 <option value="active">Active</option>
@@ -629,7 +596,7 @@ export function DashboardPage() {
                                                             setUsersPerPage(parseInt(e.target.value, 10))
                                                             setCurrentPage(1)
                                                         }}
-                                                        className="h-8 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                        className="h-9 rounded-lg border-3 border-foreground bg-background px-2 text-sm font-bold shadow-neo-sm focus-visible:outline-none"
                                                     >
                                                         <option value={5}>5</option>
                                                         <option value={10}>10</option>
@@ -788,10 +755,10 @@ function DetailsRow({
                         <div className="text-sm font-medium">
                             {bytesToGB(trafficUsed).toFixed(2)} / {bytesToGB(user.data_limit).toFixed(2)} GB
                         </div>
-                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="w-20 h-3 bg-muted rounded-full overflow-hidden border border-foreground/20">
                             <div
                                 className={cn(
-                                    'h-full bg-primary transition-all',
+                                    'h-full bg-primary transition-all rounded-full',
                                     trafficPercent > 80 && 'bg-destructive',
                                     trafficPercent > 90 && 'bg-destructive'
                                 )}
@@ -933,7 +900,7 @@ function MobileUserCard({
     const trafficPercent = (trafficUsed / user.data_limit) * 100
 
     return (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border-2 border-foreground rounded-xl overflow-hidden shadow-neo-sm">
             {/* Compact View - Always visible */}
             <button
                 onClick={onToggle}
@@ -946,10 +913,10 @@ function MobileUserCard({
                         <span className="text-xs text-muted-foreground">
                             {bytesToGB(trafficUsed).toFixed(1)} / {bytesToGB(user.data_limit).toFixed(1)} GB
                         </span>
-                        <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="w-12 h-2 bg-muted rounded-full overflow-hidden border border-foreground/20">
                             <div
                                 className={cn(
-                                    'h-full bg-primary transition-all',
+                                    'h-full bg-primary transition-all rounded-full',
                                     trafficPercent > 80 && 'bg-destructive'
                                 )}
                                 style={{ width: `${Math.min(trafficPercent, 100)}%` }}

@@ -132,7 +132,7 @@ export function PanelFormDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                        <div className="flex items-gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive font-bold">
                             <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
                         </div>
@@ -294,9 +294,9 @@ export function PanelFormDialog({
                                 disabled={isSubmitting}
                                 defaultChecked
                                 {...register('is_active')}
-                                className="rounded border border-input"
+                                className="rounded border-2 border-foreground"
                             />
-                            <span className="text-sm">Active</span>
+                            <span className="text-sm font-bold uppercase tracking-wider">Active</span>
                         </label>
                     </div>
                 </form>

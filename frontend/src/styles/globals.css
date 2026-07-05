@@ -4,48 +4,52 @@
 
 @layer base {
     :root {
-        --background: 0 0% 96%;
-        --foreground: 0 0% 10%;
+        --background: 0 0% 100%;
+        --foreground: 0 0% 7%;
         --card: 0 0% 100%;
-        --card-foreground: 0 0% 10%;
+        --card-foreground: 0 0% 7%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 10%;
-        --muted: 0 0% 93%;
+        --popover-foreground: 0 0% 7%;
+        --muted: 0 0% 96%;
         --muted-foreground: 0 0% 40%;
-        --accent: 0 0% 92%;
-        --accent-foreground: 0 0% 10%;
+        --accent: 0 85% 57%;
+        --accent-foreground: 0 0% 100%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 85%;
-        --input: 0 0% 85%;
-        --primary: 190 85% 34%;
+        --border: 0 0% 88%;
+        --input: 0 0% 88%;
+        --primary: 0 85% 57%;
         --primary-foreground: 0 0% 100%;
         --secondary: 0 0% 93%;
         --secondary-foreground: 0 0% 10%;
-        --ring: 190 85% 34%;
-        --radius: 0.6rem;
+        --ring: 0 85% 57%;
+        --radius: 1rem;
+        --neo-border: 3px;
+        --neo-shadow: 5px 5px 0px 0px;
     }
 
     .dark {
-        --background: 0 0% 4%;
-        --foreground: 0 0% 95%;
-        --card: 0 0% 7%;
-        --card-foreground: 0 0% 95%;
-        --popover: 0 0% 8%;
-        --popover-foreground: 0 0% 95%;
-        --muted: 0 0% 10%;
-        --muted-foreground: 0 0% 45%;
-        --accent: 0 0% 12%;
-        --accent-foreground: 0 0% 95%;
+        --background: 0 0% 10%;
+        --foreground: 0 0% 93%;
+        --card: 0 0% 14%;
+        --card-foreground: 0 0% 93%;
+        --popover: 0 0% 14%;
+        --popover-foreground: 0 0% 93%;
+        --muted: 0 0% 18%;
+        --muted-foreground: 0 0% 55%;
+        --accent: 0 75% 50%;
+        --accent-foreground: 0 0% 100%;
         --destructive: 0 72% 51%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14%;
-        --input: 0 0% 14%;
-        --primary: 187 100% 60%;
-        --primary-foreground: 0 0% 6%;
-        --secondary: 0 0% 12%;
-        --secondary-foreground: 0 0% 95%;
-        --ring: 187 100% 60%;
+        --border: 0 0% 22%;
+        --input: 0 0% 22%;
+        --primary: 0 75% 50%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 18%;
+        --secondary-foreground: 0 0% 93%;
+        --ring: 0 75% 50%;
+        --neo-border: 3px;
+        --neo-shadow: 5px 5px 0px 0px;
     }
 }
 
@@ -58,7 +62,23 @@
     body {
         @apply bg-background text-foreground overflow-x-hidden;
         max-width: 100vw;
-        font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+        font-family: 'Rubik', sans-serif;
+    }
+
+    /* English text uses Bangers */
+    [lang="en"], .en, :where(:not([dir="rtl"])) {
+        font-family: 'Bangers', cursive;
+    }
+
+    /* Bold/heading elements use Bangers for English */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Bangers', cursive;
+        letter-spacing: 0.03em;
+    }
+
+    /* Persian content keeps Rubik */
+    [dir="rtl"], [lang="fa"] {
+        font-family: 'Rubik', sans-serif;
     }
 
     .dark body {
@@ -68,24 +88,146 @@
     }
 }
 
+@layer components {
+    /* Neobrutalism base styles */
+    .neo-border {
+        border: var(--neo-border) solid hsl(var(--foreground));
+    }
+
+    .neo-shadow {
+        box-shadow: var(--neo-shadow) hsl(var(--foreground));
+    }
+
+    .neo-card {
+        border: var(--neo-border) solid hsl(var(--foreground));
+        box-shadow: var(--neo-shadow) hsl(var(--foreground));
+        border-radius: var(--radius);
+        background-color: hsl(var(--card));
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .neo-card:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 7px 7px 0px 0px hsl(var(--foreground));
+    }
+
+    .neo-btn {
+        border: var(--neo-border) solid hsl(var(--foreground));
+        box-shadow: var(--neo-shadow) hsl(var(--foreground));
+        border-radius: var(--radius);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+        cursor: pointer;
+    }
+
+    .neo-btn:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 7px 7px 0px 0px hsl(var(--foreground));
+    }
+
+    .neo-btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
+    }
+
+    .neo-input {
+        border: var(--neo-border) solid hsl(var(--foreground));
+        box-shadow: 4px 4px 0px 0px hsl(var(--foreground));
+        border-radius: var(--radius);
+        background-color: hsl(var(--background));
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .neo-input:focus {
+        outline: none;
+        border-color: hsl(var(--primary));
+        box-shadow: 4px 4px 0px 0px hsl(var(--primary));
+    }
+
+    .neo-badge {
+        border: 2px solid hsl(var(--foreground));
+        border-radius: 9999px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        padding: 0.125rem 0.625rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .neo-table {
+        border: var(--neo-border) solid hsl(var(--foreground));
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .neo-table th {
+        background-color: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+    }
+
+    .neo-table td {
+        border-bottom: 2px solid hsl(var(--border));
+    }
+
+    .neo-dialog-overlay {
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+    }
+
+    .neo-dialog {
+        border: var(--neo-border) solid hsl(var(--foreground));
+        box-shadow: 8px 8px 0px 0px hsl(var(--foreground));
+        border-radius: var(--radius);
+        background-color: hsl(var(--background));
+    }
+
+    /* Wiggle animation */
+    @keyframes wiggle {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(-2deg); }
+        75% { transform: rotate(2deg); }
+    }
+
+    .animate-wiggle {
+        animation: wiggle 0.3s ease-in-out;
+    }
+
+    /* Pop animation */
+    @keyframes neo-pop {
+        0% { transform: scale(0.95); opacity: 0; }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    .animate-neo-pop {
+        animation: neo-pop 0.3s ease-out;
+    }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    @apply bg-muted;
+    @apply bg-muted rounded;
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground rounded;
+    @apply bg-foreground/30 rounded;
+    border: 2px solid hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/80;
+    @apply bg-foreground/50;
 }
-
 
 /* Marquee container */
 .marquee-container {
@@ -94,15 +236,9 @@
     position: relative;
 }
 
-/* Marquee Animation - Subtitle style (Right to Left) */
 @keyframes marquee {
-    0% {
-        transform: translateX(-100%);
-    }
-
-    100% {
-        transform: translateX(300%);
-    }
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
 }
 
 .animate-marquee {
