@@ -2,235 +2,118 @@
 # MIT Panel - Installer & Manager
 # https://github.com/liwyd/mit-panel
 
-set -euo pipefail
+set -e
 
 INSTALL_DIR="/opt/mit-panel"
 REPO_URL="https://raw.githubusercontent.com/liwyd/mit-panel/main"
 CONTAINER="mit-panel"
 DATA="$INSTALL_DIR/data"
 
-# ── Palette ─────────────────────────────────────────────────────────────────────
-R='\033[0m'
-B='\033[1m'
-D='\033[2m'
-C='\033[38;5;80m'    # accent - cyan
-P='\033[38;5;141m'   # accent - violet
-G='\033[38;5;78m'    # success
-Y='\033[38;5;221m'   # warning
-RD='\033[38;5;203m'  # danger
-DM='\033[38;5;244m'  # muted
-
-# ── Low-level helpers ───────────────────────────────────────────────────────────
-input() { read -r "$@" < /dev/tty; }
-secret() { read -rs "$@" < /dev/tty; echo ""; }
-clr() { printf '\033[2J\033[H'; }
-pad()  { printf "\n"; }
-
-repeat() { local ch="$1" n="$2"; (( n < 0 )) && n=0; printf '%*s' "$n" '' | tr ' ' "$ch"; }
-
-line() { printf "  ${DM}$(repeat '─' 50)${R}\n"; }
-
-# a single boxed row: $1 = plain text (for width math), $2 = colored/styled text to render
-box_row() {
-    local plain="$1" styled="$2" width="$3"
-    local pad_n=$(( width - 4 - ${#plain} ))
-    (( pad_n < 0 )) && pad_n=0
-    printf "  ${DM}│${R}  %b%*s  ${DM}│${R}\n" "$styled" "$pad_n" ""
-}
-
-box_top()    { printf "  ${DM}╭$(repeat '─' "$1")╮${R}\n"; }
-box_bottom() { printf "  ${DM}╰$(repeat '─' "$1")╯${R}\n"; }
-
-title() {
-    clr
-    pad
-    local sub="${1:-}"
-    local logo="mitpanel"
-    local w=$(( ${#logo} + 4 ))
-    if [ -n "$sub" ] && [ $(( ${#sub} + 4 )) -gt "$w" ]; then w=$(( ${#sub} + 4 )); fi
-
-    box_top "$w"
-    box_row "$logo" "${P}${B}mit${R}${C}${B}panel${R}" "$w"
-    [ -n "$sub" ] && box_row "$sub" "${DM}${sub}${R}" "$w"
-    box_bottom "$w"
-    pad
-}
-
-ok()   { printf "  ${G}✓${R}  %b\n" "$1"; }
-fail() { printf "  ${RD}✗${R}  %b\n" "$1"; }
-info() { printf "  ${DM}  %b${R}\n" "$1"; }
-warn() { printf "  ${Y}!${R}  ${Y}%b${R}\n" "$1"; }
-ask()  { printf "  ${C}❯${R}  %b " "$1"; }
-
-spin() {
-    local msg="$1" i=0
-    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    while true; do
-        printf "\r  ${C}%s${R}  ${DM}%s…${R}" "${frames[i++ % ${#frames[@]}]}" "$msg"
-        sleep 0.08
-    done
-}
-
-die() { fail "$1"; show_cursor; exit 1; }
-
-show_cursor() { tput cnorm 2>/dev/null; }
-hide_cursor() { tput civis 2>/dev/null; }
-
+# ── Helpers ─────────────────────────────────────────────────────────────────────
 running() { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
 exists()  { docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; }
 installed() {
-    # Check standard install dir first
     if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then return 0; fi
-    # Check if container exists anywhere
     if exists; then return 0; fi
     return 1
 }
 
-# Find the source directory of the running/existing container
 find_source_dir() {
-    # 1. Check standard install dir
     if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
         echo "$INSTALL_DIR"
         return
     fi
-    # 2. Inspect container for compose working directory label
     local dir
     dir=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)
-    if [ -n "$dir" ] && [ -d "$dir" ]; then
-        echo "$dir"
-        return
-    fi
-    # 3. Try compose project config_files label
+    if [ -n "$dir" ] && [ -d "$dir" ]; then echo "$dir"; return; fi
     dir=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}' 2>/dev/null || true)
     if [ -n "$dir" ]; then
         dir=$(dirname "$dir")
-        if [ -d "$dir" ]; then
-            echo "$dir"
-            return
-        fi
+        if [ -d "$dir" ]; then echo "$dir"; return; fi
     fi
-    # 4. Fallback to install dir
     echo "$INSTALL_DIR"
 }
 
 get_ip() { curl -s --connect-timeout 4 ifconfig.me 2>/dev/null || echo "SERVER_IP"; }
 
-# ── Docker ──────────────────────────────────────────────────────────────────────
 ensure_docker() {
     if command -v docker &>/dev/null; then return; fi
-    title "installing docker"
-    info "Docker not found, installing..."
-    pad
-    spin "Downloading Docker" &
-    SPIN_PID=$!
+    echo "  Docker not found. Installing..."
     curl -fsSL https://get.docker.com | bash >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Docker installed"
     systemctl enable docker >/dev/null 2>&1
     systemctl start docker >/dev/null 2>&1
-    sleep 0.5
-}
-
-# ── Env ─────────────────────────────────────────────────────────────────────────
-env_set() {
-    local k="$1" v="$2"
-    if grep -q "^${k}=" "$INSTALL_DIR/.env" 2>/dev/null; then
-        sed -i "s|^${k}=.*|${k}=${v}|" "$INSTALL_DIR/.env"
-    else
-        echo "${k}=${v}" >> "$INSTALL_DIR/.env"
-    fi
-}
-
-env_get() {
-    grep "^${1}=" "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "${2:-}"
-}
-
-setup_env() {
-    local user="${1:-admin}" pass="${2:-admin}" port="${3:-8000}" path="${4:-dashboard}"
-    local secret=$(openssl rand -hex 32)
-    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-    env_set ADMIN_USERNAME "$user"
-    env_set ADMIN_PASSWORD "$pass"
-    env_set PORT "$port"
-    env_set URLPATH "$path"
-    env_set JWT_SECRET_KEY "\"$secret\""
+    echo "  Docker installed."
 }
 
 # ── Install ─────────────────────────────────────────────────────────────────────
 do_install() {
     ensure_docker
 
-    title "preparing"
+    echo ""
+    echo "--- Preparing ---"
     mkdir -p "$DATA"
 
-    spin "Downloading files" &
-    SPIN_PID=$!
+    echo "  Downloading files..."
     curl -fsSL "$REPO_URL/docker-compose.yml" -o "$INSTALL_DIR/docker-compose.yml"
     curl -fsSL "$REPO_URL/.env.example" -o "$INSTALL_DIR/.env.example"
     curl -fsSL "$REPO_URL/entrypoint.sh" -o "$INSTALL_DIR/entrypoint.sh"
     chmod +x "$INSTALL_DIR/entrypoint.sh"
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Files downloaded"
-    sleep 0.3
+    echo "  Files downloaded."
 
-    # Config
-    title "configuration"
-    ask "admin username   ${D}[admin]${R}"; input user; user="${user:-admin}"
-    ask "admin password   ${D}[admin]${R}"; secret pass; pass="${pass:-admin}"
-    ask "port             ${D}[8000]${R}"; input port; port="${port:-8000}"
-    ask "url path         ${D}[dashboard]${R}"; input path; path="${path:-dashboard}"
-    pad
-    setup_env "$user" "$pass" "$port" "$path"
-    ok "Configuration saved"
-    sleep 0.3
+    echo ""
+    echo "--- Configuration ---"
+    read -r -p "  Admin username [admin]: " USER </dev/tty
+    USER=${USER:-admin}
+    read -r -s -p "  Admin password [admin]: " PASS </dev/tty
+    echo ""
+    PASS=${PASS:-admin}
+    read -r -p "  Panel port [8000]: " PORT </dev/tty
+    PORT=${PORT:-8000}
+    read -r -p "  URL path [dashboard]: " URLPATH </dev/tty
+    URLPATH=${URLPATH:-dashboard}
 
-    # Build
-    title "building"
+    JWT_SECRET=$(openssl rand -hex 32)
+    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    sed -i "s/^ADMIN_USERNAME=.*/ADMIN_USERNAME=$USER/" "$INSTALL_DIR/.env"
+    sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$PASS/" "$INSTALL_DIR/.env"
+    sed -i "s/^PORT=.*/PORT=$PORT/" "$INSTALL_DIR/.env"
+    sed -i "s/^URLPATH=.*/URLPATH=$URLPATH/" "$INSTALL_DIR/.env"
+    sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"$JWT_SECRET\"|" "$INSTALL_DIR/.env"
+    echo "  Configuration saved."
+
+    echo ""
+    echo "--- Building ---"
     cd "$INSTALL_DIR"
-    spin "Building image" &
-    SPIN_PID=$!
+    echo "  Building Docker image (this takes a while)..."
     docker compose build --no-cache >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Image built"
-    sleep 0.3
-
-    spin "Starting container" &
-    SPIN_PID=$!
+    echo "  Image built."
+    echo "  Starting container..."
     docker compose up -d >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Container started"
+    echo "  Container started."
 
     install_cli
-    show_done "$port" "$path"
+    show_done "$PORT" "$URLPATH"
 }
 
 show_done() {
-    local ip=$(get_ip)
-    local url="http://${ip}:${1}/${2}/login"
-    title "done"
-    pad
-    printf "  ${G}${B}MIT Panel is live${R}\n"
-    pad
-    local w=$(( ${#url} + 4 ))
-    box_top "$w"
-    box_row "$url" "${C}${B}${url}${R}" "$w"
-    box_bottom "$w"
-    pad
-    info "Run ${C}mit-panel${R} anytime to manage the panel"
-    pad
-    show_cursor
+    local IP=$(get_ip)
+    echo ""
+    echo "========================================"
+    echo "  Installation Complete!"
+    echo "========================================"
+    echo ""
+    echo "  Panel URL: http://$IP:$1/$2/login"
+    echo ""
+    echo "  Command:   mit-panel"
+    echo ""
 }
 
 install_cli() {
-    local src
-    src=$(find_source_dir)
+    local SRC
+    SRC=$(find_source_dir)
     cat > /usr/local/bin/mit-panel << EOF
 #!/bin/bash
-cd "$src"
+cd "$SRC"
 case "\${1:-}" in
     update)
         echo "Updating..."
@@ -240,244 +123,196 @@ case "\${1:-}" in
         chmod +x entrypoint.sh
         docker compose build --no-cache
         docker compose up -d
-        echo "Done"
+        echo "Done."
         ;;
-    stop)    docker compose down && echo "Stopped" ;;
-    start)   docker compose up -d && echo "Started" ;;
-    restart) docker compose restart && echo "Restarted" ;;
+    stop)    docker compose down && echo "Stopped." ;;
+    start)   docker compose up -d && echo "Started." ;;
+    restart) docker compose restart && echo "Restarted." ;;
     logs)    docker compose logs -f --tail=50 ;;
     status)  docker compose ps ;;
     uninstall)
-        read -p "Are you sure? (y/N): " c
+        read -r -p "Are you sure? (y/N): " c
         if [ "\$c" = "y" ] || [ "\$c" = "Y" ]; then
             docker compose down -v
             rm -f /usr/local/bin/mit-panel
-            echo "Uninstalled"
+            echo "Uninstalled."
         fi
         ;;
-    *) bash "$src/.tui.sh" ;;
+    *) bash "$SRC/.tui.sh" ;;
 esac
 EOF
     chmod +x /usr/local/bin/mit-panel
-    cp "$0" "$src/.tui.sh" 2>/dev/null || true
-    chmod +x "$src/.tui.sh" 2>/dev/null || true
+    cp "$0" "$SRC/.tui.sh" 2>/dev/null || true
+    chmod +x "$SRC/.tui.sh" 2>/dev/null || true
 }
 
 # ── Actions ─────────────────────────────────────────────────────────────────────
 action_update() {
-    local src
-    src=$(find_source_dir)
-    title "updating"
-    cd "$src"
-    spin "Pulling latest" &
-    SPIN_PID=$!
+    local SRC
+    SRC=$(find_source_dir)
+    cd "$SRC"
+    echo ""
+    echo "========================================"
+    echo "  Updating MIT Panel"
+    echo "========================================"
+    echo ""
+    echo "  Downloading latest files..."
     curl -fsSL "$REPO_URL/docker-compose.yml" -o docker-compose.yml
     curl -fsSL "$REPO_URL/.env.example" -o .env.example
     curl -fsSL "$REPO_URL/entrypoint.sh" -o entrypoint.sh
     chmod +x entrypoint.sh
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Files updated"
+    echo "  Files updated."
 
     if running; then
-        spin "Stopping" &
-        SPIN_PID=$!
+        echo "  Stopping container..."
         docker compose down >/dev/null 2>&1
-        kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-        printf "\r\033[K"
-        ok "Stopped"
+        echo "  Container stopped."
     fi
 
-    spin "Rebuilding" &
-    SPIN_PID=$!
+    echo "  Rebuilding image..."
     docker compose build --no-cache >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Rebuilt"
+    echo "  Image rebuilt."
 
-    spin "Starting" &
-    SPIN_PID=$!
+    echo "  Starting container..."
     docker compose up -d >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Updated and running"
-    sleep 0.8
+    echo "  Container started."
+    echo ""
+    echo "  Update complete!"
+    echo ""
 }
 
 action_stop() {
-    title "stop"
-    if ! running; then warn "Already stopped"; sleep 0.5; return; fi
-    ask "Stop panel? ${D}[Y/n]${R}"; input c
+    if ! running; then echo "  Already stopped."; return; fi
+    read -r -p "  Stop panel? [Y/n]: " c </dev/tty
     [[ "$c" =~ ^[nN] ]] && return
     cd "$(find_source_dir)"
-    spin "Stopping" &
-    SPIN_PID=$!
+    echo "  Stopping..."
     docker compose down >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Stopped"
-    sleep 0.5
+    echo "  Stopped."
 }
 
 action_start() {
-    title "start"
-    if running; then warn "Already running"; sleep 0.5; return; fi
+    if running; then echo "  Already running."; return; fi
     cd "$(find_source_dir)"
-    spin "Starting" &
-    SPIN_PID=$!
+    echo "  Starting..."
     docker compose up -d >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Started"
-    sleep 0.5
+    echo "  Started."
 }
 
 action_restart() {
-    title "restart"
     cd "$(find_source_dir)"
-    spin "Restarting" &
-    SPIN_PID=$!
+    echo "  Restarting..."
     docker compose restart >/dev/null 2>&1
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Restarted"
-    sleep 0.5
+    echo "  Restarted."
 }
 
 action_logs() {
-    title "logs (ctrl+c to exit)"
     cd "$(find_source_dir)"
     docker compose logs -f --tail=50
 }
 
 action_env() {
-    local src
-    src=$(find_source_dir)
-    while true; do
-        title "settings"
-        local u=$(grep "^ADMIN_USERNAME=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "admin")
-        local p=$(grep "^PORT=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "8000")
-        local pp=$(grep "^URLPATH=" "$src/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "dashboard")
+    local SRC
+    SRC=$(find_source_dir)
+    echo ""
+    echo "--- Current Settings ---"
+    local U=$(grep "^ADMIN_USERNAME=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "admin")
+    local P=$(grep "^PORT=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "8000")
+    local PP=$(grep "^URLPATH=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "dashboard")
+    echo "  Username:  $U"
+    echo "  Password:  ********"
+    echo "  Port:      $P"
+    echo "  URL Path:  $PP"
+    echo ""
+    echo "  1.  Change username"
+    echo "  2.  Change password"
+    echo "  3.  Change port"
+    echo "  4.  Change URL path"
+    echo "  5.  Edit .env manually (nano)"
+    echo ""
+    read -r -p "  Choose [0]: " c </dev/tty
+    c=${c:-0}
 
-        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "username" "$u"
-        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "password" "••••••••"
-        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "port" "$p"
-        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "url path" "$pp"
-        pad
-        line
-        pad
-        printf "  ${C}${B}1${R}  Username\n"
-        printf "  ${C}${B}2${R}  Password\n"
-        printf "  ${C}${B}3${R}  Port\n"
-        printf "  ${C}${B}4${R}  URL path\n"
-        printf "  ${C}${B}5${R}  Edit manually ${D}(nano)${R}\n"
-        printf "  ${RD}${B}0${R}  Back\n"
-        pad
-        ask "select"; input c
-        pad
+    case "$c" in
+        1)
+            read -r -p "  New username: " v </dev/tty
+            [ -n "$v" ] && sed -i "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${v}|" "$SRC/.env" && echo "  Updated."
+            ;;
+        2)
+            read -r -s -p "  New password: " v </dev/tty
+            echo ""
+            [ -n "$v" ] && sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${v}|" "$SRC/.env" && echo "  Updated."
+            ;;
+        3)
+            read -r -p "  New port: " v </dev/tty
+            [ -n "$v" ] && sed -i "s|^PORT=.*|PORT=${v}|" "$SRC/.env" && echo "  Updated."
+            ;;
+        4)
+            read -r -p "  New URL path: " v </dev/tty
+            [ -n "$v" ] && sed -i "s|^URLPATH=.*|URLPATH=${v}|" "$SRC/.env" && echo "  Updated."
+            ;;
+        5) ${EDITOR:-nano} "$SRC/.env" ;;
+        0) return ;;
+    esac
 
-        case "$c" in
-            1)
-                ask "new username"; input v
-                if [ -n "$v" ]; then
-                    sed -i "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${v}|" "$src/.env"
-                    ok "Updated"
-                fi
-                sleep 0.3
-                ;;
-            2)
-                ask "new password"; secret v
-                if [ -n "$v" ]; then
-                    sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${v}|" "$src/.env"
-                    ok "Updated"
-                fi
-                sleep 0.3
-                ;;
-            3)
-                ask "new port"; input v
-                if [ -n "$v" ]; then
-                    sed -i "s|^PORT=.*|PORT=${v}|" "$src/.env"
-                    ok "Updated"
-                fi
-                sleep 0.3
-                ;;
-            4)
-                ask "new url path"; input v
-                if [ -n "$v" ]; then
-                    sed -i "s|^URLPATH=.*|URLPATH=${v}|" "$src/.env"
-                    ok "Updated"
-                fi
-                sleep 0.3
-                ;;
-            5) ${EDITOR:-nano} "$src/.env"; sleep 0.3 ;;
-            0) return ;;
-        esac
-
-        if [ "$c" != "0" ] && [ "$c" != "5" ]; then
-            pad
-            ask "restart now? ${D}[Y/n]${R}"; input r
-            if [[ ! "$r" =~ ^[nN] ]]; then
-                cd "$src"
-                spin "Restarting" &
-                SPIN_PID=$!
-                docker compose restart >/dev/null 2>&1
-                kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-                printf "\r\033[K"
-                ok "Restarted"
-                sleep 0.5
-            fi
+    if [ "$c" != "0" ] && [ "$c" != "5" ]; then
+        echo ""
+        read -r -p "  Restart now? [Y/n]: " r </dev/tty
+        if [[ ! "$r" =~ ^[nN] ]]; then
+            cd "$SRC"
+            docker compose restart >/dev/null 2>&1
+            echo "  Restarted."
         fi
-    done
+    fi
 }
 
 action_uninstall() {
-    local src
-    src=$(find_source_dir)
-    title "uninstall"
-    warn "All data will be deleted"
-    ask "Continue? ${D}[y/N]${R}"; input c
+    local SRC
+    SRC=$(find_source_dir)
+    echo ""
+    echo "  WARNING: All data will be deleted!"
+    read -r -p "  Continue? [y/N]: " c </dev/tty
     [[ ! "$c" =~ ^[yY] ]] && return
-    cd "$src"
-    spin "Removing" &
-    SPIN_PID=$!
+    cd "$SRC"
     docker compose down -v >/dev/null 2>&1
-    # Only remove /opt/mit-panel if that's where we are
-    if [ "$src" = "$INSTALL_DIR" ]; then
+    if [ "$SRC" = "$INSTALL_DIR" ]; then
         rm -rf "$INSTALL_DIR"
     fi
     rm -f /usr/local/bin/mit-panel
-    kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r\033[K"
-    ok "Uninstalled"
-    sleep 0.5
+    echo "  Uninstalled."
 }
 
 # ── Menu ────────────────────────────────────────────────────────────────────────
 menu_installed() {
-    local st="${G}●${R} running"
+    local STATUS="running"
     if ! running; then
-        if exists; then st="${Y}●${R} stopped"; else st="${RD}●${R} offline"; fi
+        if exists; then STATUS="stopped"; else STATUS="offline"; fi
     fi
+    local SRC
+    SRC=$(find_source_dir)
 
-    local src
-    src=$(find_source_dir)
-
-    title "menu"
-    printf "  ${DM}status${R}   %b\n" "$st"
-    printf "  ${DM}path${R}     ${C}${src}${R}\n"
-    pad
-    line
-    pad
-    printf "  ${C}${B}1${R}   Update\n"
-    printf "  ${C}${B}2${R}   Stop\n"
-    printf "  ${C}${B}3${R}   Start\n"
-    printf "  ${C}${B}4${R}   Restart\n"
-    printf "  ${C}${B}5${R}   Logs\n"
-    printf "  ${C}${B}6${R}   Settings\n"
-    printf "  ${C}${B}7${R}   Uninstall\n"
-    printf "  ${RD}${B}0${R}   Exit\n"
-    pad
-    ask "select"; input c
+    echo ""
+    echo "========================================"
+    echo "  MIT Panel Manager"
+    echo "========================================"
+    echo ""
+    echo "  Status:  $STATUS"
+    echo "  Path:    $SRC"
+    echo ""
+    echo "  --- Actions ---"
+    echo ""
+    echo "  1.  Update"
+    echo "  2.  Stop"
+    echo "  3.  Start"
+    echo "  4.  Restart"
+    echo "  5.  Logs"
+    echo "  6.  Settings"
+    echo "  7.  Uninstall"
+    echo ""
+    echo "  0.  Exit"
+    echo ""
+    read -r -p "  Choose [0]: " c </dev/tty
+    c=${c:-0}
     case "$c" in
         1) action_update ;;
         2) action_stop ;;
@@ -490,46 +325,49 @@ menu_installed() {
 }
 
 menu_fresh() {
-    # If container exists but we couldn't detect source, show migrate option
     if exists; then
-        title "detected"
-        pad
-        printf "  ${DM}Existing mit-panel container found.${R}\n"
-        pad
-        line
-        pad
-        printf "  ${C}${B}1${R}   Manage existing panel\n"
-        printf "  ${C}${B}2${R}   Fresh install (new)\n"
-        printf "  ${RD}${B}0${R}   Exit\n"
-        pad
-        ask "select"; input c
+        echo ""
+        echo "========================================"
+        echo "  Existing Container Detected"
+        echo "========================================"
+        echo ""
+        echo "  A mit-panel container was found on this system."
+        echo ""
+        echo "  1.  Manage existing panel"
+        echo "  2.  Fresh install (new)"
+        echo ""
+        echo "  0.  Exit"
+        echo ""
+        read -r -p "  Choose [0]: " c </dev/tty
+        c=${c:-0}
         case "$c" in
-            1) return ;;  # Will show installed menu on next loop
+            1) return ;;
             2) do_install ;;
         esac
     else
-        title "welcome"
-        pad
-        printf "  ${DM}MIT Panel is not installed yet.${R}\n"
-        pad
-        line
-        pad
-        printf "  ${C}${B}1${R}   Install\n"
-        printf "  ${RD}${B}0${R}   Exit\n"
-        pad
-        ask "select"; input c
+        echo ""
+        echo "========================================"
+        echo "  MIT Panel Installer"
+        echo "========================================"
+        echo ""
+        echo "  MIT Panel is not installed yet."
+        echo ""
+        echo "  1.  Install"
+        echo ""
+        echo "  0.  Exit"
+        echo ""
+        read -r -p "  Choose [0]: " c </dev/tty
+        c=${c:-0}
         [ "$c" = "1" ] && do_install
     fi
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────────
 main() {
-    trap 'show_cursor; exit 0' INT TERM
-    hide_cursor
-
     if [[ $EUID -ne 0 ]]; then
-        title "error"
-        die "Run with: sudo bash install.sh"
+        echo "  Error: This script must be run as root."
+        echo "  Run with: sudo bash install.sh"
+        exit 1
     fi
 
     while true; do
