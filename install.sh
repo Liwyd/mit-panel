@@ -17,35 +17,33 @@ C='\033[36m'
 G='\033[32m'
 Y='\033[33m'
 RD='\033[31m'
-W='\033[97m'
 DM='\033[90m'
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 input() { read -r "$@" < /dev/tty; }
 secret() { read -rs "$@" < /dev/tty; echo ""; }
-clear() { printf '\033[2J\033[H'; }
-move(){ printf '\033[%d;%dH' "$1" "${2:-1}"; }
+clr() { printf '\033[2J\033[H'; }
 
-line() { printf "${C}  ─────────────────────────────────────────────────────────${R}\n"; }
+line() { printf "${DM}  --------------------------------------------------${R}\n"; }
 pad()  { printf "\n"; }
 
 title() {
-    clear
+    clr
     pad
     printf "  ${C}${B}mit${R}${D}panel${R}\n"
-    [ -n "${1:-}" ] && printf "  ${DM}$1${R}\n"
+    [ -n "${1:-}" ] && printf "  ${DM}  $1${R}\n"
     line
 }
 
-ok()   { printf "  ${G}✓${R} $1\n"; }
-fail() { printf "  ${RD}✗${R} $1\n"; }
-info() { printf "  ${DM}$1${R}\n"; }
-warn() { printf "  ${Y}!${R} ${Y}$1${R}\n"; }
-ask()  { printf "  ${DM}$1${R} "; }
+ok()   { printf "  ${G}[+]${R} $1\n"; }
+fail() { printf "  ${RD}[-]${R} $1\n"; }
+info() { printf "  ${DM}    $1${R}\n"; }
+warn() { printf "  ${Y}[!]${R} ${Y}$1${R}\n"; }
+ask()  { printf "  ${DM}  > $1${R} "; }
 
 spin() {
-    local msg="$1" chars="⣾⣽⣻⢿⡿⣟⣯⣷" i=0
-    while true; do printf "\r  ${C}${chars:i++%${#chars}:1}${R} ${DM}${msg}${R}"; sleep 0.08; done
+    local msg="$1" chars='|/-\' i=0
+    while true; do printf "\r  ${C}${chars:i++%${#chars}:1}${R} ${DM}${msg}...${R}"; sleep 0.1; done
 }
 
 die() { fail "$1"; show_cursor; exit 1; }
@@ -117,15 +115,14 @@ do_install() {
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
     printf "\r"
     ok "Files downloaded"
-
     sleep 0.3
 
     # Config
     title "configuration"
-    ask "admin username  ${D}[admin]${R}"; input user; user="${user:-admin}"
-    ask "admin password  ${D}[admin]${R}"; secret pass; pass="${pass:-admin}"
-    ask "port            ${D}[8000]${R}"; input port; port="${port:-8000}"
-    ask "url path        ${D}[dashboard]${R}"; input path; path="${path:-dashboard}"
+    ask "admin username  [admin]"; input user; user="${user:-admin}"
+    ask "admin password  [admin]"; secret pass; pass="${pass:-admin}"
+    ask "port            [8000]"; input port; port="${port:-8000}"
+    ask "url path        [dashboard]"; input path; path="${path:-dashboard}"
     pad
     setup_env "$user" "$pass" "$port" "$path"
     ok "Configuration saved"
@@ -134,7 +131,7 @@ do_install() {
     # Build
     title "building"
     cd "$INSTALL_DIR"
-    spin "Building image (this takes a while)" &
+    spin "Building image" &
     SPIN_PID=$!
     docker compose build --no-cache >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
@@ -245,7 +242,7 @@ action_update() {
 action_stop() {
     title "stop"
     if ! running; then warn "Already stopped"; sleep 0.5; return; fi
-    ask "Stop panel? ${D}[Y/n]${R}"; input c
+    ask "Stop panel? [Y/n]"; input c
     [[ "$c" =~ ^[nN] ]] && return
     cd "$INSTALL_DIR"
     spin "Stopping" &
@@ -283,7 +280,7 @@ action_restart() {
 }
 
 action_logs() {
-    title "logs  ${D}(ctrl+c to exit)${R}"
+    title "logs  (ctrl+c to exit)"
     cd "$INSTALL_DIR"
     docker compose logs -f --tail=50
 }
@@ -295,18 +292,18 @@ action_env() {
         local p=$(env_get PORT "8000")
         local pp=$(env_get URLPATH "dashboard")
 
-        printf "  ${DM}username${R}    ${C}${u}${R}\n"
-        printf "  ${DM}password${R}    ${C}****${R}\n"
-        printf "  ${DM}port${R}        ${C}${p}${R}\n"
-        printf "  ${DM}url path${R}    ${C}${pp}${R}\n"
+        printf "  ${DM}  username${R}    ${C}${u}${R}\n"
+        printf "  ${DM}  password${R}    ${C}****${R}\n"
+        printf "  ${DM}  port${R}        ${C}${p}${R}\n"
+        printf "  ${DM}  url path${R}    ${C}${pp}${R}\n"
         pad
         line
-        printf "  ${G}1${R}  username\n"
-        printf "  ${G}2${R}  password\n"
-        printf "  ${G}3${R}  port\n"
-        printf "  ${G}4${R}  url path\n"
-        printf "  ${G}5${R}  edit manually ${D}(nano)${R}\n"
-        printf "  ${RD}0${R}  back\n"
+        printf "  ${G}  1${R}  username\n"
+        printf "  ${G}  2${R}  password\n"
+        printf "  ${G}  3${R}  port\n"
+        printf "  ${G}  4${R}  url path\n"
+        printf "  ${G}  5${R}  edit manually ${D}(nano)${R}\n"
+        printf "  ${RD}  0${R}  back\n"
         pad
         ask "select"; input c
         pad
@@ -322,7 +319,7 @@ action_env() {
 
         if [ "$c" != "0" ] && [ "$c" != "5" ]; then
             pad
-            ask "restart now? ${D}[Y/n]${R}"; input r
+            ask "restart now? [Y/n]"; input r
             if [[ ! "$r" =~ ^[nN] ]]; then
                 cd "$INSTALL_DIR"
                 spin "Restarting" &
@@ -340,7 +337,7 @@ action_env() {
 action_uninstall() {
     title "uninstall"
     warn "All data will be deleted"
-    ask "Continue? ${D}[y/N]${R}"; input c
+    ask "Continue? [y/N]"; input c
     [[ ! "$c" =~ ^[yY] ]] && return
     cd "$INSTALL_DIR"
     spin "Removing" &
@@ -356,23 +353,23 @@ action_uninstall() {
 
 # ── Menu ────────────────────────────────────────────────────────────────────────
 menu_installed() {
-    local st="${G}● running${R}"
+    local st="${G}[running]${R}"
     if ! running; then
-        if exists; then st="${Y}● stopped${R}"; else st="${RD}● offline${R}"; fi
+        if exists; then st="${Y}[stopped]${R}"; else st="${RD}[offline]${R}"; fi
     fi
 
     title "menu"
-    printf "  ${DM}status${R}   ${st}\n"
+    printf "  ${DM}  status${R}   ${st}\n"
     pad
     line
-    printf "  ${G}1${R}   update\n"
-    printf "  ${G}2${R}   stop\n"
-    printf "  ${G}3${R}   start\n"
-    printf "  ${G}4${R}   restart\n"
-    printf "  ${G}5${R}   logs\n"
-    printf "  ${G}6${R}   settings\n"
-    printf "  ${G}7${R}   uninstall\n"
-    printf "  ${RD}0${R}   exit\n"
+    printf "  ${G}  1${R}   update\n"
+    printf "  ${G}  2${R}   stop\n"
+    printf "  ${G}  3${R}   start\n"
+    printf "  ${G}  4${R}   restart\n"
+    printf "  ${G}  5${R}   logs\n"
+    printf "  ${G}  6${R}   settings\n"
+    printf "  ${G}  7${R}   uninstall\n"
+    printf "  ${RD}  0${R}   exit\n"
     pad
     ask "select"; input c
     case "$c" in
@@ -389,11 +386,11 @@ menu_installed() {
 menu_fresh() {
     title "welcome"
     pad
-    printf "  ${DM}MIT Panel is not installed.${R}\n"
+    printf "  ${DM}  MIT Panel is not installed.${R}\n"
     pad
     line
-    printf "  ${G}1${R}   install\n"
-    printf "  ${RD}0${R}   exit\n"
+    printf "  ${G}  1${R}   install\n"
+    printf "  ${RD}  0${R}   exit\n"
     pad
     ask "select"; input c
     [ "$c" = "1" ] && do_install
