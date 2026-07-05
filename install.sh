@@ -9,41 +9,66 @@ REPO_URL="https://raw.githubusercontent.com/liwyd/mit-panel/main"
 CONTAINER="mit-panel"
 DATA="$INSTALL_DIR/data"
 
-# ── Colors ──────────────────────────────────────────────────────────────────────
+# ── Palette ─────────────────────────────────────────────────────────────────────
 R='\033[0m'
 B='\033[1m'
 D='\033[2m'
-C='\033[36m'
-G='\033[32m'
-Y='\033[33m'
-RD='\033[31m'
-DM='\033[90m'
+C='\033[38;5;80m'    # accent - cyan
+P='\033[38;5;141m'   # accent - violet
+G='\033[38;5;78m'    # success
+Y='\033[38;5;221m'   # warning
+RD='\033[38;5;203m'  # danger
+DM='\033[38;5;244m'  # muted
 
-# ── Helpers ─────────────────────────────────────────────────────────────────────
+# ── Low-level helpers ───────────────────────────────────────────────────────────
 input() { read -r "$@" < /dev/tty; }
 secret() { read -rs "$@" < /dev/tty; echo ""; }
 clr() { printf '\033[2J\033[H'; }
-
-line() { printf "${DM}  --------------------------------------------------${R}\n"; }
 pad()  { printf "\n"; }
+
+repeat() { local ch="$1" n="$2"; (( n < 0 )) && n=0; printf '%*s' "$n" '' | tr ' ' "$ch"; }
+
+line() { printf "  ${DM}$(repeat '─' 50)${R}\n"; }
+
+# a single boxed row: $1 = plain text (for width math), $2 = colored/styled text to render
+box_row() {
+    local plain="$1" styled="$2" width="$3"
+    local pad_n=$(( width - 4 - ${#plain} ))
+    (( pad_n < 0 )) && pad_n=0
+    printf "  ${DM}│${R}  %b%*s  ${DM}│${R}\n" "$styled" "$pad_n" ""
+}
+
+box_top()    { printf "  ${DM}╭$(repeat '─' "$1")╮${R}\n"; }
+box_bottom() { printf "  ${DM}╰$(repeat '─' "$1")╯${R}\n"; }
 
 title() {
     clr
     pad
-    printf "  ${C}${B}mit${R}${D}panel${R}\n"
-    [ -n "${1:-}" ] && printf "  ${DM}  $1${R}\n"
-    line
+    local sub="${1:-}"
+    local logo="mitpanel"
+    local w=$(( ${#logo} + 4 ))
+    if [ -n "$sub" ] && [ $(( ${#sub} + 4 )) -gt "$w" ]; then w=$(( ${#sub} + 4 )); fi
+
+    box_top "$w"
+    box_row "$logo" "${P}${B}mit${R}${C}${B}panel${R}" "$w"
+    [ -n "$sub" ] && box_row "$sub" "${DM}${sub}${R}" "$w"
+    box_bottom "$w"
+    pad
 }
 
-ok()   { printf "  ${G}[+]${R} $1\n"; }
-fail() { printf "  ${RD}[-]${R} $1\n"; }
-info() { printf "  ${DM}    $1${R}\n"; }
-warn() { printf "  ${Y}[!]${R} ${Y}$1${R}\n"; }
-ask()  { printf "  ${DM}  > $1${R} "; }
+ok()   { printf "  ${G}✓${R}  %b\n" "$1"; }
+fail() { printf "  ${RD}✗${R}  %b\n" "$1"; }
+info() { printf "  ${DM}  %b${R}\n" "$1"; }
+warn() { printf "  ${Y}!${R}  ${Y}%b${R}\n" "$1"; }
+ask()  { printf "  ${C}❯${R}  %b " "$1"; }
 
 spin() {
-    local msg="$1" chars='|/-\' i=0
-    while true; do printf "\r  ${C}${chars:i++%${#chars}:1}${R} ${DM}${msg}...${R}"; sleep 0.1; done
+    local msg="$1" i=0
+    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    while true; do
+        printf "\r  ${C}%s${R}  ${DM}%s…${R}" "${frames[i++ % ${#frames[@]}]}" "$msg"
+        sleep 0.08
+    done
 }
 
 die() { fail "$1"; show_cursor; exit 1; }
@@ -67,7 +92,7 @@ ensure_docker() {
     SPIN_PID=$!
     curl -fsSL https://get.docker.com | bash >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Docker installed"
     systemctl enable docker >/dev/null 2>&1
     systemctl start docker >/dev/null 2>&1
@@ -113,16 +138,16 @@ do_install() {
     curl -fsSL "$REPO_URL/entrypoint.sh" -o "$INSTALL_DIR/entrypoint.sh"
     chmod +x "$INSTALL_DIR/entrypoint.sh"
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Files downloaded"
     sleep 0.3
 
     # Config
     title "configuration"
-    ask "admin username  [admin]"; input user; user="${user:-admin}"
-    ask "admin password  [admin]"; secret pass; pass="${pass:-admin}"
-    ask "port            [8000]"; input port; port="${port:-8000}"
-    ask "url path        [dashboard]"; input path; path="${path:-dashboard}"
+    ask "admin username   ${D}[admin]${R}"; input user; user="${user:-admin}"
+    ask "admin password   ${D}[admin]${R}"; secret pass; pass="${pass:-admin}"
+    ask "port             ${D}[8000]${R}"; input port; port="${port:-8000}"
+    ask "url path         ${D}[dashboard]${R}"; input path; path="${path:-dashboard}"
     pad
     setup_env "$user" "$pass" "$port" "$path"
     ok "Configuration saved"
@@ -135,7 +160,7 @@ do_install() {
     SPIN_PID=$!
     docker compose build --no-cache >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Image built"
     sleep 0.3
 
@@ -143,7 +168,7 @@ do_install() {
     SPIN_PID=$!
     docker compose up -d >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Container started"
 
     install_cli
@@ -152,14 +177,17 @@ do_install() {
 
 show_done() {
     local ip=$(get_ip)
+    local url="http://${ip}:${1}/${2}/login"
     title "done"
     pad
-    printf "  ${G}MIT Panel is live${R}\n"
+    printf "  ${G}${B}MIT Panel is live${R}\n"
     pad
-    printf "  ${C}http://${ip}:${1}/${2}/login${R}\n"
+    local w=$(( ${#url} + 4 ))
+    box_top "$w"
+    box_row "$url" "${C}${B}${url}${R}" "$w"
+    box_bottom "$w"
     pad
-    line
-    info "Run ${C}mit-panel${R} to manage"
+    info "Run ${C}mit-panel${R} anytime to manage the panel"
     pad
     show_cursor
 }
@@ -211,7 +239,7 @@ action_update() {
     curl -fsSL "$REPO_URL/entrypoint.sh" -o entrypoint.sh
     chmod +x entrypoint.sh
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Files updated"
 
     if running; then
@@ -219,7 +247,7 @@ action_update() {
         SPIN_PID=$!
         docker compose down >/dev/null 2>&1
         kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-        printf "\r"
+        printf "\r\033[K"
         ok "Stopped"
     fi
 
@@ -227,14 +255,14 @@ action_update() {
     SPIN_PID=$!
     docker compose build --no-cache >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Rebuilt"
 
     spin "Starting" &
     SPIN_PID=$!
     docker compose up -d >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Updated and running"
     sleep 0.8
 }
@@ -242,14 +270,14 @@ action_update() {
 action_stop() {
     title "stop"
     if ! running; then warn "Already stopped"; sleep 0.5; return; fi
-    ask "Stop panel? [Y/n]"; input c
+    ask "Stop panel? ${D}[Y/n]${R}"; input c
     [[ "$c" =~ ^[nN] ]] && return
     cd "$INSTALL_DIR"
     spin "Stopping" &
     SPIN_PID=$!
     docker compose down >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Stopped"
     sleep 0.5
 }
@@ -262,7 +290,7 @@ action_start() {
     SPIN_PID=$!
     docker compose up -d >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Started"
     sleep 0.5
 }
@@ -274,13 +302,13 @@ action_restart() {
     SPIN_PID=$!
     docker compose restart >/dev/null 2>&1
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Restarted"
     sleep 0.5
 }
 
 action_logs() {
-    title "logs  (ctrl+c to exit)"
+    title "logs (ctrl+c to exit)"
     cd "$INSTALL_DIR"
     docker compose logs -f --tail=50
 }
@@ -292,18 +320,19 @@ action_env() {
         local p=$(env_get PORT "8000")
         local pp=$(env_get URLPATH "dashboard")
 
-        printf "  ${DM}  username${R}    ${C}${u}${R}\n"
-        printf "  ${DM}  password${R}    ${C}****${R}\n"
-        printf "  ${DM}  port${R}        ${C}${p}${R}\n"
-        printf "  ${DM}  url path${R}    ${C}${pp}${R}\n"
+        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "username" "$u"
+        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "password" "••••••••"
+        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "port" "$p"
+        printf "  ${DM}%-10s${R} ${C}%s${R}\n" "url path" "$pp"
         pad
         line
-        printf "  ${G}  1${R}  username\n"
-        printf "  ${G}  2${R}  password\n"
-        printf "  ${G}  3${R}  port\n"
-        printf "  ${G}  4${R}  url path\n"
-        printf "  ${G}  5${R}  edit manually ${D}(nano)${R}\n"
-        printf "  ${RD}  0${R}  back\n"
+        pad
+        printf "  ${C}${B}1${R}  Username\n"
+        printf "  ${C}${B}2${R}  Password\n"
+        printf "  ${C}${B}3${R}  Port\n"
+        printf "  ${C}${B}4${R}  URL path\n"
+        printf "  ${C}${B}5${R}  Edit manually ${D}(nano)${R}\n"
+        printf "  ${RD}${B}0${R}  Back\n"
         pad
         ask "select"; input c
         pad
@@ -319,14 +348,14 @@ action_env() {
 
         if [ "$c" != "0" ] && [ "$c" != "5" ]; then
             pad
-            ask "restart now? [Y/n]"; input r
+            ask "restart now? ${D}[Y/n]${R}"; input r
             if [[ ! "$r" =~ ^[nN] ]]; then
                 cd "$INSTALL_DIR"
                 spin "Restarting" &
                 SPIN_PID=$!
                 docker compose restart >/dev/null 2>&1
                 kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-                printf "\r"
+                printf "\r\033[K"
                 ok "Restarted"
                 sleep 0.5
             fi
@@ -337,7 +366,7 @@ action_env() {
 action_uninstall() {
     title "uninstall"
     warn "All data will be deleted"
-    ask "Continue? [y/N]"; input c
+    ask "Continue? ${D}[y/N]${R}"; input c
     [[ ! "$c" =~ ^[yY] ]] && return
     cd "$INSTALL_DIR"
     spin "Removing" &
@@ -346,30 +375,31 @@ action_uninstall() {
     rm -rf "$INSTALL_DIR"
     rm -f /usr/local/bin/mit-panel
     kill $SPIN_PID 2>/dev/null; wait $SPIN_PID 2>/dev/null
-    printf "\r"
+    printf "\r\033[K"
     ok "Uninstalled"
     sleep 0.5
 }
 
 # ── Menu ────────────────────────────────────────────────────────────────────────
 menu_installed() {
-    local st="${G}[running]${R}"
+    local st="${G}●${R} running"
     if ! running; then
-        if exists; then st="${Y}[stopped]${R}"; else st="${RD}[offline]${R}"; fi
+        if exists; then st="${Y}●${R} stopped"; else st="${RD}●${R} offline"; fi
     fi
 
     title "menu"
-    printf "  ${DM}  status${R}   ${st}\n"
+    printf "  ${DM}status${R}   %b\n" "$st"
     pad
     line
-    printf "  ${G}  1${R}   update\n"
-    printf "  ${G}  2${R}   stop\n"
-    printf "  ${G}  3${R}   start\n"
-    printf "  ${G}  4${R}   restart\n"
-    printf "  ${G}  5${R}   logs\n"
-    printf "  ${G}  6${R}   settings\n"
-    printf "  ${G}  7${R}   uninstall\n"
-    printf "  ${RD}  0${R}   exit\n"
+    pad
+    printf "  ${C}${B}1${R}   Update\n"
+    printf "  ${C}${B}2${R}   Stop\n"
+    printf "  ${C}${B}3${R}   Start\n"
+    printf "  ${C}${B}4${R}   Restart\n"
+    printf "  ${C}${B}5${R}   Logs\n"
+    printf "  ${C}${B}6${R}   Settings\n"
+    printf "  ${C}${B}7${R}   Uninstall\n"
+    printf "  ${RD}${B}0${R}   Exit\n"
     pad
     ask "select"; input c
     case "$c" in
@@ -386,11 +416,12 @@ menu_installed() {
 menu_fresh() {
     title "welcome"
     pad
-    printf "  ${DM}  MIT Panel is not installed.${R}\n"
+    printf "  ${DM}MIT Panel is not installed yet.${R}\n"
     pad
     line
-    printf "  ${G}  1${R}   install\n"
-    printf "  ${RD}  0${R}   exit\n"
+    pad
+    printf "  ${C}${B}1${R}   Install\n"
+    printf "  ${RD}${B}0${R}   Exit\n"
     pad
     ask "select"; input c
     [ "$c" = "1" ] && do_install
