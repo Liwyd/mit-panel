@@ -65,6 +65,22 @@
         font-family: 'Rubik', sans-serif;
     }
 
+    /* English text uses Bangers */
+    [lang="en"], .en, :where(:not([dir="rtl"])) {
+        font-family: 'Bangers', cursive;
+    }
+
+    /* Bold/heading elements use Bangers for English */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Bangers', cursive;
+        letter-spacing: 0.03em;
+    }
+
+    /* Persian content keeps Rubik */
+    [dir="rtl"], [lang="fa"] {
+        font-family: 'Rubik', sans-serif;
+    }
+
     .dark body {
         background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
         background-size: 22px 22px;

@@ -9,6 +9,7 @@ export default {
         extend: {
             fontFamily: {
                 rubik: ['Rubik', 'sans-serif'],
+                bangers: ['Bangers', 'cursive'],
             },
             colors: {
                 border: 'hsl(var(--border))',
