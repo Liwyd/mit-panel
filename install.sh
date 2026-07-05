@@ -1,6 +1,37 @@
 #!/bin/bash
 set -e
 
+# ── ANSI Colors ──────────────────────────────────────────────────
+RST='\033[0m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RED='\033[31m'
+GRN='\033[32m'
+YLW='\033[33m'
+CYN='\033[36m'
+WHT='\033[97M'
+
+c()  { echo -e "${1}${2}${RST}"; }
+ok() { c "$GRN" "  $1"; }
+er() { c "$RED" "  $1"; }
+wn() { c "$YLW" "  $1"; }
+inf(){ c "$DIM" "  $1"; }
+
+header() {
+    local title="$1"
+    local width=46
+    local pad=$(( (width - ${#title} - 2) / 2 ))
+    echo ""
+    c "$CYN" "  ╔$(printf '%0.s═' $(seq 1 $width))╗"
+    c "$CYN" "  ║$(printf '%0.s ' $(seq 1 $pad))${BOLD}${WHT}${title}$(printf '%0.s ' $(seq 1 $pad))║"
+    c "$CYN" "  ╚$(printf '%0.s═' $(seq 1 $width))╝"
+    echo ""
+}
+
+separator() { c "$CYN" "  ──────────────────────────────────────────────"; }
+prompt()    { echo -ne "  ${BOLD}${CYN}$1${RST}"; }
+
+# ── Variables ────────────────────────────────────────────────────
 INSTALL_DIR="/opt/mit-panel"
 REPO_URL="https://raw.githubusercontent.com/liwyd/mit-panel/main"
 CONTAINER="mit-panel"
@@ -34,27 +65,32 @@ get_ip() { curl -s --connect-timeout 4 ifconfig.me 2>/dev/null || echo "SERVER_I
 
 ensure_docker() {
     if command -v docker &>/dev/null; then return; fi
-    echo "  Docker not found. Installing..."
+    wn "Docker not found. Installing..."
     curl -fsSL https://get.docker.com | bash >/dev/null 2>&1
     systemctl enable docker >/dev/null 2>&1
     systemctl start docker >/dev/null 2>&1
-    echo "  Docker installed."
+    ok "Docker installed."
 }
 
+# ── Install ──────────────────────────────────────────────────────
 do_install() {
     ensure_docker
 
     echo ""
-    echo "--- Preparing ---"
+    separator
+    c "$BOLD" "  Preparing"
+    separator
 
-    echo "  Cloning repository..."
+    inf "Cloning repository..."
     git clone --quiet "https://github.com/liwyd/mit-panel.git" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
     mkdir -p "$DATA"
-    echo "  Repository cloned."
+    ok "Repository cloned."
 
     echo ""
-    echo "--- Configuration ---"
+    separator
+    c "$BOLD" "  Configuration"
+    separator
     read -r -p "  Admin username [admin]: " USER </dev/tty
     USER=${USER:-admin}
     read -r -s -p "  Admin password [admin]: " PASS </dev/tty
@@ -72,16 +108,18 @@ do_install() {
     sed -i "s/^PORT=.*/PORT=$PORT/" .env
     sed -i "s/^URLPATH=.*/URLPATH=$URLPATH/" .env
     sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"$JWT_SECRET\"|" .env
-    echo "  Configuration saved."
+    ok "Configuration saved."
 
     echo ""
-    echo "--- Building ---"
-    echo "  Building Docker image (this takes a while)..."
+    separator
+    c "$BOLD" "  Building"
+    separator
+    inf "Building Docker image (this takes a while)..."
     docker compose build --no-cache >/dev/null 2>&1
-    echo "  Image built."
-    echo "  Starting container..."
+    ok "Image built."
+    inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
-    echo "  Container started."
+    ok "Container started."
 
     install_cli
     show_done "$PORT" "$URLPATH"
@@ -90,13 +128,13 @@ do_install() {
 show_done() {
     local IP=$(get_ip)
     echo ""
-    echo "========================================"
-    echo "  Installation Complete!"
-    echo "========================================"
+    c "$GRN" "  ╔══════════════════════════════════════════════╗"
+    c "$GRN" "  ║          Installation Complete!              ║"
+    c "$GRN" "  ╚══════════════════════════════════════════════╝"
     echo ""
-    echo "  Panel URL: http://$IP:$1/$2/login"
+    c "$WHT" "  Panel URL: ${CYN}http://$IP:$1/$2/login${RST}"
     echo ""
-    echo "  Command:   mit-panel"
+    c "$WHT" "  Command:   ${CYN}mit-panel${RST}"
     echo ""
 }
 
@@ -136,19 +174,17 @@ EOF
     chmod +x "$SRC/.tui.sh" 2>/dev/null || true
 }
 
+# ── Actions ──────────────────────────────────────────────────────
 action_update() {
     local SRC
     SRC=$(find_source_dir)
     cd "$SRC"
     echo ""
-    echo "========================================"
-    echo "  Updating MIT Panel"
-    echo "========================================"
-    echo ""
-    echo "  Pulling latest source code..."
+    header "Updating MIT Panel"
+    inf "Pulling latest source code..."
     if [ -d .git ]; then
         git pull --quiet 2>/dev/null || {
-            echo "  git pull failed, re-cloning..."
+            er "git pull failed, re-cloning..."
             cd /
             rm -rf "$SRC"
             git clone --quiet "https://github.com/liwyd/mit-panel.git" "$SRC"
@@ -160,49 +196,49 @@ action_update() {
         git clone --quiet "https://github.com/liwyd/mit-panel.git" "$SRC"
         cd "$SRC"
     fi
-    echo "  Source code updated."
+    ok "Source code updated."
 
     if running; then
-        echo "  Stopping container..."
+        inf "Stopping container..."
         docker compose down >/dev/null 2>&1
-        echo "  Container stopped."
+        ok "Container stopped."
     fi
 
-    echo "  Rebuilding image..."
+    inf "Rebuilding image..."
     docker compose build --no-cache >/dev/null 2>&1
-    echo "  Image rebuilt."
+    ok "Image rebuilt."
 
-    echo "  Starting container..."
+    inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
-    echo "  Container started."
+    ok "Container started."
     echo ""
-    echo "  Update complete!"
+    ok "Update complete!"
     echo ""
 }
 
 action_stop() {
-    if ! running; then echo "  Already stopped."; return; fi
+    if ! running; then wn "Already stopped."; return; fi
     read -r -p "  Stop panel? [Y/n]: " c </dev/tty
     [[ "$c" =~ ^[nN] ]] && return
     cd "$(find_source_dir)"
-    echo "  Stopping..."
+    inf "Stopping..."
     docker compose down >/dev/null 2>&1
-    echo "  Stopped."
+    ok "Stopped."
 }
 
 action_start() {
-    if running; then echo "  Already running."; return; fi
+    if running; then wn "Already running."; return; fi
     cd "$(find_source_dir)"
-    echo "  Starting..."
+    inf "Starting..."
     docker compose up -d >/dev/null 2>&1
-    echo "  Started."
+    ok "Started."
 }
 
 action_restart() {
     cd "$(find_source_dir)"
-    echo "  Restarting..."
+    inf "Restarting..."
     docker compose restart >/dev/null 2>&1
-    echo "  Restarted."
+    ok "Restarted."
 }
 
 action_logs() {
@@ -214,14 +250,14 @@ action_env() {
     local SRC
     SRC=$(find_source_dir)
     echo ""
-    echo "--- Current Settings ---"
+    header "Current Settings"
     local U=$(grep "^ADMIN_USERNAME=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "admin")
     local P=$(grep "^PORT=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "8000")
     local PP=$(grep "^URLPATH=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "dashboard")
-    echo "  Username:  $U"
-    echo "  Password:  ****"
-    echo "  Port:      $P"
-    echo "  URL Path:  $PP"
+    c "$WHT" "  Username:  ${CYN}$U${RST}"
+    c "$WHT" "  Password:  ${CYN}****${RST}"
+    c "$WHT" "  Port:      ${CYN}$P${RST}"
+    c "$WHT" "  URL Path:  ${CYN}$PP${RST}"
     echo ""
     echo "  1.  Change username"
     echo "  2.  Change password"
@@ -235,20 +271,20 @@ action_env() {
     case "$c" in
         1)
             read -r -p "  New username: " v </dev/tty
-            [ -n "$v" ] && sed -i "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${v}|" "$SRC/.env" && echo "  Updated."
+            [ -n "$v" ] && sed -i "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${v}|" "$SRC/.env" && ok "Updated."
             ;;
         2)
             read -r -s -p "  New password: " v </dev/tty
             echo ""
-            [ -n "$v" ] && sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${v}|" "$SRC/.env" && echo "  Updated."
+            [ -n "$v" ] && sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${v}|" "$SRC/.env" && ok "Updated."
             ;;
         3)
             read -r -p "  New port: " v </dev/tty
-            [ -n "$v" ] && sed -i "s|^PORT=.*|PORT=${v}|" "$SRC/.env" && echo "  Updated."
+            [ -n "$v" ] && sed -i "s|^PORT=.*|PORT=${v}|" "$SRC/.env" && ok "Updated."
             ;;
         4)
             read -r -p "  New URL path: " v </dev/tty
-            [ -n "$v" ] && sed -i "s|^URLPATH=.*|URLPATH=${v}|" "$SRC/.env" && echo "  Updated."
+            [ -n "$v" ] && sed -i "s|^URLPATH=.*|URLPATH=${v}|" "$SRC/.env" && ok "Updated."
             ;;
         5) ${EDITOR:-nano} "$SRC/.env" ;;
         0) return ;;
@@ -260,7 +296,7 @@ action_env() {
         if [[ ! "$r" =~ ^[nN] ]]; then
             cd "$SRC"
             docker compose restart >/dev/null 2>&1
-            echo "  Restarted."
+            ok "Restarted."
         fi
     fi
 }
@@ -269,7 +305,7 @@ action_uninstall() {
     local SRC
     SRC=$(find_source_dir)
     echo ""
-    echo "  WARNING: All data will be deleted!"
+    er "WARNING: All data will be deleted!"
     read -r -p "  Continue? [y/N]: " c </dev/tty
     [[ ! "$c" =~ ^[yY] ]] && return
     cd "$SRC"
@@ -278,26 +314,26 @@ action_uninstall() {
         rm -rf "$INSTALL_DIR"
     fi
     rm -f /usr/local/bin/mit-panel
-    echo "  Uninstalled."
+    ok "Uninstalled."
 }
 
+# ── Menus ────────────────────────────────────────────────────────
 menu_installed() {
     local STATUS="running"
+    local SCOLOR="$GRN"
     if ! running; then
-        if exists; then STATUS="stopped"; else STATUS="offline"; fi
+        if exists; then STATUS="stopped"; SCOLOR="$YLW"; else STATUS="offline"; SCOLOR="$RED"; fi
     fi
     local SRC
     SRC=$(find_source_dir)
 
+    header "MIT Panel Manager"
+    c "$WHT" "  Status:  ${SCOLOR}${BOLD}${STATUS}${RST}"
+    c "$WHT" "  Path:    ${DIM}${SRC}${RST}"
     echo ""
-    echo "========================================"
-    echo "  MIT Panel Manager"
-    echo "========================================"
-    echo ""
-    echo "  Status:  $STATUS"
-    echo "  Path:    $SRC"
-    echo ""
-    echo "  --- Actions ---"
+    separator
+    c "$BOLD" "  Actions"
+    separator
     echo ""
     echo "  1.  Update"
     echo "  2.  Stop"
@@ -307,7 +343,7 @@ menu_installed() {
     echo "  6.  Settings"
     echo "  7.  Uninstall"
     echo ""
-    echo "  0.  Exit"
+    c "$DIM" "  0.  Exit"
     echo ""
     read -r -p "  Choose [0]: " c </dev/tty
     c=${c:-0}
@@ -325,17 +361,13 @@ menu_installed() {
 
 menu_fresh() {
     if exists; then
-        echo ""
-        echo "========================================"
-        echo "  Existing Container Detected"
-        echo "========================================"
-        echo ""
-        echo "  A mit-panel container was found on this system."
+        header "Existing Container Detected"
+        inf "A mit-panel container was found on this system."
         echo ""
         echo "  1.  Manage existing panel"
         echo "  2.  Fresh install (new)"
         echo ""
-        echo "  0.  Exit"
+        c "$DIM" "  0.  Exit"
         echo ""
         read -r -p "  Choose [0]: " c </dev/tty
         c=${c:-0}
@@ -345,16 +377,12 @@ menu_fresh() {
             0) exit 0 ;;
         esac
     else
-        echo ""
-        echo "========================================"
-        echo "  MIT Panel Installer"
-        echo "========================================"
-        echo ""
-        echo "  MIT Panel is not installed yet."
+        header "MIT Panel Installer"
+        inf "MIT Panel is not installed yet."
         echo ""
         echo "  1.  Install"
         echo ""
-        echo "  0.  Exit"
+        c "$DIM" "  0.  Exit"
         echo ""
         read -r -p "  Choose [0]: " c </dev/tty
         c=${c:-0}
@@ -367,11 +395,12 @@ menu_fresh() {
 
 main() {
     if [[ $EUID -ne 0 ]]; then
-        echo "  Error: This script must be run as root."
-        echo "  Run with: sudo bash install.sh"
+        er "Error: This script must be run as root."
+        er "Run with: sudo bash install.sh"
         exit 1
     fi
 
+    clear
     while true; do
         if installed; then menu_installed; else menu_fresh; fi
     done
