@@ -141,37 +141,161 @@ show_done() {
 install_cli() {
     local SRC
     SRC=$(find_source_dir)
-    cat > /usr/local/bin/mit-panel << EOF
+    cat > /usr/local/bin/mit-panel << 'CLIEOF'
 #!/bin/bash
+set -e
+
+SRC="__SRC__"
 cd "$SRC"
-case "\${1:-}" in
+
+usage() {
+    echo "Usage: mit-panel <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  status          Show panel status"
+    echo "  start           Start the panel"
+    echo "  stop            Stop the panel"
+    echo "  restart         Restart the panel"
+    echo "  update          Update the panel (pull + rebuild + restart)"
+    echo "  logs            View container logs"
+    echo "  settings        Show current settings"
+    echo "  set-username    Change admin username"
+    echo "  set-password    Change admin password"
+    echo "  set-port        Change panel port"
+    echo "  set-urlpath     Change URL path"
+    echo "  edit-env        Open .env in editor (nano)"
+    echo "  uninstall       Remove the panel completely"
+    echo "  help            Show this help message"
+}
+
+get_env() {
+    local key="$1" default="$2"
+    grep "^${key}=" "$SRC/.env" 2>/dev/null | head -1 | cut -d'=' -f2- || echo "$default"
+}
+
+set_env() {
+    local key="$1" value="$2"
+    if grep -q "^${key}=" "$SRC/.env" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$SRC/.env"
+    else
+        echo "${key}=${value}" >> "$SRC/.env"
+    fi
+}
+
+case "${1:-}" in
+    status)
+        echo ""
+        echo "Panel Status"
+        echo "============"
+        docker compose ps
+        echo ""
+        ;;
+    start)
+        docker compose up -d && echo "Started."
+        ;;
+    stop)
+        docker compose down && echo "Stopped."
+        ;;
+    restart)
+        docker compose restart && echo "Restarted."
+        ;;
     update)
-        echo "Updating..."
+        echo "Pulling latest code..."
         git pull
+        echo "Rebuilding..."
         docker compose down
         docker compose build --no-cache
         docker compose up -d
-        echo "Done."
+        echo "Update complete."
         ;;
-    stop)    docker compose down && echo "Stopped." ;;
-    start)   docker compose up -d && echo "Started." ;;
-    restart) docker compose restart && echo "Restarted." ;;
-    logs)    docker compose logs -f --tail=50 ;;
-    status)  docker compose ps ;;
+    logs)
+        docker compose logs -f --tail=50
+        ;;
+    settings)
+        echo ""
+        echo "Current Settings"
+        echo "================"
+        echo "  Username: $(get_env ADMIN_USERNAME admin)"
+        echo "  Password: ****"
+        echo "  Port:     $(get_env PORT 8000)"
+        echo "  URL Path: $(get_env URLPATH dashboard)"
+        echo ""
+        ;;
+    set-username)
+        if [ -z "${2:-}" ]; then
+            read -r -p "New username: " val
+        else
+            val="$2"
+        fi
+        [ -z "$val" ] && echo "Aborted." && exit 1
+        set_env ADMIN_USERNAME "$val"
+        echo "Username updated."
+        docker compose restart >/dev/null 2>&1 && echo "Restarted."
+        ;;
+    set-password)
+        if [ -z "${2:-}" ]; then
+            read -r -s -p "New password: " val
+            echo ""
+        else
+            val="$2"
+        fi
+        [ -z "$val" ] && echo "Aborted." && exit 1
+        set_env ADMIN_PASSWORD "$val"
+        echo "Password updated."
+        docker compose restart >/dev/null 2>&1 && echo "Restarted."
+        ;;
+    set-port)
+        if [ -z "${2:-}" ]; then
+            read -r -p "New port: " val
+        else
+            val="$2"
+        fi
+        [ -z "$val" ] && echo "Aborted." && exit 1
+        set_env PORT "$val"
+        sed -i "s|^PORT=.*|PORT=${val}|" docker-compose.yml 2>/dev/null || true
+        echo "Port updated."
+        docker compose down >/dev/null 2>&1
+        docker compose up -d >/dev/null 2>&1
+        echo "Restarted."
+        ;;
+    set-urlpath)
+        if [ -z "${2:-}" ]; then
+            read -r -p "New URL path: " val
+        else
+            val="$2"
+        fi
+        [ -z "$val" ] && echo "Aborted." && exit 1
+        set_env URLPATH "$val"
+        echo "URL path updated."
+        docker compose restart >/dev/null 2>&1 && echo "Restarted."
+        ;;
+    edit-env)
+        ${EDITOR:-nano} "$SRC/.env"
+        echo "Restarting..."
+        docker compose restart >/dev/null 2>&1 && echo "Restarted."
+        ;;
     uninstall)
-        read -r -p "Are you sure? (y/N): " c
-        if [ "\$c" = "y" ] || [ "\$c" = "Y" ]; then
+        read -r -p "Are you sure? All data will be deleted! (y/N): " c
+        if [ "$c" = "y" ] || [ "$c" = "Y" ]; then
             docker compose down -v
+            rm -rf "$SRC"
             rm -f /usr/local/bin/mit-panel
             echo "Uninstalled."
+        else
+            echo "Cancelled."
         fi
         ;;
-    *) bash "$SRC/.tui.sh" ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
 esac
-EOF
+CLIEOF
+    sed -i "s|__SRC__|${SRC}|g" /usr/local/bin/mit-panel
     chmod +x /usr/local/bin/mit-panel
-    cp "$0" "$SRC/.tui.sh" 2>/dev/null || true
-    chmod +x "$SRC/.tui.sh" 2>/dev/null || true
 }
 
 # ── Actions ──────────────────────────────────────────────────────
