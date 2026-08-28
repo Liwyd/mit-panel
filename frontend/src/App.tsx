@@ -85,7 +85,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     return (
-        <div className="flex min-h-screen bg-background max-w-full overflow-x-hidden">
+        <div className="flex h-screen w-screen bg-background overflow-hidden">
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
@@ -115,16 +115,16 @@ function Layout({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Desktop Sidebar - Hidden on mobile */}
-            <aside className="nx-header hidden md:flex w-64 border-r flex-col flex-shrink-0">
+            <aside className="nx-header hidden md:flex w-64 border-r flex-col flex-shrink-0 h-screen overflow-hidden">
                 <div className="flex-1 overflow-y-auto">
                     <Sidebar />
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+            <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                 {/* Mobile Header with Menu Button */}
-                <header className="nx-header md:hidden flex items-center gap-3 p-4 border-b sticky top-0 z-30">
+                <header className="nx-header md:hidden flex items-center gap-3 p-4 border-b shrink-0">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -135,7 +135,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                     <span className="font-black tracking-tight">MIT Panel</span>
                 </header>
 
-                <main className="flex-1 overflow-y-auto overflow-x-hidden">
+                <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
                     {children}
                 </main>
             </div>

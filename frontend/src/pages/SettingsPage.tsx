@@ -35,6 +35,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { PageLayout } from '@/components/PageLayout'
 
 interface NewsItem {
     id: number
@@ -228,12 +229,17 @@ export function SettingsPage() {
     }
 
     return (
-        <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
-                <p className="text-muted-foreground">Manage database, logs, and ...</p>
-            </div>
-
+        <PageLayout
+            header={
+                <div className="p-4 md:p-6 pb-0">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
+                        <p className="text-muted-foreground">Manage database, logs, and ...</p>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* 4 Main Boxes */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
                 {/* Backup Box */}
@@ -627,6 +633,7 @@ export function SettingsPage() {
                     </div>
                 </AlertDialogContent>
             </AlertDialog >
-        </div >
+        </div>
+        </PageLayout>
     )
 }

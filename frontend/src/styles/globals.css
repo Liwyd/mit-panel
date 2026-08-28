@@ -107,11 +107,19 @@
 
     html,
     body {
+        height: 100%;
+        overflow: hidden;
         @apply bg-background text-foreground overflow-x-hidden;
         max-width: 100vw;
         font-family: 'Yekan', 'Vazirmatn', Tahoma, ui-sans-serif, system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* React mounts here; give it the full viewport so the fixed shell below
+       can constrain scrolling to inner regions instead of the document. */
+    #root {
+        height: 100%;
     }
 
     /* The reference design leans on very heavy, tight headings. */

@@ -32,6 +32,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { AdminFormDialog } from './components/AdminFormDialog'
+import { PageLayout } from '@/components/PageLayout'
 
 interface ExpandedRow {
     [key: string]: boolean
@@ -89,20 +90,37 @@ export function AdminsPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
-            {/* Page Title */}
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Admins Management</h1>
-                <p className="text-muted-foreground">Manage admin accounts for panels</p>
-            </div>
-
+        <PageLayout
+            header={
+                <div className="p-4 md:p-6 pb-0">
+                    {/* Page Title */}
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Admins Management</h1>
+                        <p className="text-muted-foreground">Manage admin accounts for panels</p>
+                    </div>
+                    <div className="mt-4">
+                        <Button
+                            size="sm"
+                            onClick={() => {
+                                setSelectedAdmin(null)
+                                setShowAdminDialog(true)
+                            }}
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Admin
+                        </Button>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Error Message */}
             {error && (
                 <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
@@ -112,23 +130,13 @@ export function AdminsPage() {
 
             {/* Admins Table */}
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader>
                     <div>
                         <CardTitle>Admins</CardTitle>
                         <CardDescription>
                             {admins.length} admin{admins.length !== 1 ? 's' : ''} total
                         </CardDescription>
                     </div>
-                    <Button
-                        size="sm"
-                        onClick={() => {
-                            setSelectedAdmin(null)
-                            setShowAdminDialog(true)
-                        }}
-                    >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Admin
-                    </Button>
                 </CardHeader>
 
                 <CardContent>
@@ -236,6 +244,7 @@ export function AdminsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </div>
+        </PageLayout>
     )
 }
 

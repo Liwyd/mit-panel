@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserPlus, UserCog, UserMinus, HelpCircle } from 'lucide-react'
+import { PageLayout } from '@/components/PageLayout'
 
 function FaqItem({ q, a }: { q: string; a: string }) {
     return (
@@ -12,12 +13,17 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export function HelpPage() {
     return (
-        <div dir="rtl" className="space-y-6 p-4 md:p-6 max-w-3xl">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">راهنما</h1>
-                <p className="text-muted-foreground">آموزش کار با پنل و سوالات متداول</p>
-            </div>
-
+        <PageLayout
+            header={
+                <div dir="rtl" className="p-4 md:p-6 pb-0">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">راهنما</h1>
+                        <p className="text-muted-foreground">آموزش کار با پنل و سوالات متداول</p>
+                    </div>
+                </div>
+            }
+        >
+            <div dir="rtl" className="space-y-6 p-4 md:p-6 max-w-3xl">
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -92,5 +98,6 @@ export function HelpPage() {
                 </CardContent>
             </Card>
         </div>
+        </PageLayout>
     )
 }
