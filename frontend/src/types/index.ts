@@ -308,17 +308,4 @@ export interface DashboardData {
     admins?: AdminOutput[]
     panels?: PanelOutput[]
     system?: SystemInfo
-    ads?: {
-        title?: string
-        text?: string
-        link?: string
-        button?: string
-    }
-}
-
-export interface AdsData {
-    title?: string
-    text?: string
-    link?: string
-    button?: string
 }

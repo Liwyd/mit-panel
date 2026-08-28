@@ -7,7 +7,6 @@ from backend.db.engin import get_db
 from backend.auth import get_current_admin
 from backend.schema.output import AdminOutput, ResponseModel, PanelOutput
 from backend.services import get_all_users_from_panel
-from backend.utils import get_ads_from_github
 from backend.utils.settings_store import (
     get_public_branding,
     get_logo_path,
@@ -24,14 +23,12 @@ async def read_dashboard_data(
     if current_admin["role"] == "superadmin":
         all_admins = crud.get_all_admins(db)
         all_panels = crud.get_all_panels(db)
-        ads = get_ads_from_github()
         return ResponseModel(
             success=True,
             message="Data retrieved successfully",
             data={
                 "admins": [AdminOutput.from_orm(admin) for admin in all_admins],
                 "panels": [PanelOutput.from_orm(panel) for panel in all_panels],
-                "ads": ads,
             },
         )
 

@@ -10,7 +10,6 @@ import {
     Trash2,
     RotateCcw,
     UserX,
-    ExternalLink,
     Server,
     Clock,
     Wifi,
@@ -56,6 +55,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { UserFormDialog } from './components/UserFormDialog'
+import { PageLayout } from '@/components/PageLayout'
 
     function buildSubUrl(subUrl?: string, subId?: string) {
         if (!subUrl || !subId) return ''
@@ -274,20 +274,92 @@ export function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
         )
     }
 
-    return (
-        <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
-            {/* Page Title */}
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
-                <p className="text-muted-foreground">Welcome back!</p>
-            </div>
+    const filteredUsers = (dashboardData?.users ?? []).filter(user => {
+        const matchesSearch = user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (user.uuid && user.uuid.toLowerCase().includes(searchQuery.toLowerCase()))
+        if (!matchesSearch) return false
+        if (statusFilter === 'all') return true
+        if (statusFilter === 'online') return lastOnlineInfo(user.online_at).online
+        if (statusFilter === 'active') return user.status && !lastOnlineInfo(user.online_at).online
+        if (statusFilter === 'inactive') return !user.status
+        return true
+    })
 
+    return (
+        <PageLayout
+            header={
+                <div className="p-4 md:p-6 pb-0">
+                    {/* Page Title */}
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
+                        <p className="text-muted-foreground">Welcome back!</p>
+                    </div>
+                </div>
+            }
+            footer={
+                dashboardData?.users && filteredUsers.length > 0
+                    ? (
+                        <div className="p-4 md:p-6 pt-0">
+                            <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t mt-4 gap-3">
+                                <div className="flex items-center gap-3">
+                                    <p className="text-sm text-muted-foreground text-center sm:text-left">
+                                        Showing {((currentPage - 1) * usersPerPage) + 1} to {Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length}
+                                        {searchQuery && dashboardData.users && ` (filtered from ${dashboardData.users.length} total)`}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Show:</span>
+                                        <select
+                                            value={usersPerPage}
+                                            onChange={(e) => {
+                                                setUsersPerPage(parseInt(e.target.value, 10))
+                                                setCurrentPage(1)
+                                            }}
+                                            className="h-8 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        >
+                                            <option value={5}>5</option>
+                                            <option value={10}>10</option>
+                                            <option value={20}>20</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                {filteredUsers.length > usersPerPage && (
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Previous</span>
+                                        </Button>
+                                        <span className="text-sm text-muted-foreground px-1 sm:px-2">
+                                            {currentPage} / {Math.ceil(filteredUsers.length / usersPerPage)}
+                                        </span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredUsers.length / usersPerPage), p + 1))}
+                                            disabled={currentPage >= Math.ceil(filteredUsers.length / usersPerPage)}
+                                        >
+                                            <span className="hidden sm:inline">Next</span>
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )
+                    : undefined
+            }
+        >
+            <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Error Message */}
             {error && (
                 <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
@@ -680,40 +752,6 @@ export function DashboardPage() {
                 </div>
             )}
 
-            {/* Advertisement Card */}
-            {dashboardData?.ads && dashboardData.ads.text && (
-                <Card className="bg-primary/5 border-primary/30 relative">
-                    <CardContent className="p-4 pt-8">
-                        <a
-                            href={dashboardData.ads.link || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block group"
-                        >
-                            <div className="flex flex-col gap-2" dir="rtl">
-                                <div className="flex-1 min-w-0" dir="rtl">
-                                    {dashboardData.ads.title && (
-                                        <h3 className="font-bold text-primary text-sm mb-1 group-hover:text-primary/80 transition-colors" dir="rtl">
-                                            {dashboardData.ads.title}
-                                        </h3>
-                                    )}
-                                    <p className="text-sm text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors" dir="rtl">
-                                        {dashboardData.ads.text}
-                                    </p>
-                                    {dashboardData.ads.button && (
-                                        <div className="mt-3 flex justify-start">
-                                            <span className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-lg transition-all duration-200 transform hover:scale-105" dir="rtl">
-                                                <ExternalLink className="h-4 w-4" />
-                                                {dashboardData.ads.button}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </a>
-                    </CardContent>
-                </Card>
-            )}
 
             {/* Users Table */}
             {dashboardData?.users && (
@@ -768,23 +806,6 @@ export function DashboardPage() {
 
                     <CardContent>
                         {(() => {
-                            // Filter users based on search query and status
-                            const filteredUsers = dashboardData.users.filter(user => {
-                                // Search filter
-                                const matchesSearch = user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                    (user.uuid && user.uuid.toLowerCase().includes(searchQuery.toLowerCase()))
-                                
-                                if (!matchesSearch) return false
-                                
-                                // Status filter
-                                if (statusFilter === 'all') return true
-                                if (statusFilter === 'online') return lastOnlineInfo(user.online_at).online
-                                if (statusFilter === 'active') return user.status && !lastOnlineInfo(user.online_at).online
-                                if (statusFilter === 'inactive') return !user.status
-                                
-                                return true
-                            })
-
                             if (filteredUsers.length === 0) {
                                 return (
                                     <div className="text-center py-8">
@@ -883,57 +904,6 @@ export function DashboardPage() {
                                         </Table>
                                     </div>
 
-                                    {/* Pagination */}
-                                    {filteredUsers.length > 0 && (
-                                        <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t mt-4 gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <p className="text-sm text-muted-foreground text-center sm:text-left">
-                                                    Showing {((currentPage - 1) * usersPerPage) + 1} to {Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length}
-                                                    {searchQuery && dashboardData.users && ` (filtered from ${dashboardData.users.length} total)`}
-                                                </p>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm text-muted-foreground">Show:</span>
-                                                    <select
-                                                        value={usersPerPage}
-                                                        onChange={(e) => {
-                                                            setUsersPerPage(parseInt(e.target.value, 10))
-                                                            setCurrentPage(1)
-                                                        }}
-                                                        className="h-8 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                    >
-                                                        <option value={5}>5</option>
-                                                        <option value={10}>10</option>
-                                                        <option value={20}>20</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            {filteredUsers.length > usersPerPage && (
-                                                <div className="flex items-center gap-1 sm:gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                                        disabled={currentPage === 1}
-                                                    >
-                                                        <ChevronLeft className="h-4 w-4" />
-                                                        <span className="hidden sm:inline">Previous</span>
-                                                    </Button>
-                                                    <span className="text-sm text-muted-foreground px-1 sm:px-2">
-                                                        {currentPage} / {Math.ceil(filteredUsers.length / usersPerPage)}
-                                                    </span>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredUsers.length / usersPerPage), p + 1))}
-                                                        disabled={currentPage >= Math.ceil(filteredUsers.length / usersPerPage)}
-                                                    >
-                                                        <span className="hidden sm:inline">Next</span>
-                                                        <ChevronRight className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
                                 </>
                             )
                         })()}
@@ -1007,7 +977,8 @@ export function DashboardPage() {
                     </div>
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
+        </PageLayout>
     )
 }
 
