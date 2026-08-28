@@ -19,6 +19,7 @@ from backend.utils.logger import logger, get_10_logs
 from backend.utils.backup import restore_database
 from backend.auth.auth import get_current_superadmin
 from backend.utils.system import get_system_info
+from backend.utils.marzban_overview import PERIODS, build_marzban_overview
 from backend.utils.settings_store import get_settings, update_settings, save_logo
 from backend.utils.telegram import send_backup_to_telegram
 
@@ -486,6 +487,55 @@ async def get_system_info_endpoint(
 
     system_info = get_system_info()
     return JSONResponse(content={"success": True, "data": system_info})
+
+
+@router.get("/marzban/overview", description="Aggregated Marzban stats for the dashboard")
+async def get_marzban_overview(
+    period: str = "1d",
+    db: Session = Depends(get_db),
+    current_admin: dict = Depends(get_current_superadmin),
+):
+    """User counts, lifetime traffic, host CPU/RAM and per-node usage for the
+    first active Marzban panel. Failures degrade to an empty payload rather
+    than an error so one unreachable panel never blanks the dashboard."""
+    if period not in PERIODS:
+        period = "1d"
+
+    panel = next(
+        (
+            p
+            for p in crud.get_all_panels(db)
+            if p.panel_type == "marzban" and p.is_active
+        ),
+        None,
+    )
+
+    if not panel:
+        return ResponseModel(
+            success=True,
+            message="No active Marzban panel configured",
+            data=None,
+        )
+
+    try:
+        api_service = MarzbanAPI(
+            url=panel.url,
+            username=panel.username,
+            password=panel.password,
+        )
+        data = await build_marzban_overview(api_service, panel.name, period)
+        return ResponseModel(
+            success=True,
+            message="Marzban overview retrieved successfully",
+            data=data,
+        )
+    except Exception as e:
+        logger.error(f"Failed to build Marzban overview from {panel.name}: {str(e)}")
+        return ResponseModel(
+            success=True,
+            message=f"Marzban is unreachable: {str(e)}",
+            data=None,
+        )
 
 
 @router.get("/settings", description="Get panel settings")
