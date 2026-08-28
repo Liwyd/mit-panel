@@ -4,25 +4,27 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-    "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium border-2 border-foreground transition-all duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
+    "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-extrabold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
     {
         variants: {
             variant: {
-                default: "bg-primary text-primary-foreground shadow-neo hover:shadow-neo-hover hover:-translate-x-0.5 hover:-translate-y-0.5",
+                default:
+                    "bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(19,34,56,0.16)] hover:bg-primary/90 hover:-translate-y-0.5",
                 destructive:
-                    "bg-destructive text-destructive-foreground shadow-neo hover:shadow-neo-hover hover:-translate-x-0.5 hover:-translate-y-0.5",
+                    "bg-destructive text-destructive-foreground hover:bg-destructive/90",
                 outline:
-                    "bg-background text-foreground shadow-neo hover:shadow-neo-hover hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-accent hover:text-accent-foreground",
+                    "border border-input bg-card shadow-sm hover:bg-accent hover:text-accent-foreground",
+                gold: "nx-gold shadow-lg shadow-black/10 hover:-translate-y-0.5",
                 secondary:
-                    "bg-secondary text-secondary-foreground shadow-neo hover:shadow-neo-hover hover:-translate-x-0.5 hover:-translate-y-0.5",
-                ghost: "border-transparent shadow-none hover:bg-accent hover:text-accent-foreground hover:shadow-neo-sm hover:border-foreground",
-                link: "text-primary underline-offset-4 hover:underline border-transparent shadow-none",
+                    "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                ghost: "hover:bg-accent hover:text-accent-foreground",
+                link: "text-primary underline-offset-4 hover:underline",
             },
             size: {
-                default: "h-10 px-4 py-2",
-                sm: "h-9 rounded-lg px-3 text-xs min-h-[36px]",
-                xs: "h-8 rounded-md px-2 text-xs min-h-[32px]",
-                lg: "h-11 rounded-lg px-6 text-base",
+                default: "h-11 px-5 py-2",
+                sm: "h-9 rounded-lg px-3",
+                xs: "h-7 rounded-md px-2 text-xs",
+                lg: "h-12 rounded-lg px-8 text-base",
                 icon: "h-10 w-10",
             },
         },

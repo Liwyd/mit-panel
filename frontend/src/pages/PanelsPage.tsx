@@ -90,10 +90,7 @@ export function PanelsPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="neo-card p-8 flex items-center gap-4">
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-foreground border-t-transparent"></div>
-                    <span className="font-medium text-sm">Loading...</span>
-                </div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
         )
     }
@@ -102,13 +99,13 @@ export function PanelsPage() {
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             {/* Page Title */}
             <div>
-                <h1 className="text-2xl md:text-3xl font-semibold">Panels Management</h1>
-                <p className="text-muted-foreground text-sm">Manage your proxy panels</p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Panels Management</h1>
+                <p className="text-muted-foreground">Manage your proxy panels</p>
             </div>
 
             {/* Error Message */}
             {error && (
-                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive border-2 border-destructive">
+                <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
                     {error}
                 </div>
             )}
@@ -340,7 +337,7 @@ function MobilePanelCard({
     onToggleStatus,
 }: PanelDetailsRowProps) {
     return (
-        <div className="border-2 border-foreground rounded-xl overflow-hidden shadow-neo-sm">
+        <div className="border rounded-lg overflow-hidden">
             {/* Compact View */}
             <button
                 onClick={onToggle}
@@ -386,10 +383,11 @@ function MobilePanelCard({
                         </Button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="flex flex-wrap gap-2 pt-1">
                         <Button
                             size="sm"
                             variant="outline"
+                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onToggleStatus()
@@ -405,6 +403,7 @@ function MobilePanelCard({
                         <Button
                             size="sm"
                             variant="outline"
+                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onEdit()
@@ -416,6 +415,7 @@ function MobilePanelCard({
                         <Button
                             size="sm"
                             variant="destructive"
+                            className="flex-1 min-w-[70px]"
                             onClick={(e) => {
                                 e.stopPropagation()
                                 onDelete()

@@ -14,17 +14,43 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2, Shuffle } from 'lucide-react'
 
 interface UserFormDialogProps {
     isOpen: boolean
     onClose: () => void
     onSuccess: () => void
     user?: ClientsOutput | null
+    existingUsernames?: string[]
 }
 
-export function UserFormDialog({ isOpen, onClose, onSuccess, user }: UserFormDialogProps): JSX.Element {
+// Random username: 5 to 7 English digits, avoiding names already in use.
+function generateRandomUsername(taken: Set<string>): string {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        const length = 5 + Math.floor(Math.random() * 3) // 5, 6 or 7
+        const bytes = crypto.getRandomValues(new Uint8Array(length))
+        let name = ''
+        for (const b of bytes) {
+            name += String(b % 10)
+        }
+        if (!taken.has(name)) {
+            return name
+        }
+    }
+    // Fell through 50 collisions: widen to the longest allowed length.
+    const bytes = crypto.getRandomValues(new Uint8Array(7))
+    let name = ''
+    for (const b of bytes) {
+        name += String(b % 10)
+    }
+    return name
+}
+
+export function UserFormDialog({ isOpen, onClose, onSuccess, user, existingUsernames = [] }: UserFormDialogProps): JSX.Element {
     const [serverError, setServerError] = useState<string | null>(null)
+    // Expiry as it stands on the server, kept so an edit that doesn't touch the
+    // days field re-sends the exact same timestamp instead of a rounded date.
+    const [originalExpiry, setOriginalExpiry] = useState<{ days: number; unix: number } | null>(null)
 
     const {
         register,
@@ -51,21 +77,39 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user }: UserFormDia
                 today.setHours(0, 0, 0, 0)
                 const diffMs = exp.getTime() - today.getTime()
                 const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-                setValue('expiryDatetime', diffDays > 0 ? diffDays : 0)
+                const days = diffDays > 0 ? diffDays : 0
+                setValue('expiryDatetime', days)
+                setOriginalExpiry({ days, unix: user.expiry_date_unix })
+            } else {
+                setOriginalExpiry(null)
             }
         } else {
             reset()
+            setOriginalExpiry(null)
         }
     }, [user, isOpen, setValue, reset])
+
+    const handleRandomUsername = () => {
+        const taken = new Set(existingUsernames)
+        setValue('email', generateRandomUsername(taken), { shouldValidate: true })
+    }
 
     const onSubmit = async (data: UserFormData) => {
         setServerError(null)
 
         try {
             // Convert expiry days (number) to date string YYYY-MM-DD for backend
-            let expiryForSubmit: string | null | undefined = null
+            let expiryForSubmit: string | number | null | undefined = null
             if (data.expiryDatetime === null || data.expiryDatetime === undefined || data.expiryDatetime === '') {
                 expiryForSubmit = null
+            } else if (
+                originalExpiry !== null &&
+                typeof data.expiryDatetime === 'number' &&
+                data.expiryDatetime === originalExpiry.days
+            ) {
+                // Days field untouched - resend the stored timestamp verbatim so
+                // editing something else never shortens the subscription.
+                expiryForSubmit = originalExpiry.unix
             } else if (typeof data.expiryDatetime === 'number') {
                 const d = new Date()
                 d.setHours(0, 0, 0, 0)
@@ -117,8 +161,8 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user }: UserFormDia
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive">
-                            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <div className="flex items-gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
                         </div>
                     )}
@@ -126,13 +170,28 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user }: UserFormDia
                     {/* Email */}
                     <div className="space-y-2">
                         <Label htmlFor="email">Username/Email *</Label>
-                        <Input
-                            id="email"
-                            type="text"
-                            placeholder="username or email"
-                            disabled={isSubmitting || !!user}
-                            {...register('email')}
-                        />
+                        <div className="flex gap-2">
+                            <Input
+                                id="email"
+                                type="text"
+                                placeholder="username or email"
+                                disabled={isSubmitting || !!user}
+                                className="flex-1"
+                                {...register('email')}
+                            />
+                            {!user && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleRandomUsername}
+                                    disabled={isSubmitting}
+                                    title="Generate a random 5-7 digit username"
+                                >
+                                    <Shuffle className="h-4 w-4 mr-2" />
+                                    Random
+                                </Button>
+                            )}
+                        </div>
                         {errors.email && (
                             <p className="text-sm text-destructive">{errors.email.message}</p>
                         )}

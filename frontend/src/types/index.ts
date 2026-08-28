@@ -92,6 +92,10 @@ export const adminSchema = z.object({
         .union([z.string(), z.number()])
         .nullable()
         .optional(),
+
+    telegram_id: z
+        .union([z.number(), z.null()])
+        .optional(),
 })
     .superRefine((val, ctx) => {
         // If panel is 3x-ui, flow must be provided (not null/empty)
@@ -119,6 +123,7 @@ export interface AdminOutput {
     update_return_traffic: boolean | false
     delete_return_traffic: boolean | false
     expiry_date: string | null
+    telegram_id?: number | null
 }
 
 // Panel Form
@@ -223,6 +228,7 @@ export interface ClientsOutput {
     username: string
     status: boolean
     is_online: boolean
+    online_at?: string | null
     data_limit: number
     used_data: number
     expiry_date: string | null
@@ -243,6 +249,55 @@ export interface LoginResponse {
     token_type: string
 }
 
+export interface SystemInfo {
+    total_memory: number
+    used_memory: number
+    cpu_percent: number
+    cpu_cores?: number
+    disk_total: number
+    disk_used: number
+    swap_total?: number
+    swap_used?: number
+}
+
+export interface MarzbanNodeUsage {
+    id: number | null
+    name: string
+    usage: number
+}
+
+export interface MarzbanOverview {
+    panel: string
+    period: string
+    version?: string | null
+    users: {
+        active: number
+        total: number
+        /** null when the online scan failed; the rest of the payload is still valid. */
+        online: number | null
+    }
+    traffic: {
+        incoming: number
+        outgoing: number
+        total: number
+    }
+    memory: {
+        used: number
+        total: number
+    }
+    cpu: {
+        usage: number
+        cores: number
+    }
+    nodes: {
+        total: number
+        items: MarzbanNodeUsage[]
+    }
+}
+
+export const MARZBAN_PERIODS = ['7h', '1d', '3d', '1w', '1m', '3m'] as const
+export type MarzbanPeriod = typeof MARZBAN_PERIODS[number]
+
 export interface DashboardData {
     remaining_traffic?: number
     initial_traffic?: number
@@ -252,11 +307,18 @@ export interface DashboardData {
     users?: ClientsOutput[]
     admins?: AdminOutput[]
     panels?: PanelOutput[]
-    system?: {
-        total_memory: number
-        used_memory: number
-        cpu_percent: number
-        disk_total: number
-        disk_used: number
+    system?: SystemInfo
+    ads?: {
+        title?: string
+        text?: string
+        link?: string
+        button?: string
     }
+}
+
+export interface AdsData {
+    title?: string
+    text?: string
+    link?: string
+    button?: string
 }

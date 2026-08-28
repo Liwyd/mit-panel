@@ -1,6 +1,6 @@
 {
-  "name": "mit panel",
-  "short_name": "mit panel",
+  "name": "nexra panel",
+  "short_name": "nexra panel",
   "start_url": "login",
   "scope": "./",
   "display": "standalone",

@@ -7,10 +7,6 @@ export default {
     ],
     theme: {
         extend: {
-            fontFamily: {
-                rubik: ['Rubik', 'sans-serif'],
-                outfit: ['Outfit', 'sans-serif'],
-            },
             colors: {
                 border: 'hsl(var(--border))',
                 input: 'hsl(var(--input))',
@@ -45,22 +41,20 @@ export default {
                     DEFAULT: 'hsl(var(--card))',
                     foreground: 'hsl(var(--card-foreground))',
                 },
+                brand: {
+                    blue: 'hsl(var(--brand-blue) / <alpha-value>)',
+                    gold: 'hsl(var(--brand-gold) / <alpha-value>)',
+                    green: 'hsl(var(--brand-green) / <alpha-value>)',
+                },
+            },
+            fontFamily: {
+                sans: ['Yekan', 'Vazirmatn', 'Tahoma', 'ui-sans-serif', 'system-ui', 'sans-serif'],
             },
             borderRadius: {
                 lg: 'var(--radius)',
                 md: 'calc(var(--radius) - 2px)',
                 sm: 'calc(var(--radius) - 4px)',
-            },
-            borderWidth: {
-                '3': '2px',
-            },
-            boxShadow: {
-                'neo': '4px 4px 0px 0px hsl(var(--foreground))',
-                'neo-sm': '2px 2px 0px 0px hsl(var(--foreground))',
-                'neo-lg': '6px 6px 0px 0px hsl(var(--foreground))',
-                'neo-red': '4px 4px 0px 0px hsl(0 55% 72%)',
-                'neo-hover': '5px 5px 0px 0px hsl(var(--foreground))',
-                'neo-active': '1px 1px 0px 0px hsl(var(--foreground))',
+                card: '1.75rem',
             },
             keyframes: {
                 'accordion-down': {
@@ -71,27 +65,10 @@ export default {
                     from: { height: 'var(--radix-accordion-content-height)' },
                     to: { height: '0' },
                 },
-                'wiggle': {
-                    '0%, 100%': { transform: 'rotate(0deg)' },
-                    '25%': { transform: 'rotate(-2deg)' },
-                    '75%': { transform: 'rotate(2deg)' },
-                },
-                'neo-pop': {
-                    '0%': { transform: 'scale(0.95)', opacity: '0' },
-                    '50%': { transform: 'scale(1.02)' },
-                    '100%': { transform: 'scale(1)', opacity: '1' },
-                },
-                'neo-slide-in': {
-                    '0%': { transform: 'translateY(10px)', opacity: '0' },
-                    '100%': { transform: 'translateY(0)', opacity: '1' },
-                },
             },
             animation: {
                 'accordion-down': 'accordion-down 0.2s ease-out',
                 'accordion-up': 'accordion-up 0.2s ease-out',
-                'wiggle': 'wiggle 0.3s ease-in-out',
-                'neo-pop': 'neo-pop 0.3s ease-out',
-                'neo-slide-in': 'neo-slide-in 0.3s ease-out',
             },
         },
     },

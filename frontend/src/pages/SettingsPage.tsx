@@ -230,8 +230,8 @@ export function SettingsPage() {
     return (
         <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
             <div>
-                <h1 className="text-2xl md:text-3xl font-semibold">Settings</h1>
-                <p className="text-muted-foreground text-sm">Manage database, logs, and ...</p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
+                <p className="text-muted-foreground">Manage database, logs, and ...</p>
             </div>
 
             {/* 4 Main Boxes */}
@@ -240,7 +240,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Database className="h-5 w-5 text-blue-500" />
+                            <Database className="h-5 w-5 text-primary" />
                             Database Backup
                         </CardTitle>
                     </CardHeader>
@@ -251,7 +251,7 @@ export function SettingsPage() {
                         <Button
                             onClick={handleDownloadBackup}
                             disabled={backupLoading}
-                            className="w-full"
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
                             <Download className="mr-2 h-4 w-4" />
                             {backupLoading ? 'Downloading...' : 'Download Backup'}
@@ -263,7 +263,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <RotateCcw className="h-5 w-5 text-amber-500" />
+                            <RotateCcw className="h-5 w-5 text-primary" />
                             Database Restore
                         </CardTitle>
                     </CardHeader>
@@ -275,8 +275,7 @@ export function SettingsPage() {
                             <Button
                                 onClick={() => document.getElementById('restore-file-input')?.click()}
                                 disabled={restoreLoading}
-                                className="w-full"
-                                variant="secondary"
+                                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Upload className="mr-2 h-4 w-4" />
                                 {restoreLoading ? 'Restoring...' : 'Select Backup File'}
@@ -297,7 +296,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <FileText className="h-5 w-5 text-violet-500" />
+                            <FileText className="h-5 w-5 text-primary" />
                             Application Logs
                         </CardTitle>
                     </CardHeader>
@@ -311,8 +310,7 @@ export function SettingsPage() {
                                 setShowLogsModal(true)
                             }}
                             disabled={logsLoading}
-                            className="w-full"
-                            variant="outline"
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
                             <Eye className="mr-2 h-4 w-4" />
                             {logsLoading ? 'Loading...' : 'Show Logs'}
@@ -324,7 +322,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Bell className="h-5 w-5 text-rose-500" />
+                            <Bell className="h-5 w-5 text-primary" />
                             News Management
                         </CardTitle>
                     </CardHeader>
@@ -339,15 +337,14 @@ export function SettingsPage() {
                                     setShowNewsDialog(true)
                                 }}
                                 disabled={newsLoading}
-                                className="flex-1"
-                                variant="outline"
+                                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Eye className="mr-2 h-4 w-4" />
                                 {newsLoading ? 'Loading...' : 'Show News'}
                             </Button>
                             <Button
                                 onClick={() => setShowAddNewsDialog(true)}
-                                className="flex-1"
+                                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Plus className="mr-2 h-4 w-4" />
                                 Create News
@@ -363,7 +360,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <ImageIcon className="h-5 w-5 text-cyan-500" />
+                            <ImageIcon className="h-5 w-5 text-primary" />
                             Login Branding
                         </CardTitle>
                     </CardHeader>
@@ -416,7 +413,7 @@ export function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Send className="h-5 w-5 text-sky-500" />
+                            <Send className="h-5 w-5 text-primary" />
                             Telegram Backup
                         </CardTitle>
                     </CardHeader>
@@ -480,6 +477,7 @@ export function SettingsPage() {
                 <Button
                     onClick={handleSaveSettings}
                     disabled={savingSettings || !settings}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                     {savingSettings ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -504,12 +502,12 @@ export function SettingsPage() {
                             onClick={fetchLogs}
                             disabled={logsLoading}
                             size="sm"
-                            className="w-full"
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
                             <RotateCcw className="mr-2 h-4 w-4" />
                             {logsLoading ? 'Refreshing...' : 'Refresh Logs'}
                         </Button>
-                        <div className="bg-muted p-4 rounded-xl max-h-96 overflow-y-auto border-2 border-foreground break-all">
+                        <div className="bg-muted p-4 rounded-md max-h-96 overflow-y-auto border">
                             {logs.length > 0 ? (
                                 <pre className="text-xs whitespace-pre-wrap font-mono">
                                     {logs.join('\n')}
@@ -537,7 +535,7 @@ export function SettingsPage() {
                                 {news.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="p-3 bg-muted rounded-xl border-2 border-foreground flex items-start justify-between gap-3"
+                                        className="p-3 bg-muted rounded-md border flex items-start justify-between gap-3"
                                     >
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm break-words">{item.message}</p>
@@ -598,6 +596,7 @@ export function SettingsPage() {
                             <Button
                                 onClick={handleAddNews}
                                 disabled={addingNews || !newNewsMessage.trim()}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Plus className="mr-2 h-4 w-4" />
                                 {addingNews ? 'Creating...' : 'Create News'}
@@ -621,7 +620,7 @@ export function SettingsPage() {
                         <AlertDialogAction
                             onClick={handleDeleteNews}
                             disabled={deletingNews}
-                            className="bg-destructive">
+                            className="bg-red-600 hover:bg-red-700 text-white">
                             <Trash2 className="mr-2 h-4 w-4" />
                             {deletingNews ? 'Deleting...' : 'Delete'}
                         </AlertDialogAction>

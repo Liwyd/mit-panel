@@ -7,6 +7,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { AdminsPage } from '@/pages/AdminsPage'
 import { PanelsPage } from '@/pages/PanelsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { HelpPage } from '@/pages/HelpPage'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -62,6 +63,17 @@ function App() {
                     }
                 />
 
+                <Route
+                    path="/help"
+                    element={
+                        <ProtectedRoute>
+                            <Layout>
+                                <HelpPage />
+                            </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -84,11 +96,11 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-background border-r-2 border-foreground transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
-                <div className="flex items-center justify-between p-4 border-b border-border">
-                    <span className="font-semibold text-lg">MIT Panel</span>
+                <div className="flex items-center justify-between p-4 border-b">
+                    <span className="font-black text-lg tracking-tight">MIT Panel</span>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -103,7 +115,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Desktop Sidebar - Hidden on mobile */}
-            <aside className="hidden md:flex w-64 border-r-2 border-foreground bg-muted/30 flex-col flex-shrink-0">
+            <aside className="nx-header hidden md:flex w-64 border-r flex-col flex-shrink-0">
                 <div className="flex-1 overflow-y-auto">
                     <Sidebar />
                 </div>
@@ -112,7 +124,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
                 {/* Mobile Header with Menu Button */}
-                <header className="md:hidden flex items-center gap-3 p-4 border-b border-border bg-background sticky top-0 z-30">
+                <header className="nx-header md:hidden flex items-center gap-3 p-4 border-b sticky top-0 z-30">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -120,7 +132,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                     >
                         <Menu className="h-5 w-5" />
                     </Button>
-                    <span className="font-semibold">MIT Panel</span>
+                    <span className="font-black tracking-tight">MIT Panel</span>
                 </header>
 
                 <main className="flex-1 overflow-y-auto overflow-x-hidden">

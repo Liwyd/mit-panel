@@ -4,6 +4,8 @@ import {
     Users,
     Settings,
     LogOut,
+    Zap,
+    HelpCircle,
     Sun,
     Moon,
     Server,
@@ -42,6 +44,12 @@ const navigationItems = [
         icon: Settings,
         roles: ['superadmin'],
     },
+    {
+        label: 'راهنما',
+        href: '/help',
+        icon: HelpCircle,
+        roles: ['admin', 'superadmin'],
+    },
 ]
 
 function ThemeToggleButton() {
@@ -78,7 +86,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
 
     return (
         <div className="flex flex-col h-full">
-            <nav className="flex-1 space-y-3 p-4">
+            <nav className="flex-1 space-y-2 p-4">
                 {filteredItems.map((item) => {
                     const Icon = item.icon
                     const isActive = location.pathname === item.href
@@ -88,8 +96,8 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                             key={item.href}
                             variant={isActive ? 'default' : 'ghost'}
                             className={cn(
-                                'w-full justify-start gap-3',
-                                isActive && 'bg-primary animate-neo-pop'
+                                'w-full justify-start gap-3 font-bold',
+                                isActive && 'bg-primary shadow-none hover:translate-y-0'
                             )}
                             onClick={() => {
                                 navigate(item.href)
@@ -103,8 +111,17 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                 })}
             </nav>
 
-            <div className="border-t border-border p-4 space-y-3">
+            <div className="border-t p-4 space-y-2">
                 <ThemeToggleButton />
+
+                <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3"
+                    onClick={() => navigate('/login')}
+                >
+                    <Zap className="h-4 w-4" />
+                    <span>Finance (Coming Soon)</span>
+                </Button>
 
                 <Button
                     variant="ghost"

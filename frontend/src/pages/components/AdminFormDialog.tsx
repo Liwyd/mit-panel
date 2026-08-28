@@ -65,6 +65,7 @@ export function AdminFormDialog({
             delete_return_traffic: false,
             is_active: true,
             expiry_date: null,
+            telegram_id: null,
         },
     })
 
@@ -86,6 +87,7 @@ export function AdminFormDialog({
             setValue('update_return_traffic', admin.update_return_traffic)
             setValue('delete_return_traffic', admin.delete_return_traffic)
             setValue('is_active', admin.is_active)
+            setValue('telegram_id', admin.telegram_id ?? null)
             // If admin has an expiry_date (YYYY-MM-DD), convert to remaining days for the input
             if (admin.expiry_date) {
                 try {
@@ -210,7 +212,12 @@ export function AdminFormDialog({
                 const d = new Date()
                 d.setHours(0, 0, 0, 0)
                 d.setDate(d.getDate() + Math.max(0, Math.floor(data.expiry_date)))
-                expiryForSubmit = d.toISOString().slice(0, 10)
+                // Format in local time: toISOString() would shift the date back
+                // a day for every timezone ahead of UTC.
+                const year = d.getFullYear()
+                const month = String(d.getMonth() + 1).padStart(2, '0')
+                const day = String(d.getDate()).padStart(2, '0')
+                expiryForSubmit = `${year}-${month}-${day}`
             } else {
                 expiryForSubmit = String(data.expiry_date)
             }
@@ -255,6 +262,15 @@ export function AdminFormDialog({
     const currentPanelType = panels.find(p => p.name === watch('panel'))?.panel_type
     const shouldShowInboundFields = watch('panel') && panelRequiresInboundFields(currentPanelType)
 
+    // Ensure telegram_id input can be cleared to `null`
+    const telegramIdRegister = register('telegram_id', {
+        setValueAs: (v: any) => {
+            if (v === '' || v === undefined || v === null) return null
+            const n = Number(v)
+            return Number.isNaN(n) ? null : Math.floor(n)
+        },
+    })
+
     // Ensure expiry input can be cleared to `null` (No Expiry)
     const expiryRegister = register('expiry_date', {
         setValueAs: (v: any) => {
@@ -266,7 +282,7 @@ export function AdminFormDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-h-[90vh] sm:max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{admin ? 'Edit Admin' : 'Create New Admin'}</DialogTitle>
                     <DialogDescription>
@@ -276,8 +292,8 @@ export function AdminFormDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {serverError && (
-                        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive border-2 border-destructive">
-                            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <div className="flex items-gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
                         </div>
                     )}
@@ -347,7 +363,7 @@ export function AdminFormDialog({
                                     Loading inbounds...
                                 </div>
                             ) : marzbanInbounds ? (
-                                <div className="space-y-3 p-3 border-2 border-foreground rounded-xl">
+                                <div className="space-y-3 p-3 border rounded-md">
                                     {Object.entries(marzbanInbounds).map(([protocol, tags]) => (
                                         <div key={protocol} className="space-y-2">
                                             <div className="font-medium text-sm capitalize">{protocol}</div>
@@ -359,7 +375,7 @@ export function AdminFormDialog({
                                                             checked={selectedInbounds[protocol]?.includes(tag) || false}
                                                             onChange={() => toggleInbound(protocol, tag)}
                                                             disabled={isSubmitting}
-                                                            className="rounded border-2 border-foreground"
+                                                            className="rounded border border-input"
                                                         />
                                                         <span className="text-sm">{tag}</span>
                                                     </label>
@@ -436,6 +452,25 @@ export function AdminFormDialog({
                         )}
                     </div>
 
+                    {/* Telegram ID - links this admin to the top-up bot */}
+                    <div className="space-y-2">
+                        <Label htmlFor="telegram_id">Telegram ID (top-up bot)</Label>
+                        <Input
+                            id="telegram_id"
+                            type="number"
+                            step="1"
+                            placeholder="e.g. 123456789"
+                            disabled={isSubmitting}
+                            {...telegramIdRegister}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Numeric Telegram user ID. Lets this admin top up their own traffic via the bot.
+                        </p>
+                        {errors.telegram_id && (
+                            <p className="text-sm text-destructive">{errors.telegram_id.message as string}</p>
+                        )}
+                    </div>
+
                     {/* Expiry Date */}
                     <div className="space-y-2">
                         <Label htmlFor="expiry_date">Expiry (days)</Label>
@@ -472,7 +507,7 @@ export function AdminFormDialog({
                                 type="checkbox"
                                 disabled={isSubmitting}
                                 {...register('update_return_traffic')}
-                                className="rounded border-2 border-foreground"
+                                className="rounded border border-input"
                             />
                             <span className="text-sm">Update Return Traffic</span>
                         </label>
@@ -482,7 +517,7 @@ export function AdminFormDialog({
                                 type="checkbox"
                                 disabled={isSubmitting}
                                 {...register('delete_return_traffic')}
-                                className="rounded border-2 border-foreground"
+                                className="rounded border border-input"
                             />
                             <span className="text-sm">Delete Return Traffic</span>
                         </label>
@@ -493,7 +528,7 @@ export function AdminFormDialog({
                                 disabled={isSubmitting}
                                 defaultChecked
                                 {...register('is_active')}
-                                className="rounded border-2 border-foreground"
+                                className="rounded border border-input"
                             />
                             <span className="text-sm">Active</span>
                         </label>

@@ -9,6 +9,7 @@ import {
     ResponseModel,
     AdminFormData,
     PanelFormData,
+    MarzbanOverview,
 } from '@/types'
 import { gbToBytes } from './traffic-converter'
 
@@ -75,6 +76,17 @@ export const dashboardAPI = {
         }
 
         return response.data.data || {}
+    },
+
+    // Returns null rather than throwing when no Marzban panel is configured or
+    // the panel is unreachable, so the dashboard just hides the section.
+    getMarzbanOverview: async (period: string = '1d'): Promise<MarzbanOverview | null> => {
+        const response = await api.get<ResponseModel<MarzbanOverview | null>>(
+            `/superadmin/marzban/overview`,
+            { params: { period } }
+        )
+
+        return response.data.data ?? null
     },
 }
 
@@ -290,15 +302,29 @@ function generateSubId(): string {
     return result
 }
 
+// Resolve an expiry value into the epoch-ms timestamp the backend expects.
+// A number is an exact timestamp and is passed through untouched, so operations
+// that only mean to change something else (enable/disable, traffic, ...) never
+// shift the expiry. A "YYYY-MM-DD" string is anchored to local midnight.
+function toExpiryTimestamp(expiryDatetime: string | number | null | undefined): number {
+    if (expiryDatetime === null || expiryDatetime === undefined || expiryDatetime === '') {
+        return 0
+    }
+    if (typeof expiryDatetime === 'number') {
+        return Number.isFinite(expiryDatetime) ? Math.floor(expiryDatetime) : 0
+    }
+    return new Date(expiryDatetime + 'T00:00:00').getTime()
+}
+
 // User API
 export const userAPI = {
-    createUser: async (email: string, totalGb: number, expiryDatetime?: string | null): Promise<ClientsOutput> => {
+    createUser: async (email: string, totalGb: number, expiryDatetime?: string | number | null): Promise<ClientsOutput> => {
         const submitData = {
             email,
             id: uuidv4(),
             enable: true,
-            expiry_time: expiryDatetime ? new Date(expiryDatetime + 'T00:00:00').getTime() : 0,
-            total: Math.floor(totalGb * 1024 * 1024 * 1024),
+            expiry_time: toExpiryTimestamp(expiryDatetime),
+            total: Math.round(totalGb * 1024 * 1024 * 1024),
             sub_id: generateSubId(),
             flow: '',
         }
@@ -316,7 +342,7 @@ export const userAPI = {
         userUuid: string,
         email: string,
         totalGb: number,
-        expiryDatetime: string | null | undefined,
+        expiryDatetime: string | number | null | undefined,
         subId: string,
         enable: boolean = true,
         flow: string = '',
@@ -328,8 +354,8 @@ export const userAPI = {
         const submitData = {
             email,
             enable,
-            expiry_time: expiryDatetime ? new Date(expiryDatetime + 'T00:00:00').getTime() : 0,
-            total: Math.floor(totalGb * 1024 * 1024 * 1024),
+            expiry_time: toExpiryTimestamp(expiryDatetime),
+            total: Math.round(totalGb * 1024 * 1024 * 1024),
             sub_id: sanitizedSubId,
             flow,
         }
