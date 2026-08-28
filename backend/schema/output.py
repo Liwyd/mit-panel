@@ -21,6 +21,19 @@ class AdminOutput(BaseModel):
     update_return_traffic: bool
     delete_return_traffic: bool
     expiry_date: Optional[datetime]
+    telegram_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdminCredentialsOutput(BaseModel):
+    """Deliberately minimal — separate from AdminOutput so the Marzban password
+    never leaks into any response except this one dedicated bulk-export call."""
+
+    username: str
+    telegram_id: Optional[int] = None
+    marzban_password: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -44,6 +57,7 @@ class ClientsOutput(BaseModel):
     email: Optional[str] = None
     status: bool = True
     is_online: bool = False
+    online_at: Optional[str] = None
     data_limit: int
     used_data: int
     expiry_date: Optional[datetime] = None

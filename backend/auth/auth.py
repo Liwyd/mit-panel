@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -53,6 +53,16 @@ def get_current_superadmin(admin: dict = Depends(get_current_admin)):
             content={"success": False, "message": "Access denied. Only superadmin can access this endpoint"},
         )
     return admin
+
+
+def verify_bot_api_key(x_bot_api_key: str = Header(..., alias="X-Bot-Api-Key")):
+    """Shared-secret auth for the top-up bot's service-to-service calls.
+
+    If BOT_API_KEY isn't configured yet, the bot endpoints stay locked (403)
+    rather than ever matching on an empty/unset value.
+    """
+    if not config.BOT_API_KEY or x_bot_api_key != config.BOT_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid bot API key")
 
 
 @router.post("/login", description="Admin login")

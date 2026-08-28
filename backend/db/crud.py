@@ -30,6 +30,7 @@ def add_admin(db: Session, admin_input: AdminInput) -> None:
         update_return_traffic=admin_input.update_return_traffic,
         delete_return_traffic=admin_input.delete_return_traffic,
         expiry_date=admin_input.expiry_date,
+        telegram_id=admin_input.telegram_id,
     )
     db.add(admin)
     db.commit()
@@ -72,6 +73,7 @@ def update_admin_values(
         admin.update_return_traffic = admin_input.update_return_traffic
         admin.delete_return_traffic = admin_input.delete_return_traffic
         admin.expiry_date = admin_input.expiry_date
+        admin.telegram_id = admin_input.telegram_id
         db.commit()
         return True
     return False
@@ -93,6 +95,49 @@ def reduce_admin_traffic(db: Session, admin: Admins, used_traffic) -> None:
 
 def increase_admin_traffic(db: Session, admin: Admins, added_traffic) -> None:
     admin.traffic += added_traffic
+    db.commit()
+
+
+def get_admin_by_telegram_id(db: Session, telegram_id: int):
+    return db.query(Admins).filter(Admins.telegram_id == telegram_id).first()
+
+
+def get_admins_by_telegram_id(db: Session, telegram_id: int) -> list[Admins]:
+    """Every admin (panel) owned by this Telegram account — one person can own several."""
+    return db.query(Admins).filter(Admins.telegram_id == telegram_id).all()
+
+
+def get_owned_admin(db: Session, telegram_id: int, username: str):
+    """One specific panel, but only if this Telegram account actually owns it.
+
+    Matching on both columns is what stops a caller from naming someone else's
+    panel and having it charged or re-passworded.
+    """
+    return (
+        db.query(Admins)
+        .filter(Admins.telegram_id == telegram_id, Admins.username == username)
+        .first()
+    )
+
+
+def grant_admin_traffic(db: Session, admin: Admins, added_traffic) -> None:
+    """Grant NEW quota to an admin (e.g. a paid top-up via the bot).
+
+    Unlike increase_admin_traffic (used by limit_handler.py to refund traffic a
+    user already had but didn't use — where initial_traffic must NOT move), this
+    also raises initial_traffic, since the admin's total granted quota actually
+    went up and the panel's Remaining/Initial display should reflect that.
+    """
+    admin.traffic += added_traffic
+    admin.initial_traffic += added_traffic
+    db.commit()
+
+
+def update_marzban_password(db: Session, admin: Admins, new_password: str) -> None:
+    """Update the Nexra-side copy of the admin's Marzban password (plaintext, matching
+    how add_admin/update_admin_values already store it — Marzban's own admin account
+    is NOT updated by this call; the superadmin must mirror it there manually."""
+    admin.marzban_password = new_password
     db.commit()
 
 

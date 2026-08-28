@@ -20,6 +20,8 @@ class Admins(Base):
     delete_return_traffic = Column(Boolean, default=False)
     expiry_date = Column(DateTime, nullable=True)
     inbound_flow = Column(String, nullable=True)
+    # Not unique: one person can own several reseller panels (see c7b1d4e88a25).
+    telegram_id = Column(BigInteger, nullable=True, index=True)
 
 
 class Panels(Base):

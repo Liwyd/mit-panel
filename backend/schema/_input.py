@@ -16,6 +16,7 @@ class AdminInput(BaseModel):
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
     expiry_date: datetime | None
+    telegram_id: Optional[int] = None
 
 
 class AdminUpdateInput(BaseModel):
@@ -31,6 +32,7 @@ class AdminUpdateInput(BaseModel):
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
     expiry_date: datetime | None
+    telegram_id: Optional[int] = None
 
 
 class PanelInput(BaseModel):
@@ -69,6 +71,29 @@ class NewsInput(BaseModel):
     news: str = Field(
         max_length=250, description="News content must be 250 characters or less"
     )
+
+
+class BotTopupInput(BaseModel):
+    telegram_id: int
+    added_gb: float = Field(gt=0)
+    # Which of this person's panels to credit. Optional for backwards
+    # compatibility: when omitted, the call targets their only panel.
+    username: Optional[str] = None
+
+
+class BotChangePasswordInput(BaseModel):
+    telegram_id: int
+    new_password: str = Field(min_length=1)
+    current_password: str = Field(min_length=1)
+    username: Optional[str] = None
+
+
+class BotGrantInput(BaseModel):
+    """Superadmin granting traffic straight to a panel, by username — no
+    Telegram link required, so panels nobody has linked yet can still be topped up."""
+
+    username: str
+    added_gb: float = Field(gt=0)
 
 
 class SettingsInput(BaseModel):
