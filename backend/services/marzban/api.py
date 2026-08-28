@@ -1,6 +1,7 @@
 import time
 import json
 import requests
+from datetime import datetime, timedelta, timezone
 
 from backend.schema._input import ClientInput, ClientUpdateInput
 
@@ -139,6 +140,7 @@ class APIService:
             "status": "active",
             "expire": expire_ts,
             "data_limit": data_limit,
+            "data_limit_reset_strategy": "no_reset",
             "inbounds": self.inbounds,
             "proxies": proxies,
             "note": "",
@@ -162,6 +164,7 @@ class APIService:
             "status": "active" if user_data.enable else "disabled",
             "data_limit": data_limit,
             "expire": expire_ts,
+            "data_limit_reset_strategy": "no_reset",
             "proxies": {},
             "inbounds": {},
             "note": "",
@@ -189,3 +192,89 @@ class APIService:
             headers=self.headers,
         )
         return response.status_code
+
+    async def update_admin_password(self, admin_username: str, new_password: str) -> int:
+        """Change another Marzban admin's password. Requires this APIService to be
+        logged in as a sudo admin (self.username/self.password) — Marzban rejects
+        this call from a non-sudo admin, even one modifying its own account.
+
+        Marzban's AdminModify body requires `is_sudo`, so a password-only payload
+        is rejected with 422. The admin's current record is read first and its
+        flags echoed back unchanged: guessing `is_sudo` here would silently
+        promote or demote the account being edited.
+        """
+        await self._login()
+
+        current = next(
+            (a for a in await self.get_admins() if a.get("username") == admin_username), None
+        )
+        if current is None:
+            return 404
+
+        payload = {"password": new_password, "is_sudo": bool(current.get("is_sudo"))}
+        for field in ("telegram_id", "discord_webhook"):
+            if current.get(field) is not None:
+                payload[field] = current[field]
+
+        response = self.session.put(
+            f"{self.url}api/admin/{admin_username}",
+            headers=self.headers,
+            json=payload,
+        )
+        return response.status_code
+
+    async def get_system_stats(self) -> dict:
+        """Marzban's own /api/system snapshot: user counts, lifetime bandwidth
+        and the CPU/RAM of the host Marzban itself runs on."""
+        await self._login()
+        response = self.session.get(f"{self.url}api/system", headers=self.headers)
+        if response.status_code != 200:
+            return {}
+        return response.json()
+
+    async def get_nodes_usage(self, start: str, end: str) -> list[dict]:
+        """Per-node traffic for a window. Marzban wants naive ISO timestamps."""
+        await self._login()
+        response = self.session.get(
+            f"{self.url}api/nodes/usage",
+            headers=self.headers,
+            params={"start": start, "end": end},
+        )
+        if response.status_code != 200:
+            return []
+        return response.json().get("usages", [])
+
+    async def count_online_users(self, window_seconds: int = 180) -> int:
+        """Marzban exposes no online counter, so the user list is scanned for
+        an online_at inside the window. Callers should cache this."""
+        await self._login()
+        response = self.session.get(f"{self.url}api/users", headers=self.headers)
+        if response.status_code != 200:
+            return 0
+
+        users = response.json().get("users", [])
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+        online = 0
+        for user in users:
+            seen = user.get("online_at")
+            if not seen:
+                continue
+            try:
+                stamp = datetime.fromisoformat(str(seen).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            # Marzban reports naive UTC; attach the timezone before comparing.
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            if stamp >= cutoff:
+                online += 1
+        return online
+
+    async def get_admins(self) -> list[dict]:
+        """List every admin as Marzban itself has them recorded (username,
+        telegram_id, is_sudo, ...). Requires sudo credentials."""
+        await self._login()
+        response = self.session.get(f"{self.url}api/admins", headers=self.headers)
+        if response.status_code != 200:
+            return []
+        return response.json()

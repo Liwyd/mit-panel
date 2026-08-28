@@ -37,3 +37,22 @@ class AdminLimiter:
     def increase_usage(self, traffic: int) -> None:
         if self.admin.delete_return_traffic:
             crud.increase_admin_traffic(self.db, self.admin, traffic)
+
+    def apply_update(self, old_total: int, new_total: int, used: int = 0) -> None:
+        """Adjust the admin's remaining traffic by the change in a user's committed
+        traffic, where committed = max(limit, used). Already-consumed traffic is
+        never refunded, so lowering the limit of a used-up user refunds nothing,
+        and raising it only charges the part above what's already committed.
+        (e.g. a fully-used 80 GB user: 80->20 refunds 0, then 20->100 charges 20.)"""
+        delta = max(new_total, used) - max(old_total, used)
+        if delta > 0:
+            crud.reduce_admin_traffic(self.db, self.admin, delta)
+        elif delta < 0 and self.admin.update_return_traffic:
+            crud.increase_admin_traffic(self.db, self.admin, -delta)
+
+    def charge(self, amount: int) -> None:
+        """Unconditionally deduct traffic from the admin's budget. Used on reset:
+        resetting a user's usage frees the already-consumed traffic for re-use,
+        so that amount is charged back regardless of the return-traffic flags."""
+        if amount > 0:
+            crud.reduce_admin_traffic(self.db, self.admin, amount)

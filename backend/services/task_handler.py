@@ -315,6 +315,7 @@ async def get_all_users_from_panel(
                     username=user.get("username"),
                     status=True if user.get("status") == "active" else False,
                     is_online=False,
+                    online_at=user.get("online_at"),
                     data_limit=user.get("data_limit") or 0,
                     used_data=user.get("used_traffic") or 0,
                     expiry_date_unix=expire_val * 1000 if expire_val else None,
@@ -748,7 +749,27 @@ async def update_a_user(
                     "message": "Your admin account is inactive. Contact support.",
                 },
             )
-        elif not admin_check.check_traffic_limit(user_input.total):
+
+        admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
+        user_info = await admin_task.get_user_by_username(user_input.email)
+
+        if not isinstance(user_info, dict) or not user_info.get("username"):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "success": False,
+                    "message": "User not found",
+                },
+            )
+
+        old_total = int(user_info.get("data_limit") or 0)
+        new_total = int(user_input.total or 0)
+        used = int(user_info.get("used_traffic") or 0)
+        # Charge only the increase in committed traffic (committed = max(limit, used)).
+        # Already-consumed traffic is never refunded when lowering the limit.
+        charge = max(new_total, used) - max(old_total, used)
+
+        if charge > 0 and not admin_check.check_traffic_limit(charge):
             logger.warning(
                 f"Admin {admin_username} exceeded traffic limit when updating user: {user_input.email}"
             )
@@ -759,24 +780,6 @@ async def update_a_user(
                     "message": f"Insufficient traffic to update this user, your limit: {round((_admin.traffic) / (1024 ** 3), 1)} GB",
                 },
             )
-        admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
-        user_info = await admin_task.get_user_by_username(user_input.email)
-
-        if not user_info:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={
-                    "success": False,
-                    "message": "User not found",
-                },
-            )
-
-        # Calculate extra traffic if increasing data limit
-        extra_traffic = (
-            user_input.total - user_info.get("data_limit", 0)
-            if user_input.total > user_info.get("data_limit", 0)
-            else 0
-        )
 
         update_user = await admin_task.update_user_in_panel(
             user_input.email, user_input
@@ -791,7 +794,7 @@ async def update_a_user(
                 },
             )
 
-        admin_check.reduce_usage(user_input.total, extra_traffic)
+        admin_check.apply_update(old_total, new_total, used)
         return ResponseModel(
             success=True,
             message="User updated successfully",
@@ -1006,7 +1009,11 @@ async def reset_a_user_usage(
                     "message": "User not found",
                 },
             )
-        if not admin_check.check_traffic_limit(user_info.get("data_limit", 0)):
+        freed = min(
+            int(user_info.get("used_traffic") or 0),
+            int(user_info.get("data_limit") or 0),
+        )
+        if freed > 0 and not admin_check.check_traffic_limit(freed):
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={
@@ -1014,7 +1021,6 @@ async def reset_a_user_usage(
                     "message": f"Insufficient traffic to reset usage for this user, your limit: {round((_admin.traffic) / (1024 ** 3), 1)} GB",
                 },
             )
-        usage_user_traffic = user_info.get("used_traffic", 0)
         reset_usage = await admin_task.reset_user_usage_in_panel(email)
 
         if not reset_usage:
@@ -1025,7 +1031,7 @@ async def reset_a_user_usage(
                     "message": "Failed to reset user usage",
                 },
             )
-        admin_check.reduce_usage(user_info.get("data_limit", 0), usage_user_traffic)
+        admin_check.charge(freed)
         return ResponseModel(
             success=True,
             message="User usage reset successfully",
