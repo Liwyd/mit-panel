@@ -61,6 +61,10 @@ export const adminSchema = z.object({
         .optional()
         .nullable(),
 
+    marzban_all_inbounds: z
+        .boolean()
+        .default(false),
+
     marzban_password: z
         .string()
         .optional()
@@ -116,6 +120,7 @@ export interface AdminOutput {
     panel: string
     inbound_id: string | null
     marzban_inbounds: string | null
+    marzban_all_inbounds?: boolean
     marzban_password: string | null
     flow?: string | null
     traffic: number

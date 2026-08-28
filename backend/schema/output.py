@@ -16,6 +16,8 @@ class AdminOutput(BaseModel):
     is_active: bool
     panel: str
     inbound_id: Optional[str]
+    marzban_inbounds: Optional[str] = None
+    marzban_all_inbounds: bool = False
     traffic: float
     initial_traffic: float = 0
     update_return_traffic: bool

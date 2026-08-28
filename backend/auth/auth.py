@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -99,6 +100,28 @@ async def login_for_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"success": False, "message": "Incorrect username or password"},
         )
+
+    # If this admin is set to use ALL inbounds of its Marzban panel, re-sync the
+    # stored inbound list from the master panel on every login. This keeps the
+    # "all inbounds" selection current when inbounds are added/removed upstream.
+    if admin.marzban_all_inbounds:
+        try:
+            from backend.services.marzban import APIService
+
+            panel = crud.get_panel_by_name(db, name=admin.panel)
+            if panel and panel.panel_type == "marzban":
+                svc = APIService(
+                    url=panel.url,
+                    username=panel.username,
+                    password=panel.password,
+                )
+                live_inbounds = await svc.get_inbounds()
+                admin.marzban_inbounds = json.dumps(live_inbounds)
+                db.commit()
+        except Exception as e:
+            logger.error(
+                f"Failed to refresh all-inbounds for admin {admin.username}: {e}"
+            )
 
     logger.info(f"Admin login successful: {admin.username}")
     access_token = create_access_token(

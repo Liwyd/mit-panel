@@ -43,6 +43,7 @@ export function AdminFormDialog({
     const [marzbanInbounds, setMarzbanInbounds] = useState<Record<string, string[]> | null>(null)
     const [loadingInbounds, setLoadingInbounds] = useState(false)
     const [selectedInbounds, setSelectedInbounds] = useState<Record<string, string[]>>({})
+    const [allInbounds, setAllInbounds] = useState(false)
 
     const {
         register,
@@ -59,6 +60,7 @@ export function AdminFormDialog({
             panel: '',
             inbound_id: "",
             marzban_inbounds: null,
+            marzban_all_inbounds: false,
             flow: null,
             traffic: 0,
             update_return_traffic: false,
@@ -82,6 +84,7 @@ export function AdminFormDialog({
             setValue('panel', admin.panel)
             setValue('inbound_id', admin.inbound_id || '')
             setValue('marzban_inbounds', admin.marzban_inbounds)
+            setAllInbounds(admin.marzban_all_inbounds ?? false)
             setValue('flow', (admin as any).flow ?? null)
             setValue('traffic', bytesToGB(admin.traffic))
             setValue('update_return_traffic', admin.update_return_traffic)
@@ -115,6 +118,7 @@ export function AdminFormDialog({
         } else {
             reset()
             setSelectedInbounds({})
+            setAllInbounds(false)
             setMarzbanInbounds(null)
         }
     }, [admin, isOpen, setValue, reset])
@@ -224,11 +228,14 @@ export function AdminFormDialog({
 
             const passwordToSend = data.password?.trim() ? data.password : undefined
 
+            const finalInbounds = allInbounds && marzbanInbounds ? marzbanInbounds : selectedInbounds
+
             const submitData: any = {
                 ...data,
                 expiry_date: expiryForSubmit,
-                marzban_inbounds: Object.keys(selectedInbounds).length > 0
-                    ? JSON.stringify(selectedInbounds)
+                marzban_all_inbounds: allInbounds,
+                marzban_inbounds: Object.keys(finalInbounds).length > 0
+                    ? JSON.stringify(finalInbounds)
                     : null,
                 marzban_password: selectedPanel?.panel_type === 'marzban' ? passwordToSend : null,
             }
@@ -357,6 +364,24 @@ export function AdminFormDialog({
                     {currentPanelType === 'marzban' && (
                         <div className="space-y-2">
                             <Label>Marzban Inbounds *</Label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={allInbounds}
+                                    disabled={isSubmitting || loadingInbounds}
+                                    onChange={(e) => {
+                                        const checked = e.target.checked
+                                        setAllInbounds(checked)
+                                        if (checked && marzbanInbounds) {
+                                            setSelectedInbounds(marzbanInbounds)
+                                        } else if (!checked) {
+                                            setSelectedInbounds({})
+                                        }
+                                    }}
+                                    className="rounded border border-input"
+                                />
+                                <span className="text-sm">Select all inbounds (auto-sync on every login)</span>
+                            </label>
                             {loadingInbounds ? (
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -372,9 +397,9 @@ export function AdminFormDialog({
                                                     <label key={tag} className="flex items-center gap-2 cursor-pointer">
                                                         <input
                                                             type="checkbox"
-                                                            checked={selectedInbounds[protocol]?.includes(tag) || false}
+                                                            checked={allInbounds || selectedInbounds[protocol]?.includes(tag) || false}
                                                             onChange={() => toggleInbound(protocol, tag)}
-                                                            disabled={isSubmitting}
+                                                            disabled={isSubmitting || allInbounds}
                                                             className="rounded border border-input"
                                                         />
                                                         <span className="text-sm">{tag}</span>

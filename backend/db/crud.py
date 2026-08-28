@@ -25,6 +25,7 @@ def add_admin(db: Session, admin_input: AdminInput) -> None:
         inbound_flow=admin_input.flow,
         marzban_inbounds=admin_input.marzban_inbounds,
         marzban_password=admin_input.marzban_password,
+        marzban_all_inbounds=admin_input.marzban_all_inbounds,
         traffic=admin_input.traffic,
         initial_traffic=admin_input.traffic,
         update_return_traffic=admin_input.update_return_traffic,
@@ -69,8 +70,12 @@ def update_admin_values(
         admin.marzban_inbounds = admin_input.marzban_inbounds
         if admin_input.marzban_password is not None:
             admin.marzban_password = admin_input.marzban_password
+        admin.marzban_all_inbounds = admin_input.marzban_all_inbounds
         admin.traffic = admin_input.traffic
-        admin.initial_traffic = admin_input.traffic
+        # NOTE: initial_traffic (the admin's total granted quota) is intentionally
+        # NOT overwritten here. Editing an admin must only adjust the remaining
+        # budget, otherwise the originally granted total would be silently reset
+        # to whatever traffic is left (see traffic-accounting design).
         admin.update_return_traffic = admin_input.update_return_traffic
         admin.delete_return_traffic = admin_input.delete_return_traffic
         admin.expiry_date = admin_input.expiry_date

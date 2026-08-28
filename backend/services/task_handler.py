@@ -1,3 +1,4 @@
+import json
 from sqlalchemy.orm import Session
 from fastapi import status
 from fastapi.responses import JSONResponse
@@ -512,6 +513,20 @@ async def add_new_user(
             )
 
         admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
+
+        # Admins configured with "all inbounds" always get the live full set from
+        # the master panel at creation time (complementing the per-login refresh),
+        # so inbounds added/removed upstream are reflected immediately.
+        if _admin.marzban_all_inbounds:
+            try:
+                live = await admin_task.api_service_for_main_tasks.get_inbounds()
+                admin_task.api_service.inbounds = live
+                _admin.marzban_inbounds = json.dumps(live)
+                db.commit()
+            except Exception as e:
+                logger.error(
+                    f"Failed to resolve all-inbounds for admin {admin_username}: {e}"
+                )
 
         existing_user = await admin_task.get_user_by_username(user_input.email)
         if isinstance(existing_user, dict) and existing_user.get("username"):

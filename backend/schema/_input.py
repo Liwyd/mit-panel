@@ -12,6 +12,7 @@ class AdminInput(BaseModel):
     flow: Optional[str] = None
     marzban_inbounds: Optional[str] = None
     marzban_password: Optional[str] = None
+    marzban_all_inbounds: bool = False
     traffic: float = 0.0
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
@@ -28,6 +29,7 @@ class AdminUpdateInput(BaseModel):
     flow: Optional[str] = None
     marzban_inbounds: Optional[str] = None
     marzban_password: Optional[str] = None
+    marzban_all_inbounds: bool = False
     traffic: float
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
