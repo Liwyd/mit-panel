@@ -24,7 +24,7 @@ export function PageLayout({ header, children, footer, className }: PageLayoutPr
             {header ? <div className="shrink-0">{header}</div> : null}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">{children}</div>
             {footer ? (
-                <div className="shrink-0 border-t border-border bg-background">{footer}</div>
+                <div className="shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]">{footer}</div>
             ) : null}
         </div>
     )

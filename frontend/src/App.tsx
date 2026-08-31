@@ -85,7 +85,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     return (
-        <div className="flex h-screen w-screen bg-background overflow-hidden">
+        <div className="flex h-dvh w-screen bg-background overflow-hidden">
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
@@ -115,14 +115,14 @@ function Layout({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Desktop Sidebar - Hidden on mobile */}
-            <aside className="nx-header hidden md:flex w-64 border-r flex-col flex-shrink-0 h-screen overflow-hidden">
+            <aside className="nx-header hidden md:flex w-64 border-r flex-col flex-shrink-0 h-dvh overflow-hidden">
                 <div className="flex-1 overflow-y-auto">
                     <Sidebar />
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 h-dvh overflow-hidden">
                 {/* Mobile Header with Menu Button */}
                 <header className="nx-header md:hidden flex items-center gap-3 p-4 border-b shrink-0">
                     <Button
