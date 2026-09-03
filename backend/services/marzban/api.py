@@ -278,3 +278,27 @@ class APIService:
         if response.status_code != 200:
             return []
         return response.json()
+
+    async def create_admin(
+        self, username: str, password: str, telegram_id: int | None = None
+    ) -> tuple[int, str]:
+        """Create a non-sudo admin in Marzban. Requires sudo credentials.
+
+        Returns (status_code, detail) so the caller can report Marzban's own
+        reason -- most often a duplicate username -- instead of a bare number.
+        """
+        await self._login()
+        payload = {"username": username, "password": password, "is_sudo": False}
+        if telegram_id:
+            payload["telegram_id"] = telegram_id
+
+        response = self.session.post(
+            f"{self.url}api/admin", headers=self.headers, json=payload
+        )
+        detail = ""
+        if response.status_code != 200:
+            try:
+                detail = str(response.json().get("detail", response.text))
+            except Exception:
+                detail = response.text
+        return response.status_code, detail

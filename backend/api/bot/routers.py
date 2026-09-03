@@ -1,10 +1,19 @@
+import json
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.schema.output import ResponseModel, AdminOutput, AdminCredentialsOutput
-from backend.schema._input import BotTopupInput, BotChangePasswordInput, BotGrantInput
+from backend.schema._input import (
+    AdminInput,
+    BotTopupInput,
+    BotChangePasswordInput,
+    BotGrantInput,
+    BotCreateAdminInput,
+)
 from backend.db import crud
 from backend.db.engin import get_db
 from backend.auth.auth import verify_bot_api_key
@@ -281,4 +290,97 @@ async def change_admin_marzban_password(
         success=True,
         message="Password updated successfully in Marzban and Nexra",
         data={"telegram_id": admin.telegram_id, "username": admin.username},
+    )
+
+
+@router.post(
+    "/admin/create",
+    description="Provision a new reseller: create the admin in Marzban, then in MIT Panel",
+)
+async def create_admin(
+    payload: BotCreateAdminInput,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_bot_api_key),
+):
+    if crud.get_admin_by_username(db, payload.username):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"success": False, "message": "An admin with that username already exists"},
+        )
+
+    panel = crud.get_panel_by_name(db, payload.panel)
+    if not panel:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"success": False, "message": f"No panel named '{payload.panel}'"},
+        )
+    if panel.panel_type != "marzban":
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"success": False, "message": "Only Marzban panels can be provisioned here"},
+        )
+
+    sudo_api = MarzbanAPI(url=panel.url, username=panel.username, password=panel.password)
+
+    # Create in Marzban first. If MIT Panel's row were written first and Marzban
+    # then refused, the panel would list an admin that cannot actually serve anyone.
+    try:
+        marzban_status, detail = await sudo_api.create_admin(
+            payload.username, payload.password, payload.telegram_id
+        )
+    except Exception as e:
+        logger.error(f"Marzban admin creation failed for {payload.username}: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"success": False, "message": f"Could not reach Marzban: {e}"},
+        )
+
+    if marzban_status != 200:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "success": False,
+                "message": f"Marzban refused to create the admin (status {marzban_status}). {detail}",
+            },
+        )
+
+    # Give the new admin every inbound the panel offers; the superadmin can
+    # narrow it afterwards in the panel UI.
+    try:
+        inbounds = await sudo_api.get_inbounds()
+    except Exception:
+        inbounds = {}
+
+    expiry_date = None
+    if payload.expiry_days:
+        expiry_date = datetime.utcnow() + timedelta(days=payload.expiry_days)
+
+    admin_input = AdminInput(
+        username=payload.username,
+        password=payload.password,
+        is_active=True,
+        panel=payload.panel,
+        inbound_id=None,
+        flow=None,
+        marzban_inbounds=json.dumps(inbounds) if inbounds else None,
+        marzban_password=payload.password,
+        traffic=int(payload.traffic_gb * 1024**3),
+        update_return_traffic=False,
+        delete_return_traffic=False,
+        expiry_date=expiry_date,
+        telegram_id=payload.telegram_id,
+    )
+    crud.add_admin(db, admin_input)
+
+    logger.info(f"Bot provisioned new admin {payload.username} on panel {payload.panel}")
+    return ResponseModel(
+        success=True,
+        message="Admin created successfully",
+        data={
+            "username": payload.username,
+            "panel": payload.panel,
+            "traffic_gb": payload.traffic_gb,
+            "inbounds": inbounds,
+            "expiry_date": expiry_date.isoformat() if expiry_date else None,
+        },
     )

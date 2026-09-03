@@ -98,6 +98,17 @@ class BotGrantInput(BaseModel):
     added_gb: float = Field(gt=0)
 
 
+class BotCreateAdminInput(BaseModel):
+    """Superadmin provisioning a new reseller panel from the bot."""
+
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+    panel: str
+    traffic_gb: float = Field(ge=0)
+    expiry_days: Optional[int] = None
+    telegram_id: Optional[int] = None
+
+
 class SettingsInput(BaseModel):
     login_title: Optional[str] = None
     telegram_bot_token: Optional[str] = None
