@@ -1,7 +1,7 @@
 services:
   mit-panel:
     build: .
-    image: mit-panel:latest
+    image: liwyd/mit-panel:latest
     container_name: mit-panel
     restart: always
     volumes:

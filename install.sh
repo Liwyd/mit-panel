@@ -114,9 +114,14 @@ do_install() {
     separator
     c "$BOLD" "  Building"
     separator
-    inf "Building Docker image (this takes a while)..."
-    docker compose build --no-cache >/dev/null 2>&1
-    ok "Image built."
+    inf "Pulling pre-built image..."
+    if docker pull liwyd/mit-panel:latest >/dev/null 2>&1; then
+        ok "Image pulled."
+    else
+        wn "Pull failed, building locally instead..."
+        docker compose build --no-cache >/dev/null 2>&1
+        ok "Image built."
+    fi
     inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
     ok "Container started."
@@ -202,9 +207,14 @@ case "${1:-}" in
     update)
         echo "Pulling latest code..."
         git pull
-        echo "Rebuilding..."
-        docker compose down
-        docker compose build --no-cache
+        echo "Pulling pre-built image..."
+        if docker pull liwyd/mit-panel:latest 2>/dev/null; then
+            echo "Image pulled."
+        else
+            echo "Pull failed, rebuilding locally..."
+            docker compose down
+            docker compose build --no-cache
+        fi
         docker compose up -d
         echo "Update complete."
         ;;
@@ -328,9 +338,14 @@ action_update() {
         ok "Container stopped."
     fi
 
-    inf "Rebuilding image..."
-    docker compose build --no-cache >/dev/null 2>&1
-    ok "Image rebuilt."
+    inf "Pulling pre-built image..."
+    if docker pull liwyd/mit-panel:latest >/dev/null 2>&1; then
+        ok "Image pulled."
+    else
+        wn "Pull failed, rebuilding locally..."
+        docker compose build --no-cache >/dev/null 2>&1
+        ok "Image rebuilt."
+    fi
 
     inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
