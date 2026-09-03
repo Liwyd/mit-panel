@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
     BarChart3,
@@ -11,6 +12,13 @@ import {
     Server,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { logout, getUserRole } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
@@ -75,6 +83,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
     const location = useLocation()
     const navigate = useNavigate()
     const userRole = getUserRole()
+    const [showFinanceInfo, setShowFinanceInfo] = useState(false)
 
     const filteredItems = navigationItems.filter(item =>
         userRole && item.roles.includes(userRole)
@@ -117,10 +126,10 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                 <Button
                     variant="ghost"
                     className="w-full justify-start gap-3"
-                    onClick={() => navigate('/login')}
+                    onClick={() => setShowFinanceInfo(true)}
                 >
                     <Zap className="h-4 w-4" />
-                    <span>Finance (Coming Soon)</span>
+                    <span>Finance</span>
                 </Button>
 
                 <Button
@@ -132,6 +141,20 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                     <span>Logout</span>
                 </Button>
             </div>
+
+            <Dialog open={showFinanceInfo} onOpenChange={setShowFinanceInfo}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Zap className="h-5 w-5" />
+                            Finance
+                        </DialogTitle>
+                        <DialogDescription className="pt-2 text-sm sm:text-base leading-7 sm:leading-8 text-foreground" dir="rtl">
+                            برای شارژ پنل از ربات اختصاصی استفاده کنید.
+                        </DialogDescription>
+                    </DialogHeader>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
