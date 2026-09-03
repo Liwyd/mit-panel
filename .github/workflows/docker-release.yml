@@ -2,8 +2,8 @@ name: Docker Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
 
 jobs:
   docker:
@@ -23,10 +23,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: primezdev/whale-panel
+          images: liwyd/mit-panel
           tags: |
             type=ref,event=tag
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
