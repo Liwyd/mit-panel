@@ -300,7 +300,7 @@ export interface MarzbanOverview {
     }
 }
 
-export const MARZBAN_PERIODS = ['7h', '1d', '3d', '1w', '1m', '3m'] as const
+export const MARZBAN_PERIODS = ['1h', '7h', '1d', '3d', '1w', '1m', '3m'] as const
 export type MarzbanPeriod = typeof MARZBAN_PERIODS[number]
 
 export interface DashboardData {
