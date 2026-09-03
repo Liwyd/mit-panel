@@ -95,7 +95,11 @@ export function formatApiError(error: any): string {
                 .join('; ')
         }
     } else if (typeof data === 'string' && data) {
-        serverMsg = data
+        // A gateway error (nginx 502/504) answers with a whole HTML page.
+        // Dumping that into an alert is unreadable, so fall back to the plain
+        // reason for the status code instead.
+        const looksLikeHtml = /^\s*(<!doctype|<html|<head|<body)/i.test(data)
+        serverMsg = looksLikeHtml ? '' : data
     }
 
     const translated = translate(serverMsg)
