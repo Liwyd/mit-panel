@@ -91,6 +91,22 @@ async def list_all_admins(
 
 
 @router.get(
+    "/panels",
+    description="Marzban panels a new reseller can be provisioned on",
+)
+async def list_bot_panels(
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_bot_api_key),
+):
+    names = [p.name for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
+    return ResponseModel(
+        success=True,
+        message="Panels retrieved successfully",
+        data=sorted(names),
+    )
+
+
+@router.get(
     "/admins/credentials",
     description="List every admin's current Marzban password (bulk export for the superadmin)",
 )
@@ -108,7 +124,7 @@ async def list_admin_credentials(
 
 @router.post(
     "/admins/sync-telegram-ids",
-    description="Fill in missing Telegram IDs for Nexra admins from Marzban's own admin records",
+    description="Fill in missing Telegram IDs for MIT Panel admins from Marzban's own admin records",
 )
 async def sync_telegram_ids_from_marzban(
     db: Session = Depends(get_db),
@@ -223,7 +239,7 @@ async def change_admin_marzban_password(
             },
         )
 
-    # Refuse to touch the sudo account Nexra itself authenticates with. Changing
+    # Refuse to touch the sudo account MIT Panel itself authenticates with. Changing
     # it here would silently cut the panel off from Marzban entirely.
     if admin.username == panel.username:
         logger.warning(f"Refused bot password change for sudo account {admin.username}")
@@ -236,7 +252,7 @@ async def change_admin_marzban_password(
         )
 
     # Prove the requester knows the current password by authenticating to Marzban
-    # as that admin — the authoritative check, rather than trusting Nexra's copy.
+    # as that admin — the authoritative check, rather than trusting MIT Panel's copy.
     verify_api = MarzbanAPI(url=panel.url, username=admin.username, password=payload.current_password)
     try:
         current_ok = await verify_api.test_connection()
@@ -253,7 +269,7 @@ async def change_admin_marzban_password(
             content={"success": False, "message": "Current password is incorrect"},
         )
 
-    # panel.username/panel.password are the sudo Marzban credentials Nexra already
+    # panel.username/panel.password are the sudo Marzban credentials MIT Panel already
     # uses for platform-level calls — only a sudo admin can change another admin's password.
     sudo_api = MarzbanAPI(url=panel.url, username=panel.username, password=panel.password)
     try:
@@ -270,7 +286,7 @@ async def change_admin_marzban_password(
             f"Marzban rejected password change for admin {admin.username}: status {marzban_status}"
         )
         hints = {
-            401: "Nexra's stored Marzban credentials for this panel are wrong or expired.",
+            401: "MIT Panel's stored Marzban credentials for this panel are wrong or expired.",
             403: "This panel's stored Marzban credentials are not a sudo admin.",
             404: f"Marzban has no admin named '{admin.username}'.",
             422: "Marzban rejected the request body — the panel and Marzban versions may disagree.",
@@ -285,10 +301,10 @@ async def change_admin_marzban_password(
         )
 
     crud.update_marzban_password(db, admin, payload.new_password)
-    logger.info(f"Bot password change: admin {admin.username} updated in Marzban and Nexra")
+    logger.info(f"Bot password change: admin {admin.username} updated in Marzban and MIT Panel")
     return ResponseModel(
         success=True,
-        message="Password updated successfully in Marzban and Nexra",
+        message="Password updated successfully in Marzban and MIT Panel",
         data={"telegram_id": admin.telegram_id, "username": admin.username},
     )
 
@@ -370,7 +386,17 @@ async def create_admin(
         expiry_date=expiry_date,
         telegram_id=payload.telegram_id,
     )
-    crud.add_admin(db, admin_input)
+    try:
+        crud.add_admin(db, admin_input)
+    except Exception as e:
+        logger.error(f"Failed to create admin in MIT Panel for {payload.username}: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": f"Admin created in Marzban but failed to save in MIT Panel: {e}",
+            },
+        )
 
     logger.info(f"Bot provisioned new admin {payload.username} on panel {payload.panel}")
     return ResponseModel(

@@ -207,6 +207,29 @@ export interface PanelOutput {
     is_active: boolean
 }
 
+export type ServerStatus = 'connected' | 'connecting' | 'disconnected'
+
+export interface ServerOutput {
+    id: number
+    name: string
+    status: ServerStatus
+    last_seen_at: string | null
+    cpu_percent: number | null
+    cpu_cores: number | null
+    ram_used: number | null
+    ram_total: number | null
+    swap_used: number | null
+    swap_total: number | null
+    disk_used: number | null
+    disk_total: number | null
+}
+
+export interface ServerCreatedOutput {
+    id: number
+    name: string
+    token: string
+}
+
 // User Form
 export const userSchema = z.object({
     email: z
@@ -265,10 +288,13 @@ export interface SystemInfo {
     swap_used?: number
 }
 
+export type MarzbanNodeStatus = 'connected' | 'connecting' | 'error' | 'disabled' | 'unknown'
+
 export interface MarzbanNodeUsage {
     id: number | null
     name: string
     usage: number
+    status: MarzbanNodeStatus
 }
 
 export interface MarzbanOverview {
@@ -298,16 +324,26 @@ export interface MarzbanOverview {
         total: number
         items: MarzbanNodeUsage[]
     }
+    admins?: {
+        mit: number
+        marzban_only: number
+    } | null
 }
 
 export const MARZBAN_PERIODS = ['1h', '7h', '1d', '3d', '1w', '1m', '3m'] as const
 export type MarzbanPeriod = typeof MARZBAN_PERIODS[number]
 
+export interface NewsFeedItem {
+    id: number
+    message: string | null
+    has_banner: boolean
+}
+
 export interface DashboardData {
     remaining_traffic?: number
     initial_traffic?: number
     expiry_time?: string
-    news?: string[]
+    news?: NewsFeedItem[]
     sub_url?: string
     users?: ClientsOutput[]
     admins?: AdminOutput[]

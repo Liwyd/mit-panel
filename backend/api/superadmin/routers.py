@@ -1,14 +1,22 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 import os
 
-from backend.schema.output import ResponseModel, AdminOutput, PanelOutput
+from backend.schema.output import (
+    ResponseModel,
+    AdminOutput,
+    PanelOutput,
+    ServerOutput,
+    ServerCreatedOutput,
+)
 from backend.schema._input import (
     AdminInput,
     AdminUpdateInput,
     PanelInput,
     NewsInput,
+    ServerInput,
+    ServerReorderInput,
     SettingsInput,
 )
 from backend.db import crud
@@ -21,7 +29,9 @@ from backend.auth.auth import get_current_superadmin
 from backend.utils.system import get_system_info
 from backend.utils.marzban_overview import PERIODS, build_marzban_overview
 from backend.utils.settings_store import get_settings, update_settings, save_logo
+from backend.utils.banners import save_banner, delete_banner, get_banner_path
 from backend.utils.telegram import send_backup_to_telegram
+from backend.utils.servers import server_status
 
 router = APIRouter(prefix="/superadmin", tags=["superadmin"])
 
@@ -404,6 +414,7 @@ async def get_news(
                         "id": x.id,
                         "message": x.message,
                         "created_at": x.created_at,
+                        "has_banner": get_banner_path(x.id) is not None,
                     },
                     news,
                 )
@@ -422,13 +433,36 @@ async def get_news(
 
 @router.post("/news", description="Add news", response_model=ResponseModel)
 async def add_news(
-    news: NewsInput,
+    message: str | None = Form(None, max_length=250),
+    image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     admin: dict = Depends(get_current_superadmin),
 ):
-    """Add news"""
+    """Add news: a message, a banner image, or both - at least one is required."""
+    text = (message or "").strip() or None
+
+    image_bytes: bytes | None = None
+    if image is not None and image.filename:
+        image_bytes = await image.read()
+        if image_bytes and not (image.content_type or "").startswith("image/"):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"success": False, "message": "Only image files are allowed"},
+            )
+
+    if not text and not image_bytes:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "message": "Add a message, a banner image, or both",
+            },
+        )
+
     try:
-        crud.add_news(db, news.news)
+        news = crud.add_news(db, text)
+        if image_bytes:
+            save_banner(news.id, image_bytes)
         return ResponseModel(
             success=True,
             message="News added successfully",
@@ -465,6 +499,7 @@ async def delete_news(
             )
         db.delete(news)
         db.commit()
+        delete_banner(news_id)
         return ResponseModel(
             success=True,
             message="News deleted successfully",
@@ -492,6 +527,8 @@ async def get_system_info_endpoint(
 @router.get("/marzban/overview", description="Aggregated Marzban stats for the dashboard")
 async def get_marzban_overview(
     period: str = "1d",
+    refresh: bool = False,
+    include_admins: bool = False,
     db: Session = Depends(get_db),
     current_admin: dict = Depends(get_current_superadmin),
 ):
@@ -523,7 +560,21 @@ async def get_marzban_overview(
             username=panel.username,
             password=panel.password,
         )
-        data = await build_marzban_overview(api_service, panel.name, period)
+        data = await build_marzban_overview(api_service, panel.name, period, force=refresh)
+
+        if include_admins:
+            try:
+                marzban_admins = await api_service.get_admins()
+                marzban_usernames = {a["username"] for a in marzban_admins if a.get("username")}
+                mit_usernames = {a.username for a in crud.get_all_admins(db)}
+                data["admins"] = {
+                    "mit": len(mit_usernames),
+                    "marzban_only": len(marzban_usernames - mit_usernames),
+                }
+            except Exception as e:
+                logger.warning(f"Failed to compute admin ratio from {panel.name}: {str(e)}")
+                data["admins"] = None
+
         return ResponseModel(
             success=True,
             message="Marzban overview retrieved successfully",
@@ -536,6 +587,117 @@ async def get_marzban_overview(
             message=f"Marzban is unreachable: {str(e)}",
             data=None,
         )
+
+
+def _server_to_output(server) -> ServerOutput:
+    return ServerOutput(
+        id=server.id,
+        name=server.name,
+        status=server_status(server),
+        last_seen_at=server.last_seen_at,
+        cpu_percent=server.cpu_percent,
+        cpu_cores=server.cpu_cores,
+        ram_used=server.ram_used,
+        ram_total=server.ram_total,
+        swap_used=server.swap_used,
+        swap_total=server.swap_total,
+        disk_used=server.disk_used,
+        disk_total=server.disk_total,
+    )
+
+
+@router.get("/servers", description="Get all monitored servers")
+async def get_servers(
+    db: Session = Depends(get_db), current_admin: dict = Depends(get_current_superadmin)
+):
+    servers = crud.get_all_servers(db)
+    return ResponseModel(
+        success=True,
+        message="Servers retrieved successfully",
+        data=[_server_to_output(s) for s in servers],
+    )
+
+
+@router.post("/servers", description="Add a server to monitor")
+async def create_server(
+    server_input: ServerInput,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if any(s.name == server_input.name for s in crud.get_all_servers(db)):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"success": False, "message": "A server with this name already exists"},
+        )
+
+    server = crud.add_server(db, server_input.name)
+    logger.info(f"New monitored server added: {server.name}")
+    return ResponseModel(
+        success=True,
+        message="Server added successfully",
+        data=ServerCreatedOutput(id=server.id, name=server.name, token=server.token),
+    )
+
+
+@router.put("/servers/reorder", description="Set the display order of monitored servers")
+async def reorder_servers(
+    reorder_input: ServerReorderInput,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if not crud.reorder_servers(db, reorder_input.ordered_ids):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"success": False, "message": "ordered_ids must list every existing server exactly once"},
+        )
+    return ResponseModel(success=True, message="Server order updated")
+
+
+@router.put("/servers/{server_id}", description="Rename a monitored server")
+async def rename_server(
+    server_id: int,
+    server_input: ServerInput,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if not crud.rename_server(db, server_id, server_input.name):
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"success": False, "message": "Server not found"},
+        )
+    return ResponseModel(success=True, message="Server renamed successfully")
+
+
+@router.delete("/servers/{server_id}", description="Stop monitoring a server")
+async def delete_server(
+    server_id: int,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if not crud.remove_server(db, server_id):
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"success": False, "message": "Server not found"},
+        )
+    return ResponseModel(success=True, message="Server removed successfully")
+
+
+@router.post("/servers/{server_id}/reboot", description="Queue a reboot for a server")
+async def reboot_server(
+    server_id: int,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if not crud.request_server_reboot(db, server_id):
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"success": False, "message": "Server not found"},
+        )
+    logger.info(f"Reboot requested for server #{server_id} by {admin.get('username')}")
+    return ResponseModel(
+        success=True,
+        message="Reboot queued - it will run on the server's next check-in",
+    )
 
 
 @router.get("/settings", description="Get panel settings")

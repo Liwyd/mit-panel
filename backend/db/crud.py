@@ -1,7 +1,8 @@
 from datetime import datetime
+from secrets import token_hex
 from sqlalchemy.orm import Session
 
-from backend.db.model import Admins, Panels, News, SanaeiUsers
+from backend.db.model import Admins, Panels, News, SanaeiUsers, Servers
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
 
@@ -212,18 +213,22 @@ def get_news(db: Session):
     return db.query(News).all()
 
 
-def add_news(db: Session, message: str) -> None:
+def add_news(db: Session, message: str | None) -> News:
     news = News(message=message, created_at=datetime.utcnow())
     db.add(news)
     db.commit()
     db.refresh(news)
+    return news
 
 
 def delete_news(db: Session, id: int) -> None:
+    from backend.utils.banners import delete_banner
+
     news = db.query(News).filter(News.id == id).first()
     if news:
         db.delete(news)
         db.commit()
+        delete_banner(id)
 
 
 def add_user_in_sanaei_table(db: Session, username: str, owner: str) -> None:
@@ -261,3 +266,80 @@ def remove_user_from_guard_table(db: Session, username: str) -> None:
 
 def get_user_from_guard_table(db:Session):
     return db.query(SanaeiUsers).all()
+
+
+def get_all_servers(db: Session):
+    return db.query(Servers).order_by(Servers.sort_order, Servers.id).all()
+
+
+def get_server_by_id(db: Session, server_id: int) -> Servers | None:
+    return db.query(Servers).filter(Servers.id == server_id).first()
+
+
+def get_server_by_token(db: Session, token: str) -> Servers | None:
+    return db.query(Servers).filter(Servers.token == token).first()
+
+
+def add_server(db: Session, name: str) -> Servers:
+    last = db.query(Servers.sort_order).order_by(Servers.sort_order.desc()).first()
+    server = Servers(name=name, token=token_hex(24), sort_order=(last[0] if last else 0) + 1)
+    db.add(server)
+    db.commit()
+    db.refresh(server)
+    return server
+
+
+def reorder_servers(db: Session, ordered_ids: list[int]) -> bool:
+    servers = {s.id: s for s in db.query(Servers).filter(Servers.id.in_(ordered_ids))}
+    if len(servers) != len(ordered_ids):
+        return False
+    for index, server_id in enumerate(ordered_ids):
+        servers[server_id].sort_order = index
+    db.commit()
+    return True
+
+
+def rename_server(db: Session, server_id: int, name: str) -> bool:
+    server = get_server_by_id(db, server_id)
+    if server:
+        server.name = name
+        db.commit()
+        return True
+    return False
+
+
+def remove_server(db: Session, server_id: int) -> bool:
+    server = get_server_by_id(db, server_id)
+    if server:
+        db.delete(server)
+        db.commit()
+        return True
+    return False
+
+
+def request_server_reboot(db: Session, server_id: int) -> bool:
+    server = get_server_by_id(db, server_id)
+    if server:
+        server.reboot_requested = True
+        db.commit()
+        return True
+    return False
+
+
+def record_server_heartbeat(db: Session, server: Servers, metrics: dict) -> bool:
+    server.last_seen_at = datetime.utcnow()
+    server.cpu_percent = metrics.get("cpu_percent")
+    server.cpu_cores = metrics.get("cpu_cores")
+    server.ram_used = metrics.get("ram_used")
+    server.ram_total = metrics.get("ram_total")
+    server.swap_used = metrics.get("swap_used")
+    server.swap_total = metrics.get("swap_total")
+    server.disk_used = metrics.get("disk_used")
+    server.disk_total = metrics.get("disk_total")
+
+    reboot_pending = bool(server.reboot_requested)
+    if reboot_pending:
+        server.reboot_requested = False
+
+    db.commit()
+    return reboot_pending

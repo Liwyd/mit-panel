@@ -39,8 +39,9 @@ import { PageLayout } from '@/components/PageLayout'
 
 interface NewsItem {
     id: number
-    message: string
+    message: string | null
     created_at: string
+    has_banner: boolean
 }
 
 export function SettingsPage() {
@@ -54,6 +55,8 @@ export function SettingsPage() {
     const [news, setNews] = useState<NewsItem[]>([])
     const [newsLoading, setNewsLoading] = useState(false)
     const [newNewsMessage, setNewNewsMessage] = useState('')
+    const [newNewsBanner, setNewNewsBanner] = useState<File | null>(null)
+    const [newNewsBannerPreview, setNewNewsBannerPreview] = useState<string | null>(null)
     const [addingNews, setAddingNews] = useState(false)
     const [newsToDelete, setNewsToDelete] = useState<number | null>(null)
     const [deletingNews, setDeletingNews] = useState(false)
@@ -194,15 +197,15 @@ export function SettingsPage() {
     }
 
     const handleAddNews = async () => {
-        if (!newNewsMessage.trim()) {
-            alert('Please enter a news message')
+        if (!newNewsMessage.trim() && !newNewsBanner) {
+            alert('Add a message, a banner image, or both')
             return
         }
 
         try {
             setAddingNews(true)
-            await superadminAPI.addNews(newNewsMessage)
-            setNewNewsMessage('')
+            await superadminAPI.addNews(newNewsMessage, newNewsBanner)
+            resetNewsForm()
             fetchNews()
         } catch (err: any) {
             console.error('Failed to add news:', err)
@@ -210,6 +213,20 @@ export function SettingsPage() {
         } finally {
             setAddingNews(false)
         }
+    }
+
+    const resetNewsForm = () => {
+        setNewNewsMessage('')
+        setNewNewsBanner(null)
+        if (newNewsBannerPreview) URL.revokeObjectURL(newNewsBannerPreview)
+        setNewNewsBannerPreview(null)
+    }
+
+    const handleNewsBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null
+        if (newNewsBannerPreview) URL.revokeObjectURL(newNewsBannerPreview)
+        setNewNewsBanner(file)
+        setNewNewsBannerPreview(file ? URL.createObjectURL(file) : null)
     }
 
     const handleDeleteNews = async () => {
@@ -588,11 +605,29 @@ export function SettingsPage() {
                                 disabled={addingNews}
                             />
                         </div>
+                        <div>
+                            <label className="text-sm font-medium">Banner Image (optional)</label>
+                            <div className="mt-2 space-y-2">
+                                <Input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleNewsBannerChange}
+                                    disabled={addingNews}
+                                />
+                                {newNewsBannerPreview && (
+                                    <img
+                                        src={newNewsBannerPreview}
+                                        alt="Banner preview"
+                                        className="h-24 w-auto rounded border"
+                                    />
+                                )}
+                            </div>
+                        </div>
                         <div className="flex gap-2 justify-end">
                             <Button
                                 onClick={() => {
                                     setShowAddNewsDialog(false)
-                                    setNewNewsMessage('')
+                                    resetNewsForm()
                                 }}
                                 variant="outline"
                                 disabled={addingNews}
@@ -601,7 +636,7 @@ export function SettingsPage() {
                             </Button>
                             <Button
                                 onClick={handleAddNews}
-                                disabled={addingNews || !newNewsMessage.trim()}
+                                disabled={addingNews || (!newNewsMessage.trim() && !newNewsBanner)}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Plus className="mr-2 h-4 w-4" />

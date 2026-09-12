@@ -12,6 +12,7 @@ from backend.utils.settings_store import (
     get_logo_path,
     logo_media_type,
 )
+from backend.utils.banners import get_banner_path, banner_media_type
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -47,7 +48,14 @@ async def read_dashboard_data(
                 "remaining_traffic": admin_data.traffic,
                 "initial_traffic": admin_data.initial_traffic,
                 "expiry_time": admin_data.expiry_date,
-                "news": [news.message for news in news_data],
+                "news": [
+                    {
+                        "id": news.id,
+                        "message": news.message,
+                        "has_banner": get_banner_path(news.id) is not None,
+                    }
+                    for news in news_data
+                ],
                 "sub_url": panel_data.sub_url,
                 "users": users,
             },
@@ -61,6 +69,19 @@ async def get_branding():
         message="Branding retrieved successfully",
         data=get_public_branding(),
     )
+
+
+@router.get("/banner/{news_id}", description="Announcement banner image")
+async def get_banner(
+    news_id: int, current_admin: dict = Depends(get_current_admin)
+):
+    path = get_banner_path(news_id)
+    if not path:
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "message": "No banner set"},
+        )
+    return FileResponse(path, media_type=banner_media_type(news_id))
 
 
 @router.get("/logo", description="Custom login logo (if set)")

@@ -1,6 +1,6 @@
 from datetime import datetime
 from .engin import Base
-from sqlalchemy import Column, DateTime, Integer, String, Boolean, BigInteger
+from sqlalchemy import Column, DateTime, Integer, String, Boolean, BigInteger, Float
 
 
 class Admins(Base):
@@ -59,3 +59,28 @@ class GuardUsers(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     owner = Column(String, nullable=False)
+
+
+class Servers(Base):
+    """A server monitored by the lightweight MIT Panel agent. Not tied to a
+    Marzban Panel - any box that runs the agent can be added here."""
+
+    __tablename__ = "servers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    token = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    sort_order = Column(Integer, default=0, nullable=False)
+
+    last_seen_at = Column(DateTime, nullable=True)
+    cpu_percent = Column(Float, nullable=True)
+    cpu_cores = Column(Integer, nullable=True)
+    ram_used = Column(BigInteger, nullable=True)
+    ram_total = Column(BigInteger, nullable=True)
+    swap_used = Column(BigInteger, nullable=True)
+    swap_total = Column(BigInteger, nullable=True)
+    disk_used = Column(BigInteger, nullable=True)
+    disk_total = Column(BigInteger, nullable=True)
+
+    reboot_requested = Column(Boolean, default=False)

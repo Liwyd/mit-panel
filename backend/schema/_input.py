@@ -115,3 +115,22 @@ class SettingsInput(BaseModel):
     telegram_chat_id: Optional[str] = None
     backup_enabled: Optional[bool] = None
     backup_interval_hours: Optional[int] = None
+
+
+class ServerInput(BaseModel):
+    name: str = Field(min_length=1)
+
+
+class ServerReorderInput(BaseModel):
+    ordered_ids: list[int]
+
+
+class ServerHeartbeatInput(BaseModel):
+    cpu_percent: float = Field(ge=0)
+    cpu_cores: int = Field(ge=0)
+    ram_used: int = Field(ge=0)
+    ram_total: int = Field(ge=0)
+    swap_used: int = Field(ge=0)
+    swap_total: int = Field(ge=0)
+    disk_used: int = Field(ge=0)
+    disk_total: int = Field(ge=0)

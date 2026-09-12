@@ -24,7 +24,8 @@ import { dashboardAPI, userAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
 import { formatDate, formatExpiryWithDays, cn } from '@/lib/utils'
 import { getUserRole } from '@/lib/auth'
-import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS } from '@/types'
+import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, NewsFeedItem } from '@/types'
+import { useBannerImage } from '@/hooks/useBannerImage'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,6 +57,25 @@ import {
 } from '@/components/ui/dialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { PageLayout } from '@/components/PageLayout'
+
+function NewsSlide({ item }: { item: NewsFeedItem }) {
+    const bannerUrl = useBannerImage(item.id, item.has_banner)
+    return (
+        <div className="space-y-2">
+            {bannerUrl && (
+                <img src={bannerUrl} alt="News banner" className="w-full h-auto rounded-md max-h-48 object-cover" />
+            )}
+            {item.message && (
+                <div
+                    className="text-sm text-muted-foreground break-words"
+                    style={{ direction: /[\u0600-\u06FF]/.test(item.message) ? 'rtl' : 'ltr' }}
+                >
+                    {item.message}
+                </div>
+            )}
+        </div>
+    )
+}
 
     function buildSubUrl(subUrl?: string, subId?: string) {
         if (!subUrl || !subId) return ''
@@ -141,6 +161,7 @@ export function DashboardPage() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'online'>('all')
     const [marzban, setMarzban] = useState<MarzbanOverview | null>(null)
     const [marzbanPeriod, setMarzbanPeriod] = useState<MarzbanPeriod>('1d')
+    const [marzbanAdminsLoaded, setMarzbanAdminsLoaded] = useState(false)
     const [usersPerPage, setUsersPerPage] = useState(() => {
         const saved = localStorage.getItem('usersPerPage')
         return saved ? parseInt(saved, 10) : 5
@@ -166,8 +187,14 @@ export function DashboardPage() {
 
         const load = async () => {
             try {
-                const overview = await dashboardAPI.getMarzbanOverview(marzbanPeriod)
-                if (!cancelled) setMarzban(overview)
+                const includeAdmins = !marzbanAdminsLoaded
+                const overview = await dashboardAPI.getMarzbanOverview(marzbanPeriod, false, includeAdmins)
+                if (!cancelled) {
+                    setMarzban(overview)
+                    if (includeAdmins && overview?.admins !== undefined) {
+                        setMarzbanAdminsLoaded(true)
+                    }
+                }
             } catch (err) {
                 console.warn('Failed to fetch Marzban overview:', err)
             }
@@ -180,7 +207,7 @@ export function DashboardPage() {
             cancelled = true
             clearInterval(interval)
         }
-    }, [userRole, marzbanPeriod])
+    }, [userRole, marzbanPeriod, marzbanAdminsLoaded])
 
     // Auto-refresh system info every 5 seconds for superadmin
     useEffect(() => {
@@ -517,6 +544,13 @@ export function DashboardPage() {
                                             const share = marzban.nodes.total
                                                 ? (node.usage / marzban.nodes.total) * 100
                                                 : 0
+                                            const statusColor = {
+                                                connected: 'bg-emerald-500',
+                                                connecting: 'bg-yellow-500',
+                                                error: 'bg-red-500',
+                                                disabled: 'bg-gray-400',
+                                                unknown: 'bg-gray-400',
+                                            }[node.status] || 'bg-gray-400'
                                             return (
                                                 <div
                                                     key={`${node.name}-${index}`}
@@ -532,6 +566,7 @@ export function DashboardPage() {
                                                     <span className="min-w-0 flex-1 truncate text-sm font-bold">
                                                         {node.name}
                                                     </span>
+                                                    <span className={cn('h-2 w-2 shrink-0 rounded-full', statusColor)} title={node.status} />
                                                     <span className="tabular text-sm font-extrabold">
                                                         {formatTraffic(node.usage)}
                                                     </span>
@@ -662,16 +697,9 @@ export function DashboardPage() {
                             News & Updates
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                        {dashboardData.news.map((newsItem, index) => (
-                            <div
-                                key={index}
-                                className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/20 transition-colors duration-150"
-                                style={{ direction: /[\u0600-\u06FF]/.test(newsItem) ? 'rtl' : 'ltr' }}
-                            >
-                                <Zap className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
-                                <div className="text-sm text-muted-foreground break-words">{newsItem}</div>
-                            </div>
+                    <CardContent className="space-y-4">
+                        {dashboardData.news.map((newsItem) => (
+                            <NewsSlide key={newsItem.id} item={newsItem} />
                         ))}
                     </CardContent>
                 </Card>

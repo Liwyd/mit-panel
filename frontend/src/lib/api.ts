@@ -10,6 +10,8 @@ import {
     AdminFormData,
     PanelFormData,
     MarzbanOverview,
+    ServerOutput,
+    ServerCreatedOutput,
 } from '@/types'
 import { gbToBytes } from './traffic-converter'
 
@@ -80,10 +82,14 @@ export const dashboardAPI = {
 
     // Returns null rather than throwing when no Marzban panel is configured or
     // the panel is unreachable, so the dashboard just hides the section.
-    getMarzbanOverview: async (period: string = '1d'): Promise<MarzbanOverview | null> => {
+    getMarzbanOverview: async (
+        period: string = '1d',
+        force: boolean = false,
+        includeAdmins: boolean = false
+    ): Promise<MarzbanOverview | null> => {
         const response = await api.get<ResponseModel<MarzbanOverview | null>>(
             `/superadmin/marzban/overview`,
-            { params: { period } }
+            { params: { period, ...(force ? { refresh: true } : {}), ...(includeAdmins ? { include_admins: true } : {}) } }
         )
 
         return response.data.data ?? null
@@ -264,8 +270,8 @@ export const superadminAPI = {
         return response.data.data || []
     },
 
-    getNews: async (): Promise<Array<{ id: number; message: string; created_at: string }>> => {
-        const response = await api.get<ResponseModel<Array<{ id: number; message: string; created_at: string }>>>(`/superadmin/news`)
+    getNews: async (): Promise<Array<{ id: number; message: string | null; created_at: string; has_banner: boolean }>> => {
+        const response = await api.get<ResponseModel<Array<{ id: number; message: string | null; created_at: string; has_banner: boolean }>>>(`/superadmin/news`)
 
         if (!response.data.success) {
             throw new Error(response.data.message || 'Failed to fetch news')
@@ -274,8 +280,14 @@ export const superadminAPI = {
         return response.data.data || []
     },
 
-    addNews: async (message: string): Promise<void> => {
-        const response = await api.post<ResponseModel<void>>(`/superadmin/news`, { news: message })
+    addNews: async (message: string, image?: File | null): Promise<void> => {
+        const formData = new FormData()
+        if (message) formData.append('message', message)
+        if (image) formData.append('image', image)
+
+        const response = await api.post<ResponseModel<void>>(`/superadmin/news`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        })
 
         if (!response.data.success) {
             throw new Error(response.data.message || 'Failed to add news')
@@ -472,5 +484,52 @@ export const settingsAPI = {
             throw new Error(response.data.message || 'Failed to send test backup')
         }
         return response.data.message || 'Test backup sent'
+    },
+}
+
+// Server API
+export const serverAPI = {
+    getServers: async (): Promise<ServerOutput[]> => {
+        const response = await api.get<ResponseModel<ServerOutput[]>>(`/superadmin/servers`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to fetch servers')
+        }
+        return response.data.data || []
+    },
+
+    createServer: async (name: string): Promise<ServerCreatedOutput> => {
+        const response = await api.post<ResponseModel<ServerCreatedOutput>>(`/superadmin/servers`, { name })
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to create server')
+        }
+        return response.data.data!
+    },
+
+    renameServer: async (serverId: number, name: string): Promise<void> => {
+        const response = await api.put<ResponseModel<void>>(`/superadmin/servers/${serverId}`, { name })
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to rename server')
+        }
+    },
+
+    deleteServer: async (serverId: number): Promise<void> => {
+        const response = await api.delete<ResponseModel<void>>(`/superadmin/servers/${serverId}`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to delete server')
+        }
+    },
+
+    rebootServer: async (serverId: number): Promise<void> => {
+        const response = await api.post<ResponseModel<void>>(`/superadmin/servers/${serverId}/reboot`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to reboot server')
+        }
+    },
+
+    reorderServers: async (orderedIds: number[]): Promise<void> => {
+        const response = await api.put<ResponseModel<void>>(`/superadmin/servers/reorder`, { ordered_ids: orderedIds })
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to reorder servers')
+        }
     },
 }
