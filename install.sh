@@ -115,13 +115,11 @@ do_install() {
     c "$BOLD" "  Building"
     separator
     inf "Pulling pre-built image..."
-    if docker pull liwyd/mit-panel:latest >/dev/null 2>&1; then
-        ok "Image pulled."
-    else
+    docker pull liwyd/mit-panel:latest >/dev/null 2>&1 || {
         wn "Pull failed, building locally instead..."
         docker compose build --no-cache >/dev/null 2>&1
-        ok "Image built."
-    fi
+    }
+    ok "Image ready."
     inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
     ok "Container started."
@@ -205,14 +203,15 @@ case "${1:-}" in
         docker compose restart && echo "Restarted."
         ;;
     update)
-        echo "Pulling latest code..."
+        echo "Pulling latest source code..."
         git pull
+        echo "Stopping container..."
+        docker compose down 2>/dev/null || true
         echo "Pulling pre-built image..."
         if docker pull liwyd/mit-panel:latest 2>/dev/null; then
             echo "Image pulled."
         else
             echo "Pull failed, rebuilding locally..."
-            docker compose down
             docker compose build --no-cache
         fi
         docker compose up -d
@@ -332,11 +331,9 @@ action_update() {
     fi
     ok "Source code updated."
 
-    if running; then
-        inf "Stopping container..."
-        docker compose down >/dev/null 2>&1
-        ok "Container stopped."
-    fi
+    inf "Stopping container..."
+    docker compose down >/dev/null 2>&1 || true
+    ok "Container stopped."
 
     inf "Pulling pre-built image..."
     if docker pull liwyd/mit-panel:latest >/dev/null 2>&1; then

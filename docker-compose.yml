@@ -1,6 +1,5 @@
 services:
   mit-panel:
-    build: .
     image: liwyd/mit-panel:latest
     container_name: mit-panel
     restart: always
