@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
     Zap,
     Users,
+    RefreshCw,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -20,12 +21,13 @@ import {
     Power,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { dashboardAPI, userAPI } from '@/lib/api'
+import { dashboardAPI, userAPI, serverAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
 import { formatDate, formatExpiryWithDays, cn } from '@/lib/utils'
 import { getUserRole } from '@/lib/auth'
-import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, NewsFeedItem } from '@/types'
+import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, NewsFeedItem, ServerOutput } from '@/types'
 import { useBannerImage } from '@/hooks/useBannerImage'
+import { ManageServersDialog } from './components/ManageServersDialog'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -142,6 +144,24 @@ function CopyButton({
     )
 }
 
+const SERVER_STATUS_META: Record<string, { dot: string; label: string }> = {
+    connected: { dot: 'bg-emerald-500', label: 'Connected' },
+    connecting: { dot: 'bg-amber-500', label: 'Connecting' },
+    disconnected: { dot: 'bg-destructive', label: 'Disconnected' },
+}
+
+function ServerStatusDot({ status }: { status: string }) {
+    const meta = SERVER_STATUS_META[status] || SERVER_STATUS_META.disconnected
+    return (
+        <span className="relative flex h-2.5 w-2.5 shrink-0" title={meta.label}>
+            {status !== 'disconnected' && (
+                <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-75', meta.dot)} />
+            )}
+            <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', meta.dot)} />
+        </span>
+    )
+}
+
 interface ExpandedRow {
     [key: string]: boolean
 }
@@ -162,6 +182,9 @@ export function DashboardPage() {
     const [marzban, setMarzban] = useState<MarzbanOverview | null>(null)
     const [marzbanPeriod, setMarzbanPeriod] = useState<MarzbanPeriod>('1d')
     const [marzbanAdminsLoaded, setMarzbanAdminsLoaded] = useState(false)
+    const [servers, setServers] = useState<ServerOutput[]>([])
+    const [showManageServers, setShowManageServers] = useState(false)
+    const [serverToReboot, setServerToReboot] = useState<number | null>(null)
     const [usersPerPage, setUsersPerPage] = useState(() => {
         const saved = localStorage.getItem('usersPerPage')
         return saved ? parseInt(saved, 10) : 5
@@ -226,6 +249,36 @@ export function DashboardPage() {
 
         return () => clearInterval(interval)
     }, [userRole])
+
+    // Monitored servers: the agent heartbeats every ~10s, so polling faster
+    // than that would only ever return the same row again.
+    const fetchServers = async () => {
+        try {
+            setServers(await serverAPI.getServers())
+        } catch (err) {
+            console.warn('Failed to fetch servers:', err)
+        }
+    }
+
+    useEffect(() => {
+        if (userRole !== 'superadmin') return
+
+        fetchServers()
+        const interval = setInterval(fetchServers, 10000)
+        return () => clearInterval(interval)
+    }, [userRole])
+
+    const handleRebootServer = async () => {
+        if (!serverToReboot) return
+        try {
+            await serverAPI.rebootServer(serverToReboot)
+            setServerToReboot(null)
+            fetchServers()
+        } catch (err: any) {
+            console.error('Failed to queue reboot:', err)
+            alert(err?.message || 'Failed to queue reboot')
+        }
+    }
 
     const fetchDashboardData = async () => {
         try {
@@ -688,6 +741,109 @@ export function DashboardPage() {
                 </Card>
             )}
 
+            {/* Servers - monitored via the lightweight MIT Panel agent */}
+            {userRole === 'superadmin' && (
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-base">Servers</CardTitle>
+                        <div className="flex items-center gap-1">
+                            <Button size="sm" variant="ghost" onClick={fetchServers} title="Refresh">
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setShowManageServers(true)} title="Manage servers">
+                                <Edit2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {servers.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-muted-foreground">
+                                No servers added yet. Use the pencil icon above to add one.
+                            </p>
+                        ) : (
+                            <div className="divide-y">
+                                {servers.map((server) => {
+                                    const ramPercent = server.ram_total ? ((server.ram_used || 0) / server.ram_total) * 100 : null
+                                    const swapPercent = server.swap_total ? ((server.swap_used || 0) / server.swap_total) * 100 : null
+                                    const diskPercent = server.disk_total ? ((server.disk_used || 0) / server.disk_total) * 100 : null
+                                    const hasMetrics = server.status !== 'disconnected' || server.last_seen_at
+
+                                    return (
+                                        <div
+                                            key={server.id}
+                                            className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3"
+                                        >
+                                            <div className="flex w-full shrink-0 items-center gap-2 sm:w-36">
+                                                <ServerStatusDot status={server.status} />
+                                                <span className="truncate text-sm font-bold">{server.name}</span>
+                                            </div>
+
+                                            {hasMetrics && server.cpu_percent !== null && server.cpu_percent !== undefined ? (
+                                                <div className="flex flex-wrap items-center gap-5">
+                                                    <Gauge
+                                                        percent={server.cpu_percent}
+                                                        label="CPU"
+                                                        size={72}
+                                                        thickness={7}
+                                                    />
+                                                    <Gauge
+                                                        percent={ramPercent ?? 0}
+                                                        label="RAM"
+                                                        caption={
+                                                            server.ram_used !== undefined && server.ram_used !== null
+                                                                ? `${bytesToGB(server.ram_used).toFixed(1)}/${bytesToGB(server.ram_total || 0).toFixed(1)} GB`
+                                                                : undefined
+                                                        }
+                                                        size={72}
+                                                        thickness={7}
+                                                    />
+                                                    <Gauge
+                                                        percent={swapPercent ?? 0}
+                                                        label="Swap"
+                                                        caption={
+                                                            server.swap_total
+                                                                ? `${bytesToGB(server.swap_used || 0).toFixed(1)}/${bytesToGB(server.swap_total).toFixed(1)} GB`
+                                                                : 'None'
+                                                        }
+                                                        size={72}
+                                                        thickness={7}
+                                                    />
+                                                    <Gauge
+                                                        percent={diskPercent ?? 0}
+                                                        label="Storage"
+                                                        caption={
+                                                            server.disk_used !== undefined && server.disk_used !== null
+                                                                ? `${bytesToGB(server.disk_used).toFixed(1)}/${bytesToGB(server.disk_total || 0).toFixed(1)} GB`
+                                                                : undefined
+                                                        }
+                                                        size={72}
+                                                        thickness={7}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">
+                                                    {server.status === 'connecting' ? 'Waiting for first check-in...' : 'No data'}
+                                                </span>
+                                            )}
+
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="ml-auto"
+                                                onClick={() => setServerToReboot(server.id)}
+                                            >
+                                                <RotateCcw className="h-4 w-4 mr-2" />
+                                                Reboot
+                                            </Button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Admin News - Only for admin role */}
             {userRole === 'admin' && dashboardData?.news && dashboardData.news.length > 0 && (
                 <Card>
@@ -1005,6 +1161,31 @@ export function DashboardPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Manage Servers Dialog */}
+            <ManageServersDialog
+                isOpen={showManageServers}
+                onClose={() => setShowManageServers(false)}
+                onChanged={fetchServers}
+            />
+
+            {/* Reboot Server Confirmation */}
+            <AlertDialog open={!!serverToReboot} onOpenChange={() => serverToReboot && setServerToReboot(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Reboot this server?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            It will restart as soon as its agent picks up the request, usually within a few seconds. Any active connections on it will drop.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="flex justify-end gap-3">
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleRebootServer} className="bg-destructive">
+                            Reboot
+                        </AlertDialogAction>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
         </PageLayout>
     )
