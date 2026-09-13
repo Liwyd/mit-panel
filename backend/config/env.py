@@ -21,6 +21,15 @@ class Setting(BaseSettings):
     # verify_bot_api_key), everything else keeps working normally.
     BOT_API_KEY: str = ""
 
+    # ── Telegram Top-up Bot (optional — empty BOT_TOKEN disables the bot) ──
+    BOT_TOKEN: str = ""
+    BOT_SUPERADMIN_IDS: str = ""
+    BOT_MEDIA_DIR: str = "data/bot_media"
+    BOT_MIN_GB: float = 200.0
+    BOT_MAX_GB: float = 10000.0
+    BOT_WARNING_SCAN_INTERVAL: int = 3600
+    BOT_BACKUP_HOUR: int = 0
+
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
 

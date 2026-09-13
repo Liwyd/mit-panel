@@ -52,3 +52,8 @@ async def _start_background_tasks():
     from backend.services.backup_scheduler import backup_scheduler
 
     asyncio.create_task(backup_scheduler())
+
+    # Start top-up bot if BOT_TOKEN is configured
+    from backend.bot.service import start_bot
+
+    start_bot()

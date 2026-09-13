@@ -112,6 +112,20 @@ do_install() {
 
     echo ""
     separator
+    c "$BOLD" "  Telegram Top-up Bot (optional)"
+    separator
+    read -r -p "  Bot token (empty to skip): " BOT_TOKEN </dev/tty
+    if [ -n "$BOT_TOKEN" ]; then
+        read -r -p "  Superadmin Telegram IDs (comma-separated): " BOT_IDS </dev/tty
+        sed -i "s/^# BOT_TOKEN=.*/BOT_TOKEN=$BOT_TOKEN/" .env
+        sed -i "s/^# BOT_SUPERADMIN_IDS=.*/BOT_SUPERADMIN_IDS=$BOT_IDS/" .env
+        ok "Bot configured."
+    else
+        inf "Bot skipped. You can configure it later by editing .env"
+    fi
+
+    echo ""
+    separator
     c "$BOLD" "  Building"
     separator
     inf "Pulling pre-built image..."
@@ -166,6 +180,7 @@ usage() {
     echo "  set-password    Change admin password"
     echo "  set-port        Change panel port"
     echo "  set-urlpath     Change URL path"
+    echo "  set-bot-token   Set Telegram bot token"
     echo "  edit-env        Open .env in editor (nano)"
     echo "  uninstall       Remove the panel completely"
     echo "  help            Show this help message"
@@ -228,6 +243,12 @@ case "${1:-}" in
         echo "  Password: ****"
         echo "  Port:     $(get_env PORT 8000)"
         echo "  URL Path: $(get_env URLPATH dashboard)"
+        BOT_TOK=$(get_env BOT_TOKEN "")
+        if [ -n "$BOT_TOK" ]; then
+            echo "  Bot:      ${CYN}enabled${RST}"
+        else
+            echo "  Bot:      disabled"
+        fi
         echo ""
         ;;
     set-username)
@@ -276,6 +297,25 @@ case "${1:-}" in
         [ -z "$val" ] && echo "Aborted." && exit 1
         set_env URLPATH "$val"
         echo "URL path updated."
+        docker compose restart >/dev/null 2>&1 && echo "Restarted."
+        ;;
+    set-bot-token)
+        if [ -z "${2:-}" ]; then
+            read -r -p "Bot token (empty to disable): " val
+        else
+            val="$2"
+        fi
+        if [ -z "$val" ]; then
+            set_env BOT_TOKEN ""
+            echo "Bot disabled."
+        else
+            set_env BOT_TOKEN "$val"
+            if [ -z "$(get_env BOT_SUPERADMIN_IDS "")" ]; then
+                read -r -p "Superadmin Telegram IDs (comma-separated): " ids
+                set_env BOT_SUPERADMIN_IDS "$ids"
+            fi
+            echo "Bot token updated."
+        fi
         docker compose restart >/dev/null 2>&1 && echo "Restarted."
         ;;
     edit-env)
@@ -330,6 +370,22 @@ action_update() {
         cd "$SRC"
     fi
     ok "Source code updated."
+
+    # Ensure new bot env vars exist for upgrades from older versions
+    if [ -f "$SRC/.env" ]; then
+        if ! grep -q "^BOT_TOKEN=" "$SRC/.env" && ! grep -q "^# BOT_TOKEN=" "$SRC/.env"; then
+            cat >> "$SRC/.env" << 'ENVEOF'
+
+### Telegram Top-up Bot (optional — leave BOT_TOKEN empty to disable)
+# BOT_TOKEN=
+# BOT_SUPERADMIN_IDS=
+# BOT_MEDIA_DIR=data/bot_media
+# BOT_MIN_GB=200
+# BOT_MAX_GB=10000
+ENVEOF
+            ok "New bot settings added to .env (commented out)."
+        fi
+    fi
 
     inf "Stopping container..."
     docker compose down >/dev/null 2>&1 || true
