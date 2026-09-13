@@ -115,6 +115,12 @@ class SettingsInput(BaseModel):
     telegram_chat_id: Optional[str] = None
     backup_enabled: Optional[bool] = None
     backup_interval_hours: Optional[int] = None
+    bot_enabled: Optional[bool] = None
+    bot_token: Optional[str] = None
+    bot_superadmin_ids: Optional[str] = None
+    bot_media_dir: Optional[str] = None
+    bot_min_gb: Optional[float] = None
+    bot_max_gb: Optional[float] = None
 
 
 class ServerInput(BaseModel):

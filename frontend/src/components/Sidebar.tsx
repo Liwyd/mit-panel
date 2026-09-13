@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
     BarChart3,
@@ -22,6 +22,7 @@ import {
 import { logout, getUserRole } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
+import { settingsAPI } from '@/lib/api'
 
 interface SidebarProps {
     onItemClick?: () => void
@@ -84,6 +85,11 @@ export function Sidebar({ onItemClick }: SidebarProps) {
     const navigate = useNavigate()
     const userRole = getUserRole()
     const [showFinanceInfo, setShowFinanceInfo] = useState(false)
+    const [version, setVersion] = useState('')
+
+    useEffect(() => {
+        settingsAPI.getVersion().then((data) => setVersion(data.version)).catch(() => {})
+    }, [])
 
     const filteredItems = navigationItems.filter(item =>
         userRole && item.roles.includes(userRole)
@@ -140,6 +146,12 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                     <LogOut className="h-4 w-4" />
                     <span>Logout</span>
                 </Button>
+
+                {version && (
+                    <div className="text-xs text-muted-foreground text-center pt-2 font-mono">
+                        v{version}
+                    </div>
+                )}
             </div>
 
             <Dialog open={showFinanceInfo} onOpenChange={setShowFinanceInfo}>

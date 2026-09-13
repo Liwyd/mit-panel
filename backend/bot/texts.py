@@ -167,6 +167,14 @@ DEBT_PAYMENT_INSTRUCTIONS = (
 NO_DEBT = "✅ در حال حاضر بدهی‌ای ثبت نشده است."
 SETTLEMENT_SUBMITTED = "⏳ رسید تسویه ثبت شد. پس از بررسی، بدهی شما تسویه خواهد شد."
 SETTLEMENT_APPROVED_ADMIN = "✅ تسویه‌ی شما تأیید شد. بدهی پنل «{username}» صفر شد."
+SETTLEMENT_PARTIAL_ADMIN = (
+    "✅ پرداخت {paid:,} تومان برای پنل «{username}» ثبت شد.\n"
+    "💰 باقی‌مانده‌ی بدهی: {remaining:,} تومان"
+)
+SETTLEMENT_APPROVED_WITH_CREDIT = (
+    "✅ تسویه‌ی شما تأیید شد. بدهی پنل «{username}» صفر شد.\n"
+    "💼 مبلغ اضافه ({excess:,} تومان) به کیف پول شما افزوده شد. موجودی: {balance:,} تومان"
+)
 
 BTN_TOGGLE_WEEKLY = "🗓 فعال/غیرفعال‌کردن پرداخت هفتگی"
 ASK_WEEKLY_USERNAME = "🗓 نام کاربری پنلی که می‌خواهید وضعیت پرداخت هفتگی‌اش تغییر کند را وارد نمایید:"
@@ -229,12 +237,6 @@ ASK_GRANT_WALLET_AMOUNT = "💼 چه مبلغی (تومان) به کیف پول 
 GRANT_WALLET_SUCCESS = "✅ کیف پول کاربر {telegram_id} شارژ شد.\n💼 موجودی جدید: {balance:,} تومان"
 
 BTN_DEBTS = "💰 بدهی‌ها"
-DEBTS_HEADER = "💰 بدهی‌های تسویه‌نشده:\n\n"
-DEBT_LINE = (
-    "▫️ <b>{username}</b> — {amount:,} تومان\n"
-    "     ↳ {mention} · <code>{telegram_id}</code>\n"
-)
-NO_DEBTS_AT_ALL = "✅ هیچ بدهی تسویه‌نشده‌ای وجود ندارد."
 
 ASK_RECEIPT = "🧾 لطفاً تصویر رسید واریز را ارسال نمایید."
 NOT_A_PHOTO = "⚠️ فایل ارسالی تصویر نیست. لطفاً تصویر رسید را ارسال نمایید."
@@ -367,6 +369,7 @@ USER_PROFILE = (
     "🆔 آیدی عددی: <code>{telegram_id}</code>\n"
     "📎 یوزرنیم: {mention}\n"
     "💼 موجودی کیف پول: {wallet:,} تومان\n"
+    "💳 جمع بدهی: {debt:,} تومان\n"
 )
 USER_PROFILE_PANELS = "\n▪️ پنل‌ها:\n{panels}"
 USER_PROFILE_PANEL_LINE = "   • <b>{username}</b> — {remaining_gb:.2f} / {initial_gb:.2f} گیگابایت\n"
@@ -446,26 +449,7 @@ INVOICE_ALREADY_PAID = "ℹ️ این فاکتور قبلاً تسویه شده 
 INVOICE_NOT_FOUND = "⚠️ فاکتور یافت نشد."
 
 BTN_INVOICES = "🧾 فاکتورهای باز"
-INVOICES_HEADER = "🧾 فاکتورهای پرداخت‌نشده:\n\n"
-INVOICE_LINE = (
-    "▫️ فاکتور #{id} — {amount:,} تومان\n"
-    "     ↳ {mention} · <code>{telegram_id}</code>\n"
-    "     ↳ 📝 {description}\n"
-    "     ↳ ⏳ {due}\n"
-)
 NO_INVOICES = "✅ هیچ فاکتور پرداخت‌نشده‌ای وجود ندارد."
-WEEKLY_DEBT_LINE = (
-    "🗓 بدهی هفتگی — {amount:,} تومان\n"
-    "     ↳ پنل {username}\n"
-    "     ↳ {mention} · <code>{telegram_id}</code>\n"
-)
-WEEKLY_DEBT_AS_INVOICE = (
-    "🗓 بدهی هفتگی\n\n"
-    "▪️ پنل: {username}\n"
-    "💰 مبلغ قابل پرداخت: {amount:,} تومان\n\n"
-    "برای پرداخت، دکمه‌ی زیر را بزنید."
-)
-MY_INVOICES_HEADER = "🧾 فاکتورهای پرداخت‌نشده‌ی شما:\n\n"
 BTN_MY_INVOICES = "🧾 فاکتورهای من"
 NO_MY_INVOICES = "✅ فاکتور پرداخت‌نشده‌ای ندارید."
 
@@ -546,4 +530,103 @@ INVALID_TUTORIAL_CONTENT = "⚠️ نوع محتوای ارسالی پشتیبا
 TUTORIAL_ADDED_CONFIRM = "✅ آموزش «{title}» با موفقیت اضافه شد."
 TUTORIAL_UNAVAILABLE = (
     "⚠️ در حال حاضر این آموزش در دسترس نیست. لطفاً به پشتیبانی اطلاع دهید."
+)
+
+# --- one list of bills: invoices and weekly credit are the same thing to a customer ---
+TIMING_OPEN = "♾ بدون مهلت"
+TIMING_DUE_IN = "⏳ {days} روز تا موعد"
+TIMING_DUE_TODAY = "⏳ موعد: امروز"
+TIMING_OVERDUE = "⏰ {days} روز از موعد گذشته"
+TIMING_OVERDUE_TODAY = "⏰ موعد امروز گذشت"
+WHEN_TODAY = "امروز"
+WHEN_DAYS_AGO = "{days} روز پیش"
+
+BILLS_SUMMARY = (
+    "🧾 <b>فاکتورهای باز</b>\n"
+    "━━━━━━━━━━━━━━━\n"
+    "💰 جمع کل مطالبات: <b>{total:,}</b> تومان\n"
+    "👥 {customers} مشتری · 🧾 {count} مورد\n"
+    "⏰ سررسید گذشته: {overdue_count} مورد — {overdue_total:,} تومان"
+)
+BILLS_CUSTOMER_HEADER = (
+    "👤 <b>{name}</b> · {mention} · <code>{telegram_id}</code>\n"
+    "💰 جمع بدهی: <b>{total:,}</b> تومان\n"
+)
+BILL_INVOICE_ITEM = (
+    "\n🧾 فاکتور #{id} — <b>{amount:,}</b> تومان\n"
+    "      📝 {description}\n"
+    "      {timing}\n"
+)
+BILL_WEEKLY_ITEM = (
+    "\n🗓 پرداخت هفتگی · {username} — <b>{amount:,}</b> تومان\n"
+    "      {timing}\n"
+)
+BILL_LAST_WARNED = "      🔔 آخرین هشدار: {when}\n"
+BTN_WARN_INVOICE = "⚠️ هشدار عدم پرداخت · فاکتور #{id}"
+BTN_WARN_WEEKLY = "⚠️ هشدار عدم پرداخت · {username}"
+
+MY_BILLS_SUMMARY = (
+    "🧾 <b>بدهی‌های پرداخت‌نشده‌ی شما</b>\n"
+    "💰 جمع بدهی: <b>{total:,}</b> تومان · {count} مورد"
+)
+MY_BILL_INVOICE = (
+    "🧾 فاکتور #{id}\n\n"
+    "💰 مبلغ قابل پرداخت: {amount:,} تومان\n"
+    "📝 بابت: {description}\n"
+    "{timing}\n\n"
+    "برای پرداخت، دکمه‌ی زیر را بزنید."
+)
+MY_BILL_WEEKLY = (
+    "🗓 پرداخت هفتگی\n\n"
+    "▪️ پنل: {username}\n"
+    "💰 مبلغ قابل پرداخت: {amount:,} تومان\n"
+    "{timing}\n\n"
+    "برای پرداخت، دکمه‌ی زیر را بزنید."
+)
+
+# Sent when the superadmin presses a warning button, but worded as a notice from
+# the billing system itself, the same voice as the automatic reminders.
+NONPAYMENT_WARNING = (
+    "🔔 <b>اطلاعیه‌ی سیستم — عدم پرداخت</b>\n"
+    "━━━━━━━━━━━━━━━\n"
+    "{subject}\n"
+    "💰 مبلغ بدهی: <b>{amount:,}</b> تومان\n"
+    "{days_line}\n\n"
+    "⛔️ در صورت عدم پرداخت، {service} شما به‌صورت خودکار معلق خواهد شد.\n"
+    "برای جلوگیری از تعلیق، از دکمه‌ی زیر اقدام به پرداخت نمایید."
+)
+WARN_SUBJECT_INVOICE = "🧾 فاکتور #{id} — {description}"
+WARN_SUBJECT_WEEKLY = "🗓 پرداخت هفتگی پنل «{username}»"
+WARN_DAYS_OVERDUE = "⏰ {days} روز از موعد پرداخت بدهی شما گذشته است."
+WARN_DAYS_SINCE_ISSUED = "⏰ {days} روز از ثبت بدهی شما گذشته است."
+WARN_UNPAID = "⏰ بدهی شما هنوز تسویه نشده است."
+WARN_SERVICE_PANEL = "پنل"
+WARN_SERVICE_GENERIC = "سرویس"
+WARNING_SENT_TOAST = "⚠️ هشدار ارسال شد."
+WARNING_NOT_DELIVERED = "⚠️ ارسال هشدار ناموفق بود (احتمالاً کاربر ربات را مسدود کرده است)."
+WARNING_BILL_GONE = "ℹ️ این بدهی دیگر باز نیست (احتمالاً تسویه شده است)."
+
+# --- who may see the wallet, and so the card number ---
+WALLET_NOT_AVAILABLE = "ℹ️ کیف پول پس از فعال‌شدن حساب شما در دسترس خواهد بود."
+ACCOUNT_ACTIVATED = "💼 کیف پول و بخش فاکتورها برای حساب شما فعال شد."
+
+# --- automatic approval ---
+BTN_TOGGLE_AUTO_APPROVE = "🤖 تأیید خودکار رسیدها"
+AUTO_APPROVE_ON = (
+    "🤖 تأیید خودکار روشن شد.\n\n"
+    "از این لحظه هر رسیدی که برسد، یک دقیقه بعد بدون بررسی تأیید می‌شود. "
+    "رسید همچنان برای شما ارسال می‌شود و اگر در همان یک دقیقه «رد» را بزنید، تأیید نمی‌شود.\n\n"
+    "رسیدهایی که از قبل در انتظار بوده‌اند دست نمی‌خورند."
+)
+AUTO_APPROVE_OFF = "✋ تأیید خودکار خاموش شد. رسیدها دوباره منتظر بررسی شما می‌مانند."
+AUTO_APPROVE_CAPTION_NOTE = "\n\n🤖 تأیید خودکار روشن است — این رسید یک دقیقه پس از دریافت تأیید می‌شود."
+AUTO_APPROVED_NOTICE = (
+    "🤖 تأیید خودکار\n\n"
+    "🧾 رسید #{id} — {kind}\n"
+    "👤 آیدی عددی: <code>{telegram_id}</code>\n"
+    "💰 مبلغ: {amount:,} تومان"
+)
+AUTO_APPROVE_FAILED_NOTICE = (
+    "⚠️ تأیید خودکار رسید #{id} انجام نشد و برای بررسی دستی باقی ماند.\n"
+    "علت: {reason}"
 )

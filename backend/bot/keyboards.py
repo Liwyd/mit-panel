@@ -30,6 +30,15 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
     return kb.as_markup(resize_keyboard=True)
 
 
+def prospect_menu_kb() -> ReplyKeyboardMarkup:
+    """Someone we have no business with yet — no panel, never billed. Only the way
+    in: no wallet, and so no card number, until there is something to pay."""
+    kb = ReplyKeyboardBuilder()
+    kb.button(text=texts.BTN_MY_PANELS)
+    kb.adjust(1)
+    return kb.as_markup(resize_keyboard=True)
+
+
 def panel_request_kb() -> ReplyKeyboardMarkup:
     """Shown alongside the activation notice, so the two ways of asking for a
     panel sit where someone actually looks for them."""
@@ -81,13 +90,12 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
 
 def finance_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
-        texts.BTN_NEW_INVOICE,
         texts.BTN_INVOICES,
-        texts.BTN_DEBTS,
+        texts.BTN_NEW_INVOICE,
         texts.BTN_GRANT_WALLET,
         texts.BTN_TOGGLE_WEEKLY,
         texts.BTN_BACK,
-        layout=(2, 2, 1, 1),
+        layout=(2, 2, 1),
     )
 
 
@@ -112,6 +120,7 @@ def tutorials_section_kb() -> ReplyKeyboardMarkup:
 
 def settings_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
+        texts.BTN_TOGGLE_AUTO_APPROVE,
         texts.BTN_SET_PRICE,
         texts.BTN_SET_CARD,
         texts.BTN_TOGGLE_FORCE_JOIN,
@@ -119,7 +128,7 @@ def settings_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_SET_BULK_PIN,
         texts.BTN_BACKUP,
         texts.BTN_BACK,
-        layout=(2, 2, 2, 1),
+        layout=(1, 2, 2, 2, 1),
     )
 
 
@@ -205,6 +214,29 @@ def pay_debt_kb(username: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_PAY_DEBT, callback_data=f"pay_debt:{username}")
     return kb.as_markup()
+
+
+def bill_actions_kb(customer) -> InlineKeyboardMarkup | None:
+    """A warning button per open bill, plus a direct message. Nothing to offer for
+    a debt with no Telegram ID on record — there is nobody to send it to."""
+    if customer.telegram_id is None:
+        return None
+    kb = InlineKeyboardBuilder()
+    for bill in customer.bills:
+        if bill.kind == "invoice":
+            label = texts.BTN_WARN_INVOICE.format(id=bill.invoice_id)
+        else:
+            label = texts.BTN_WARN_WEEKLY.format(username=bill.username)
+        kb.button(text=label, callback_data=f"warn:{bill.key}")
+    kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{customer.telegram_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bill_pay_kb(bill) -> InlineKeyboardMarkup:
+    if bill.kind == "invoice":
+        return pay_invoice_kb(bill.invoice_id)
+    return pay_debt_kb(bill.username)
 
 
 def wallet_amount_kb() -> InlineKeyboardMarkup:

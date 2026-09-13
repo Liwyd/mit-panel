@@ -20,6 +20,12 @@ DEFAULTS = {
     "telegram_chat_id": "",
     "backup_enabled": False,
     "backup_interval_hours": 6,
+    "bot_enabled": False,
+    "bot_token": "",
+    "bot_superadmin_ids": "",
+    "bot_media_dir": "data/bot_media",
+    "bot_min_gb": 200.0,
+    "bot_max_gb": 10000.0,
 }
 
 

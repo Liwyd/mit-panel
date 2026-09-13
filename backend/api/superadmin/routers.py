@@ -754,3 +754,76 @@ async def test_telegram_backup(admin: dict = Depends(get_current_superadmin)):
         status_code=status.HTTP_400_BAD_REQUEST,
         content={"success": False, "message": message},
     )
+
+
+@router.get("/settings/bot", description="Get top-up bot settings")
+async def get_bot_settings(admin: dict = Depends(get_current_superadmin)):
+    settings = get_settings()
+    bot_data = {
+        "bot_enabled": settings.get("bot_enabled", False),
+        "bot_token": settings.get("bot_token", ""),
+        "bot_superadmin_ids": settings.get("bot_superadmin_ids", ""),
+        "bot_media_dir": settings.get("bot_media_dir", "data/bot_media"),
+        "bot_min_gb": settings.get("bot_min_gb", 200.0),
+        "bot_max_gb": settings.get("bot_max_gb", 10000.0),
+    }
+    return ResponseModel(
+        success=True,
+        message="Bot settings retrieved successfully",
+        data=bot_data,
+    )
+
+
+@router.put("/settings/bot", description="Update top-up bot settings and restart bot", response_model=ResponseModel)
+async def update_bot_settings(
+    payload: SettingsInput,
+    admin: dict = Depends(get_current_superadmin),
+):
+    patch = payload.model_dump(exclude_unset=True)
+    allowed = {"bot_enabled", "bot_token", "bot_superadmin_ids", "bot_media_dir", "bot_min_gb", "bot_max_gb"}
+    bot_patch = {k: v for k, v in patch.items() if k in allowed}
+
+    if bot_patch:
+        update_settings(bot_patch)
+
+    # Sync to .env file so the bot picks up changes on restart
+    env_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
+    env_path = os.path.normpath(env_path)
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+
+        env_map = {}
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            if line_stripped and not line_stripped.startswith("#") and "=" in line_stripped:
+                key = line_stripped.split("=", 1)[0]
+                env_map[key] = i
+
+        env_updates = {}
+        if "bot_token" in bot_patch:
+            env_updates["BOT_TOKEN"] = bot_patch["bot_token"]
+        if "bot_superadmin_ids" in bot_patch:
+            env_updates["BOT_SUPERADMIN_IDS"] = bot_patch["bot_superadmin_ids"]
+        if "bot_media_dir" in bot_patch:
+            env_updates["BOT_MEDIA_DIR"] = bot_patch["bot_media_dir"]
+        if "bot_min_gb" in bot_patch:
+            env_updates["BOT_MIN_GB"] = str(bot_patch["bot_min_gb"])
+        if "bot_max_gb" in bot_patch:
+            env_updates["BOT_MAX_GB"] = str(bot_patch["bot_max_gb"])
+
+        for key, value in env_updates.items():
+            if key in env_map:
+                lines[env_map[key]] = f"{key}={value}\n"
+            else:
+                lines.append(f"{key}={value}\n")
+
+        with open(env_path, "w") as f:
+            f.writelines(lines)
+
+    logger.info("Bot settings updated")
+    return ResponseModel(
+        success=True,
+        message="Bot settings updated. Restart the panel to apply changes.",
+        data=get_settings(),
+    )

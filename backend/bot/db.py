@@ -167,6 +167,9 @@ def init_db() -> None:
         _ensure_column(conn, "tutorials", "source_message_id", "INTEGER")
         _ensure_column(conn, "debts", "overdue_since", "TEXT")
         _ensure_column(conn, "topup_requests", "invoice_id", "INTEGER")
+        # When a non-payment warning was last sent for a bill.
+        _ensure_column(conn, "invoices", "last_warned_at", "TEXT")
+        _ensure_column(conn, "debts", "last_warned_at", "TEXT")
 
 
 @dataclass
@@ -523,7 +526,8 @@ def mark_overdue(username: str) -> None:
 def list_outstanding_debts() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT username, telegram_id, amount, overdue_since FROM debts "
+            "SELECT username, telegram_id, amount, overdue_since, updated_at, last_warned_at "
+            "FROM debts "
             "WHERE amount > 0 ORDER BY username"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -540,6 +544,7 @@ class Invoice:
     created_at: str
     paid_at: str | None
     last_reminded_date: str | None
+    last_warned_at: str | None = None
 
 
 def create_invoice(
@@ -597,8 +602,45 @@ def cancel_invoice(invoice_id: int) -> bool:
 def set_invoice_reminded(invoice_id: int, date_stamp: str) -> None:
     with _connect() as conn:
         conn.execute(
-            "UPDATE invoices SET last_reminded_date = ? WHERE id = ?", (date_stamp, invoice_id)
+            "UPDATE invoices SET last_reminded_date = ? WHERE id = ?",
+            (date_stamp, invoice_id),
         )
+
+
+def mark_invoice_warned(invoice_id: int) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute("UPDATE invoices SET last_warned_at = ? WHERE id = ?", (now, invoice_id))
+
+
+def mark_debt_warned(username: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute("UPDATE debts SET last_warned_at = ? WHERE username = ?", (now, username))
+
+
+def get_debt_record(username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT username, telegram_id, amount, overdue_since, updated_at, last_warned_at "
+            "FROM debts WHERE username = ?",
+            (username,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def has_billing_account(telegram_id: int) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM bot_users WHERE telegram_id = ? AND is_linked = 1
+            UNION ALL SELECT 1 FROM invoices WHERE telegram_id = ?
+            UNION ALL SELECT 1 FROM debts WHERE telegram_id = ?
+            LIMIT 1
+            """,
+            (telegram_id, telegram_id, telegram_id),
+        ).fetchone()
+        return row is not None
 
 
 def record_traffic_snapshot(

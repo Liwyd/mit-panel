@@ -35,3 +35,5 @@ class Setting(BaseSettings):
 
 
 config = Setting()
+
+__version__ = "3.0.0"

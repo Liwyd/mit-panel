@@ -31,6 +31,7 @@ ALL_MENU_TEXTS = {
     texts.BTN_SEC_USERS,
     texts.BTN_SEC_SETTINGS,
     texts.BTN_BACK,
+    texts.BTN_TOGGLE_AUTO_APPROVE,
     texts.BTN_MESSAGE_USER,
     texts.BTN_PENDING_REQUESTS,
     texts.BTN_TOGGLE_FORCE_JOIN,
@@ -102,7 +103,10 @@ async def menu_kb_for(user_id: int):
         return superadmin_kb(user_id)
     if db.is_user_linked(user_id):
         return keyboards.main_menu_kb()
-    return keyboards.unlinked_menu_kb()
+    # No panel: the wallet and invoices only open once we have billed them.
+    if db.has_billing_account(user_id):
+        return keyboards.unlinked_menu_kb()
+    return keyboards.prospect_menu_kb()
 
 
 async def cancel_and_show_menu(message: Message, state: FSMContext) -> None:

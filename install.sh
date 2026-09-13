@@ -126,11 +126,11 @@ do_install() {
 
     echo ""
     separator
-    c "$BOLD" "  Building"
+    c "$BOLD" "  Pulling & Starting"
     separator
-    inf "Building image locally..."
-    docker compose build --no-cache >/dev/null 2>&1
-    ok "Image ready."
+    inf "Pulling latest image from Docker Hub..."
+    docker compose pull >/dev/null 2>&1
+    ok "Image pulled."
     inf "Starting container..."
     docker compose up -d >/dev/null 2>&1
     ok "Container started."
@@ -219,8 +219,8 @@ case "${1:-}" in
         git pull
         echo "Stopping container..."
         docker compose down 2>/dev/null || true
-        echo "Building image locally..."
-        docker compose build --no-cache
+        echo "Pulling latest image..."
+        docker compose pull
         docker compose up -d
         echo "Update complete."
         ;;
@@ -383,9 +383,9 @@ ENVEOF
     docker compose down >/dev/null 2>&1 || true
     ok "Container stopped."
 
-    inf "Building image locally..."
-    docker compose build --no-cache >/dev/null 2>&1
-    ok "Image built."
+    inf "Pulling latest image..."
+    docker compose pull >/dev/null 2>&1
+    ok "Image pulled."
 
     inf "Starting container..."
     docker compose up -d >/dev/null 2>&1

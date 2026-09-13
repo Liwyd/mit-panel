@@ -13,8 +13,10 @@ import {
     Send,
     Save,
     Loader2,
+    Bot,
 } from 'lucide-react'
 import { superadminAPI, settingsAPI, getLogoUrl, type PanelSettings } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,10 +72,27 @@ export function SettingsPage() {
     const [testingTelegram, setTestingTelegram] = useState(false)
     const [logoVersion, setLogoVersion] = useState(0)
 
+    // Version
+    const [version, setVersion] = useState('')
+
+    // Bot settings
+    const [savingBot, setSavingBot] = useState(false)
+    const [savingBotRestart, setSavingBotRestart] = useState(false)
+
     useEffect(() => {
         fetchNews()
         fetchSettings()
+        fetchVersion()
     }, [])
+
+    const fetchVersion = async () => {
+        try {
+            const data = await settingsAPI.getVersion()
+            setVersion(data.version)
+        } catch (err: any) {
+            console.error('Failed to fetch version:', err)
+        }
+    }
 
     const fetchSettings = async () => {
         try {
@@ -101,6 +120,31 @@ export function SettingsPage() {
             alert(err?.message || 'Failed to save settings')
         } finally {
             setSavingSettings(false)
+        }
+    }
+
+    const handleSaveBotSettings = async (restart = false) => {
+        if (!settings) return
+        try {
+            setSavingBot(true)
+            if (restart) setSavingBotRestart(true)
+            const data = await settingsAPI.updateBotSettings({
+                bot_enabled: settings.bot_enabled,
+                bot_token: settings.bot_token,
+                bot_superadmin_ids: settings.bot_superadmin_ids,
+                bot_media_dir: settings.bot_media_dir,
+                bot_min_gb: Number(settings.bot_min_gb) || 200,
+                bot_max_gb: Number(settings.bot_max_gb) || 10000,
+            })
+            setSettings(data)
+            alert(restart
+                ? 'Bot settings saved. Restart the panel for changes to take effect.'
+                : 'Bot settings saved successfully')
+        } catch (err: any) {
+            alert(err?.message || 'Failed to save bot settings')
+        } finally {
+            setSavingBot(false)
+            setSavingBotRestart(false)
         }
     }
 
@@ -249,9 +293,16 @@ export function SettingsPage() {
         <PageLayout
             header={
                 <div className="p-4 md:p-6 pb-0">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
-                        <p className="text-muted-foreground">Manage database, logs, and ...</p>
+                    <div className="flex items-center gap-3">
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
+                            <p className="text-muted-foreground">Manage database, logs, and configuration</p>
+                        </div>
+                        {version && (
+                            <Badge variant="secondary" className="text-xs font-mono">
+                                v{version}
+                            </Badge>
+                        )}
                     </div>
                 </div>
             }
@@ -495,6 +546,116 @@ export function SettingsPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Top-up Bot Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Bot className="h-5 w-5 text-primary" />
+                        Top-up Bot
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Telegram bot for managing reseller traffic purchases, wallets, and invoicing. Runs inside the panel process. The <strong>Telegram Backup</strong> card above is a separate bot that sends periodic database snapshots.
+                    </p>
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={!!settings?.bot_enabled}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                settings && setSettings({ ...settings, bot_enabled: e.target.checked })
+                            }
+                        />
+                        Enable top-up bot
+                    </label>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Bot Token</label>
+                        <Input
+                            type="password"
+                            placeholder="123456:ABC-DEF..."
+                            value={settings?.bot_token ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                settings && setSettings({ ...settings, bot_token: e.target.value })
+                            }
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Superadmin Telegram IDs (comma-separated)</label>
+                        <Input
+                            placeholder="123456789,987654321"
+                            value={settings?.bot_superadmin_ids ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                settings && setSettings({ ...settings, bot_superadmin_ids: e.target.value })
+                            }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Comma-separated list of Telegram user IDs with full bot control.
+                        </p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Media Directory</label>
+                            <Input
+                                placeholder="data/bot_media"
+                                value={settings?.bot_media_dir ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, bot_media_dir: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Min GB (per purchase)</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={settings?.bot_min_gb ?? 200}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, bot_min_gb: Number(e.target.value) })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Max GB (per purchase)</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={settings?.bot_max_gb ?? 10000}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, bot_max_gb: Number(e.target.value) })
+                                }
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={() => handleSaveBotSettings(false)}
+                            disabled={savingBot || !settings}
+                            variant="outline"
+                        >
+                            {savingBot && !savingBotRestart ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            {savingBot && !savingBotRestart ? 'Saving...' : 'Save Bot Settings'}
+                        </Button>
+                        <Button
+                            onClick={() => handleSaveBotSettings(true)}
+                            disabled={savingBot || !settings}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        >
+                            {savingBotRestart ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            {savingBotRestart ? 'Saving...' : 'Save & Restart'}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
 
             <div className="flex justify-end">
                 <Button

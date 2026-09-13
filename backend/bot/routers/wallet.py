@@ -1,8 +1,11 @@
-"""Wallet: balance, topping it up by card, and settling a weekly-credit debt.
+"""The money side of the bot: wallet, invoices and weekly-credit payments.
 
-Both a wallet top-up and a debt settlement go through the same receipt →
-superadmin approval path as a traffic purchase; what differs is the request's
-`kind`, which decides what approval actually does (see routers/approval.py).
+A wallet top-up, an invoice payment and a debt settlement all go through the
+same receipt → superadmin approval path as a traffic purchase; what differs is
+the request's `kind`, which decides what approval actually does (approvals.py).
+
+None of it opens to someone we have no business with yet. The wallet — and with
+it the card number — appears once they own a panel or have been billed.
 """
 
 from __future__ import annotations
@@ -14,9 +17,9 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import keyboards, texts
-from backend.bot.invoices import describe_due
-from backend.bot.nav import ALL_MENU_TEXTS
+from backend.bot import auto_approve, keyboards, texts
+from backend.bot.bills import open_bills, render_for_customer, urgency
+from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.states import DebtPayment, InvoicePayment, WalletTopUp
 from backend.bot import db
 from backend.bot.config import bot_config as settings
@@ -37,6 +40,7 @@ async def _save_receipt(message: Message, bot: Bot) -> str:
 
 
 async def _send_to_superadmins(bot: Bot, path: str, caption: str, request_id: int, user_id: int) -> None:
+    caption += auto_approve.caption_note()
     for superadmin_id in settings.superadmin_id_list:
         try:
             await bot.send_photo(
@@ -49,10 +53,21 @@ async def _send_to_superadmins(bot: Bot, path: str, caption: str, request_id: in
             continue
 
 
+async def _has_access(message: Message, user_id: int) -> bool:
+    """A hidden button isn't a gate — an old keyboard or typed text still gets
+    here — so every way in to the card number checks this itself."""
+    if db.has_billing_account(user_id):
+        return True
+    await message.answer(texts.WALLET_NOT_AVAILABLE, reply_markup=await menu_kb_for(user_id))
+    return False
+
+
 # ---- wallet balance & top-up -------------------------------------------------
 
 @router.message(F.text == texts.BTN_WALLET)
 async def show_wallet(message: Message) -> None:
+    if not await _has_access(message, message.from_user.id):
+        return
     balance = db.get_wallet_balance(message.from_user.id)
     await message.answer(
         texts.WALLET_BALANCE.format(balance=balance), reply_markup=keyboards.wallet_kb()
@@ -62,15 +77,23 @@ async def show_wallet(message: Message) -> None:
 @router.callback_query(F.data == "wallet_charge")
 async def start_wallet_charge(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
+    if not await _has_access(call.message, call.from_user.id):
+        return
     await state.set_state(WalletTopUp.amount)
     await call.message.answer(texts.ASK_WALLET_AMOUNT, reply_markup=keyboards.wallet_amount_kb())
 
 
-async def _ask_for_receipt(message: Message, state: FSMContext, amount: int) -> None:
+async def _ask_for_receipt(message: Message, state: FSMContext, amount: int, user_id: int) -> None:
+    # This is where the card number is revealed, so it is gated here too, not
+    # only at the menu: an amount picker left over in the chat must not get past.
+    if not await _has_access(message, user_id):
+        await state.clear()
+        return
+
     card_number = db.get_setting("card_number")
     if not card_number:
         await state.clear()
-        await message.answer(texts.CARD_NOT_CONFIGURED, reply_markup=keyboards.main_menu_kb())
+        await message.answer(texts.CARD_NOT_CONFIGURED, reply_markup=await menu_kb_for(user_id))
         return
 
     await state.update_data(wallet_amount=amount)
@@ -90,7 +113,7 @@ async def pick_wallet_amount(call: CallbackQuery, state: FSMContext) -> None:
             texts.ASK_WALLET_CUSTOM_AMOUNT, reply_markup=keyboards.cancel_kb()
         )
         return
-    await _ask_for_receipt(call.message, state, int(choice))
+    await _ask_for_receipt(call.message, state, int(choice), call.from_user.id)
 
 
 @router.message(WalletTopUp.amount, ~F.text.in_(ALL_MENU_TEXTS))
@@ -99,7 +122,7 @@ async def get_wallet_amount(message: Message, state: FSMContext) -> None:
     if amount is None:
         await message.answer(texts.INVALID_WALLET_AMOUNT)
         return
-    await _ask_for_receipt(message, state, amount)
+    await _ask_for_receipt(message, state, amount, message.from_user.id)
 
 
 @router.message(WalletTopUp.receipt, ~F.text.in_(ALL_MENU_TEXTS))
@@ -122,7 +145,9 @@ async def get_wallet_receipt(message: Message, state: FSMContext, bot: Bot) -> N
         kind="wallet",
     )
 
-    await message.answer(texts.WALLET_CHARGE_SUBMITTED, reply_markup=keyboards.main_menu_kb())
+    await message.answer(
+        texts.WALLET_CHARGE_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+    )
     await _send_to_superadmins(
         bot,
         path,
@@ -134,37 +159,23 @@ async def get_wallet_receipt(message: Message, state: FSMContext, bot: Bot) -> N
     )
 
 
-# ---- manual invoices ---------------------------------------------------------
+# ---- invoices and weekly credit, as one list ----------------------------------
 
 @router.message(F.text == texts.BTN_MY_INVOICES)
 async def my_invoices(message: Message) -> None:
-    invoices = db.list_pending_invoices(message.from_user.id)
-    # Weekly credit is billed through the debts table rather than as an invoice,
-    # but to the customer it's just another unpaid amount — so it belongs here too.
-    debts = [d for d in db.list_outstanding_debts() if d["telegram_id"] == message.from_user.id]
-
-    if not invoices and not debts:
+    # An invoice and a weekly-credit debt are the same thing to whoever owes
+    # them, so they come as one list, most urgent first.
+    bills = sorted(open_bills(message.from_user.id), key=urgency, reverse=True)
+    if not bills:
         await message.answer(texts.NO_MY_INVOICES)
         return
 
-    for debt in debts:
+    if len(bills) > 1:
         await message.answer(
-            texts.WEEKLY_DEBT_AS_INVOICE.format(
-                username=debt["username"], amount=debt["amount"]
-            ),
-            reply_markup=keyboards.pay_debt_kb(debt["username"]),
+            texts.MY_BILLS_SUMMARY.format(total=sum(b.amount for b in bills), count=len(bills))
         )
-
-    for inv in invoices:
-        await message.answer(
-            texts.INVOICE_FOR_CUSTOMER.format(
-                id=inv.id,
-                amount=inv.amount,
-                description=inv.description or "—",
-                due=describe_due(inv.due_at),
-            ),
-            reply_markup=keyboards.pay_invoice_kb(inv.id),
-        )
+    for bill in bills:
+        await message.answer(render_for_customer(bill), reply_markup=keyboards.bill_pay_kb(bill))
 
 
 @router.callback_query(F.data.startswith("pay_invoice:"))
@@ -220,7 +231,9 @@ async def get_invoice_receipt(message: Message, state: FSMContext, bot: Bot) -> 
         invoice_id=invoice_id,
     )
 
-    await message.answer(texts.INVOICE_RECEIPT_SUBMITTED, reply_markup=keyboards.main_menu_kb())
+    await message.answer(
+        texts.INVOICE_RECEIPT_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+    )
     await _send_to_superadmins(
         bot,
         path,
@@ -237,10 +250,14 @@ async def get_invoice_receipt(message: Message, state: FSMContext, bot: Bot) -> 
 @router.callback_query(F.data.startswith("pay_debt:"))
 async def start_debt_payment(call: CallbackQuery, state: FSMContext) -> None:
     username = call.data.split(":", 1)[1]
-    amount = db.get_debt(username)
-    if amount <= 0:
+    debt = db.get_debt_record(username)
+    # The panel named in callback data comes from the client, so it is checked
+    # against who is asking — otherwise anyone could pull up another panel's
+    # debt, and the card number along with it.
+    if not debt or debt["amount"] <= 0 or debt["telegram_id"] != call.from_user.id:
         await call.answer(texts.NO_DEBT, show_alert=True)
         return
+    amount = debt["amount"]
 
     card_number = db.get_setting("card_number")
     if not card_number:
@@ -277,7 +294,9 @@ async def get_debt_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         kind="settlement",
     )
 
-    await message.answer(texts.SETTLEMENT_SUBMITTED, reply_markup=keyboards.main_menu_kb())
+    await message.answer(
+        texts.SETTLEMENT_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+    )
     await _send_to_superadmins(
         bot,
         path,

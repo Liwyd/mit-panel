@@ -13,6 +13,7 @@ from backend.utils.settings_store import (
     logo_media_type,
 )
 from backend.utils.banners import get_banner_path, banner_media_type
+from backend.config import __version__
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -93,3 +94,12 @@ async def get_login_logo():
             content={"success": False, "message": "No logo set"},
         )
     return FileResponse(path, media_type=logo_media_type())
+
+
+@router.get("/version", description="Panel version (public)")
+async def get_version():
+    return ResponseModel(
+        success=True,
+        message="Version retrieved successfully",
+        data={"version": __version__},
+    )

@@ -31,6 +31,7 @@ async def _run_bot() -> None:
     from backend.bot.forecast import run_forecast_scheduler
     from backend.bot.warnings import run_warning_scanner
     from backend.bot.weekly import run_weekly_scheduler
+    from backend.bot.auto_approve import run_auto_approver
 
     if not bot_config.bot_token:
         return
@@ -58,6 +59,7 @@ async def _run_bot() -> None:
         asyncio.create_task(run_weekly_scheduler(bot)),
         asyncio.create_task(run_backup_scheduler(bot)),
         asyncio.create_task(run_forecast_scheduler(bot)),
+        asyncio.create_task(run_auto_approver(bot)),
     ]
     try:
         await dp.start_polling(bot)

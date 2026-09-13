@@ -432,6 +432,12 @@ export interface PanelSettings {
     backup_enabled: boolean
     backup_interval_hours: number
     has_logo: boolean
+    bot_enabled: boolean
+    bot_token: string
+    bot_superadmin_ids: string
+    bot_media_dir: string
+    bot_min_gb: number
+    bot_max_gb: number
 }
 
 export interface BrandingInfo {
@@ -484,6 +490,27 @@ export const settingsAPI = {
             throw new Error(response.data.message || 'Failed to send test backup')
         }
         return response.data.message || 'Test backup sent'
+    },
+
+    getBotSettings: async (): Promise<PanelSettings> => {
+        const response = await api.get<ResponseModel<PanelSettings>>(`/superadmin/settings/bot`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to fetch bot settings')
+        }
+        return response.data.data!
+    },
+
+    updateBotSettings: async (data: Partial<PanelSettings>): Promise<PanelSettings> => {
+        const response = await api.put<ResponseModel<PanelSettings>>(`/superadmin/settings/bot`, data)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to update bot settings')
+        }
+        return response.data.data!
+    },
+
+    getVersion: async (): Promise<{ version: string }> => {
+        const response = await api.get<ResponseModel<{ version: string }>>(`/dashboard/version`)
+        return response.data.data || { version: 'unknown' }
     },
 }
 

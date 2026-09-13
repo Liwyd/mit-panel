@@ -7,15 +7,12 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import keyboards, texts
+from backend.bot import auto_approve, keyboards, texts
+from backend.bot.approvals import approve_request
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, forget_section, superadmin_kb
 from backend.bot.states import MessageUser, RejectReason
 from backend.bot import db
-from backend.bot.billing import apply_wallet_to_debts
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
-from backend.bot.units import bytes_to_gb
 
 router = Router(name="approval")
 
@@ -54,85 +51,10 @@ async def list_pending(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("topup_approve:"))
 async def approve(call: CallbackQuery, bot: Bot) -> None:
-    request_id = int(call.data.split(":")[1])
-    req = db.get_request(request_id)
-    if req is None:
-        await call.answer(texts.NOT_FOUND, show_alert=True)
-        return
-    if not db.mark_reviewed(request_id, status="approved", reviewed_by=call.from_user.id):
-        await call.answer(texts.ALREADY_HANDLED, show_alert=True)
-        return
-
-    # A wallet top-up or a debt settlement moves money, not traffic.
-    if req.kind == "wallet":
-        db.add_wallet_balance(req.admin_telegram_id, req.toman_amount)
-        # Newly arrived money clears any outstanding weekly debt immediately.
-        apply_wallet_to_debts(req.admin_telegram_id)
-        balance = db.get_wallet_balance(req.admin_telegram_id)
-        try:
-            await bot.send_message(
-                req.admin_telegram_id,
-                texts.WALLET_CHARGED_ADMIN.format(amount=req.toman_amount, balance=balance),
-            )
-        except Exception:
-            pass
-        await call.answer(texts.APPROVED_TOAST)
+    outcome = await approve_request(bot, int(call.data.split(":")[1]), call.from_user.id)
+    await call.answer(outcome.message, show_alert=outcome.alert)
+    if outcome.finished:
         await call.message.edit_reply_markup(reply_markup=None)
-        return
-
-    if req.kind == "invoice":
-        if not db.mark_invoice_paid(req.invoice_id):
-            await call.answer(texts.INVOICE_ALREADY_PAID, show_alert=True)
-            await call.message.edit_reply_markup(reply_markup=None)
-            return
-        try:
-            await bot.send_message(
-                req.admin_telegram_id, texts.INVOICE_PAID_CUSTOMER.format(id=req.invoice_id)
-            )
-        except Exception:
-            pass
-        await call.answer(texts.APPROVED_TOAST)
-        await call.message.edit_reply_markup(reply_markup=None)
-        return
-
-    if req.kind == "settlement":
-        db.clear_debt(req.admin_username)
-        try:
-            await bot.send_message(
-                req.admin_telegram_id,
-                texts.SETTLEMENT_APPROVED_ADMIN.format(username=req.admin_username),
-            )
-        except Exception:
-            pass
-        await call.answer(texts.APPROVED_TOAST)
-        await call.message.edit_reply_markup(reply_markup=None)
-        return
-
-    try:
-        result = await nexra_panel.topup(
-            req.admin_telegram_id, req.requested_gb, username=req.admin_username
-        )
-    except NexraPanelError as exc:
-        db.revert_to_pending(request_id)
-        await call.answer(f"{texts.PANEL_ERROR_TOAST} ({exc})", show_alert=True)
-        return
-
-    # A successful top-up rearms the low-traffic warnings for this panel.
-    db.clear_warning_bucket(req.admin_username)
-
-    new_balance_gb = bytes_to_gb(result.get("new_traffic_bytes"))
-    try:
-        await bot.send_message(
-            req.admin_telegram_id,
-            texts.REQUEST_APPROVED_ADMIN.format(
-                added_gb=req.requested_gb, new_balance_gb=new_balance_gb
-            ),
-        )
-    except Exception:
-        pass
-
-    await call.answer(texts.APPROVED_TOAST)
-    await call.message.edit_reply_markup(reply_markup=None)
 
 
 # ---- reject (asks for a reason first) ----------------------------------------
@@ -148,6 +70,9 @@ async def start_reject(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer(texts.ALREADY_HANDLED, show_alert=True)
         return
 
+    # Typing a reason can take longer than the automatic approver's minute; the
+    # rejection has to win that race.
+    auto_approve.hold(request_id)
     await state.set_state(RejectReason.reason)
     await state.update_data(
         request_id=request_id,
@@ -166,9 +91,13 @@ async def finish_reject(message: Message, state: FSMContext, bot: Bot) -> None:
     raw_reason = (message.text or "").strip()
     reason = None if raw_reason == "-" else raw_reason
 
-    if not db.mark_reviewed(
+    rejected = db.mark_reviewed(
         request_id, status="rejected", reviewed_by=message.from_user.id, reason=reason
-    ):
+    )
+    # Released only once the status is written, so there is no gap in which the
+    # automatic approver could slip in ahead of the rejection.
+    auto_approve.release(request_id)
+    if not rejected:
         await message.answer(texts.ALREADY_HANDLED, reply_markup=superadmin_kb(message.from_user.id))
         return
 

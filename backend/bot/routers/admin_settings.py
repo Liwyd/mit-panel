@@ -7,11 +7,11 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import keyboards, texts
+from backend.bot import auto_approve, bills, keyboards, texts
 from backend.bot.backups import send_backup
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
-from backend.bot.nav import ALL_MENU_TEXTS, remember_section, superadmin_kb
+from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
 from backend.bot.states import (
     Broadcast,
     CreateAdmin,
@@ -358,6 +358,8 @@ async def invoice_due(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
 
     due_at = due_at_for(key)
     target_id = data["invoice_target"]
+    # Checked before the invoice exists — afterwards everyone is a customer.
+    was_customer = db.has_billing_account(target_id)
     invoice_id = db.create_invoice(
         telegram_id=target_id,
         amount=data["invoice_amount"],
@@ -391,49 +393,72 @@ async def invoice_due(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     )
     if not delivered:
         await call.message.answer(texts.INVOICE_CREATE_NOT_DELIVERED)
+    elif not was_customer:
+        # A first bill is what opens the wallet and invoices to them, and a reply
+        # keyboard only changes when a message arrives carrying the new one.
+        try:
+            await bot.send_message(
+                target_id, texts.ACCOUNT_ACTIVATED, reply_markup=await menu_kb_for(target_id)
+            )
+        except Exception:
+            pass
 
 
-@router.message(F.text == texts.BTN_INVOICES)
+@router.message(F.text.in_({texts.BTN_INVOICES, texts.BTN_DEBTS}))
 async def list_invoices(message: Message) -> None:
-    invoices = db.list_pending_invoices()
-    debts = db.list_outstanding_debts()
-    if not invoices and not debts:
+    """Everything owed — invoices and weekly credit alike — grouped by customer,
+    most urgent first, each with its own warning buttons.
+
+    BTN_DEBTS is only matched so a keyboard still showing the old separate debts
+    button lands somewhere sensible.
+    """
+    customers = bills.by_customer(bills.open_bills())
+    if not customers:
         await message.answer(texts.NO_INVOICES)
         return
-
-    lines = []
-    # Weekly credit lives in its own table but is money owed all the same, so it
-    # is listed alongside invoices rather than hiding in a separate screen.
-    for debt in debts:
-        user = db.get_user(debt["telegram_id"]) if debt["telegram_id"] else None
-        mention = "—"
-        if user:
-            mention = f"@{user['username']}" if user.get("username") else (user.get("full_name") or "—")
-        lines.append(
-            texts.WEEKLY_DEBT_LINE.format(
-                username=debt["username"],
-                amount=debt["amount"],
-                mention=mention,
-                telegram_id=debt["telegram_id"] or "—",
-            )
+    await message.answer(bills.render_summary(customers))
+    for customer in customers:
+        await message.answer(
+            bills.render_customer(customer), reply_markup=keyboards.bill_actions_kb(customer)
         )
 
-    for inv in invoices:
-        user = db.get_user(inv.telegram_id)
-        mention = "—"
-        if user:
-            mention = f"@{user['username']}" if user.get("username") else (user.get("full_name") or "—")
-        lines.append(
-            texts.INVOICE_LINE.format(
-                id=inv.id,
-                amount=inv.amount,
-                mention=mention,
-                telegram_id=inv.telegram_id,
-                description=inv.description or "—",
-                due=describe_due(inv.due_at),
-            )
+
+@router.callback_query(F.data.startswith("warn:"))
+async def send_nonpayment_warning(call: CallbackQuery, bot: Bot) -> None:
+    bill = bills.find(call.data.split(":", 1)[1])
+    if bill is None or bill.telegram_id is None:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    try:
+        await bot.send_message(
+            bill.telegram_id, bills.render_warning(bill), reply_markup=keyboards.bill_pay_kb(bill)
         )
-    await message.answer(texts.INVOICES_HEADER + "".join(lines))
+    except Exception:
+        await call.answer(texts.WARNING_NOT_DELIVERED, show_alert=True)
+        return
+
+    bills.mark_warned(bill)
+    await call.answer(texts.WARNING_SENT_TOAST)
+    # Redraw this customer's card so its "last warned" line shows what was just sent.
+    refreshed = bills.by_customer(bills.open_bills(bill.telegram_id))
+    if refreshed:
+        try:
+            await call.message.edit_text(
+                bills.render_customer(refreshed[0]),
+                reply_markup=keyboards.bill_actions_kb(refreshed[0]),
+            )
+        except Exception:
+            pass
+
+
+@router.message(F.text == texts.BTN_TOGGLE_AUTO_APPROVE)
+async def toggle_auto_approve(message: Message) -> None:
+    turning_on = not auto_approve.is_enabled()
+    auto_approve.set_enabled(turning_on)
+    await message.answer(
+        texts.AUTO_APPROVE_ON if turning_on else texts.AUTO_APPROVE_OFF,
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
 
 
 @router.message(F.text == texts.BTN_CREATE_ADMIN)
@@ -612,29 +637,6 @@ async def manual_backup(message: Message, bot: Bot) -> None:
     await message.answer(texts.BACKUP_RUNNING)
     if not await send_backup(bot, targets=[message.from_user.id]):
         await message.answer(texts.BACKUP_FAILED, reply_markup=superadmin_kb(message.from_user.id))
-
-
-@router.message(F.text == texts.BTN_DEBTS)
-async def show_debts(message: Message) -> None:
-    debts = db.list_outstanding_debts()
-    if not debts:
-        await message.answer(texts.NO_DEBTS_AT_ALL)
-        return
-    lines = []
-    for d in debts:
-        user = db.get_user(d["telegram_id"]) if d["telegram_id"] else None
-        mention = "—"
-        if user:
-            mention = f"@{user['username']}" if user.get("username") else (user.get("full_name") or "—")
-        lines.append(
-            texts.DEBT_LINE.format(
-                username=d["username"],
-                amount=d["amount"],
-                mention=mention,
-                telegram_id=d["telegram_id"] or "—",
-            )
-        )
-    await message.answer(texts.DEBTS_HEADER + "".join(lines))
 
 
 @router.message(F.text == texts.BTN_TOGGLE_WEEKLY)
