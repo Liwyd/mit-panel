@@ -1,1 +1,1 @@
-from .env import config
+from .env import config, __version__
