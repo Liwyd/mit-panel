@@ -774,7 +774,7 @@ async def get_bot_settings(admin: dict = Depends(get_current_superadmin)):
     )
 
 
-@router.put("/settings/bot", description="Update top-up bot settings and restart bot", response_model=ResponseModel)
+@router.put("/settings/bot", description="Update top-up bot settings", response_model=ResponseModel)
 async def update_bot_settings(
     payload: SettingsInput,
     admin: dict = Depends(get_current_superadmin),
@@ -786,44 +786,9 @@ async def update_bot_settings(
     if bot_patch:
         update_settings(bot_patch)
 
-    # Sync to .env file so the bot picks up changes on restart
-    env_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
-    env_path = os.path.normpath(env_path)
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            lines = f.readlines()
-
-        env_map = {}
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            if line_stripped and not line_stripped.startswith("#") and "=" in line_stripped:
-                key = line_stripped.split("=", 1)[0]
-                env_map[key] = i
-
-        env_updates = {}
-        if "bot_token" in bot_patch:
-            env_updates["BOT_TOKEN"] = bot_patch["bot_token"]
-        if "bot_superadmin_ids" in bot_patch:
-            env_updates["BOT_SUPERADMIN_IDS"] = bot_patch["bot_superadmin_ids"]
-        if "bot_media_dir" in bot_patch:
-            env_updates["BOT_MEDIA_DIR"] = bot_patch["bot_media_dir"]
-        if "bot_min_gb" in bot_patch:
-            env_updates["BOT_MIN_GB"] = str(bot_patch["bot_min_gb"])
-        if "bot_max_gb" in bot_patch:
-            env_updates["BOT_MAX_GB"] = str(bot_patch["bot_max_gb"])
-
-        for key, value in env_updates.items():
-            if key in env_map:
-                lines[env_map[key]] = f"{key}={value}\n"
-            else:
-                lines.append(f"{key}={value}\n")
-
-        with open(env_path, "w") as f:
-            f.writelines(lines)
-
     logger.info("Bot settings updated")
     return ResponseModel(
         success=True,
-        message="Bot settings updated. Restart the panel to apply changes.",
+        message="Bot settings saved. Restart the panel for changes to take effect.",
         data=get_settings(),
     )
