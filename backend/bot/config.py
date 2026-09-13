@@ -68,9 +68,5 @@ class _BotConfig:
     def warning_scan_interval_seconds(self) -> int:
         return _panel_config.BOT_WARNING_SCAN_INTERVAL
 
-    @property
-    def backup_hour(self) -> int:
-        return _panel_config.BOT_BACKUP_HOUR
-
 
 bot_config = _BotConfig()

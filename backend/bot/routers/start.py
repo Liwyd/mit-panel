@@ -10,9 +10,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import keyboards, texts
+from backend.bot.filters import SuperadminFilter
 from backend.bot.forecast import render
 from backend.bot.nav import cancel_and_show_menu, forget_section, menu_kb_for
 from backend.bot.panels import format_panel_line, safe_get_admins
+from backend.bot.states import CreatePanel
 from backend.bot import db
 from backend.bot.config import bot_config as settings
 
@@ -123,8 +125,12 @@ async def show_forecast(message: Message) -> None:
 
 
 @router.message(F.text == texts.BTN_CREATE_PANEL)
-async def create_panel_stub(message: Message) -> None:
-    await message.answer(texts.CREATE_PANEL_SOON)
+async def create_panel_stub(message: Message, state: FSMContext) -> None:
+    if not await SuperadminFilter()(message):
+        await message.answer(texts.CREATE_PANEL_SOON)
+        return
+    await state.set_state(CreatePanel.name)
+    await message.answer(texts.ASK_PANEL_NAME, reply_markup=keyboards.cancel_kb())
 
 
 @router.message(F.text == texts.BTN_CANCEL)

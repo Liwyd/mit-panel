@@ -3,6 +3,8 @@ and message any bot user directly through the bot."""
 
 from __future__ import annotations
 
+import os
+
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
@@ -101,7 +103,14 @@ async def finish_reject(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.answer(texts.ALREADY_HANDLED, reply_markup=superadmin_kb(message.from_user.id))
         return
 
+    # Clean up receipt file after rejection
     req = db.get_request(request_id)
+    if req and req.receipt_path:
+        try:
+            os.unlink(req.receipt_path)
+        except OSError:
+            pass
+
     try:
         text = (
             texts.REQUEST_REJECTED_ADMIN_WITH_REASON.format(reason=reason)

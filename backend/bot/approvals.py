@@ -6,6 +6,7 @@ move exactly the same money in exactly the same way.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from aiogram import Bot
@@ -45,6 +46,13 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
     # below can run twice for the same receipt, however it was approved.
     if not db.mark_reviewed(request_id, status="approved", reviewed_by=reviewer_id):
         return Outcome(False, texts.ALREADY_HANDLED, alert=True)
+
+    # Clean up receipt file after successful status change
+    if req.receipt_path:
+        try:
+            os.unlink(req.receipt_path)
+        except OSError:
+            pass
 
     customer = req.admin_telegram_id
 

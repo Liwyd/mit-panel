@@ -87,13 +87,15 @@ async def get_amount_gb(message: Message, state: FSMContext) -> None:
 
 
 async def _price_and_invoice(message: Message, state: FSMContext, amount: float) -> None:
-    price_per_gb_raw = db.get_setting("price_per_gb")
-    if not price_per_gb_raw:
+    data = await state.get_data()
+    panel_username = data.get("panel_username", "")
+    price_per_gb = db.get_effective_price(panel_username)
+    if not price_per_gb:
         await state.clear()
         await message.answer(texts.PRICE_NOT_SET, reply_markup=keyboards.main_menu_kb())
         return
 
-    total_price = round(amount * float(price_per_gb_raw))
+    total_price = round(amount * price_per_gb)
     await state.update_data(amount_gb=amount, total_price=total_price)
     await state.set_state(TopUp.awaiting_payment)
     await message.answer(

@@ -167,6 +167,35 @@ async def list_panels() -> list[str]:
         return sorted(p.name for p in panels if p.panel_type == "marzban")
 
 
+async def create_panel(name: str, url: str, username: str, password: str) -> dict:
+    """Test connection and save a new Marzban panel."""
+    with _session() as db:
+        if crud.get_panel_by_name(db, name):
+            raise PanelClientError(f"A panel named '{name}' already exists")
+
+        from backend.services.marzban.api import APIService as MarzbanAPI
+        api = MarzbanAPI(url=url, username=username, password=password)
+        ok = await api.test_connection()
+        if not ok:
+            raise PanelClientError(
+                "Could not connect to Marzban. Check URL and credentials."
+            )
+
+        from backend.schema._input import PanelInput
+        crud.add_panel(
+            db,
+            PanelInput(
+                panel_type="marzban",
+                name=name,
+                url=url,
+                username=username,
+                password=password,
+                is_active=True,
+            ),
+        )
+        return {"name": name, "url": url}
+
+
 async def grant(username: str, added_gb: float) -> dict:
     """Superadmin direct traffic grant."""
     added_bytes = int(added_gb * 1024**3)
@@ -251,17 +280,6 @@ async def change_password(
 
         crud.update_marzban_password(db, admin, new_password)
         return {"telegram_id": admin.telegram_id, "username": admin.username}
-
-
-async def get_all_credentials() -> list[dict]:
-    """All admin usernames + passwords for bulk export."""
-    with _session() as db:
-        admins = crud.get_all_admins(db)
-        return [
-            {"username": a.username, "password": a.marzban_password}
-            for a in admins
-            if a.marzban_password
-        ]
 
 
 async def sync_telegram_ids() -> dict:

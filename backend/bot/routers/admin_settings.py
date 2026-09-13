@@ -1,5 +1,5 @@
 """Superadmin-facing: configure the per-GB price, the card-to-card number, the
-force-join channel, and the bulk-credentials-export PIN."""
+force-join channel, admin creation, panel creation, and per-admin pricing."""
 
 from __future__ import annotations
 
@@ -8,18 +8,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import auto_approve, bills, keyboards, texts
-from backend.bot.backups import send_backup
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
 from backend.bot.states import (
     Broadcast,
+    ClearAdminPrice,
     CreateAdmin,
-    ExportCredentials,
+    CreatePanel,
     GrantTraffic,
     GrantWallet,
     NewInvoice,
-    SetBulkPin,
+    SetAdminPrice,
     SetCardNumber,
     SetForceJoinChannel,
     SetPricePerGb,
@@ -30,6 +30,8 @@ from backend.bot.billing import apply_wallet_to_debts
 from backend.bot.panel_client import PanelClientError as NexraPanelError
 from backend.bot import panel_client as nexra_panel
 from backend.bot.units import bytes_to_gb
+from backend.db.engin import sessionLocal
+from backend.db import crud
 
 router = Router(name="admin_settings")
 router.message.filter(SuperadminFilter())
@@ -148,72 +150,6 @@ async def toggle_force_join(message: Message, bot: Bot) -> None:
     )
     if not currently_on:
         await _report_channel_access(message, bot, channel)
-
-
-@router.message(F.text == texts.BTN_SET_BULK_PIN)
-async def start_set_bulk_pin(message: Message, state: FSMContext) -> None:
-    await state.set_state(SetBulkPin.value)
-    await message.answer(texts.ASK_BULK_PIN_SET, reply_markup=keyboards.cancel_kb())
-
-
-@router.message(SetBulkPin.value, ~F.text.in_(ALL_MENU_TEXTS))
-async def finish_set_bulk_pin(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    pin = (message.text or "").strip()
-    if not pin:
-        await message.answer(texts.INVALID_BULK_PIN, reply_markup=superadmin_kb(message.from_user.id))
-        return
-    db.set_setting("bulk_password_pin", pin)
-    await message.answer(texts.BULK_PIN_SET_CONFIRM, reply_markup=superadmin_kb(message.from_user.id))
-
-
-@router.message(F.text == texts.BTN_EXPORT_ALL_PASSWORDS)
-async def start_export_credentials(message: Message, state: FSMContext) -> None:
-    if not db.get_setting("bulk_password_pin"):
-        await message.answer(texts.BULK_PIN_NOT_SET)
-        return
-    await state.set_state(ExportCredentials.pin)
-    await message.answer(texts.ASK_BULK_PIN_ENTER, reply_markup=keyboards.cancel_kb())
-
-
-@router.message(ExportCredentials.pin, ~F.text.in_(ALL_MENU_TEXTS))
-async def finish_export_credentials(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    entered_pin = (message.text or "").strip()
-    correct_pin = db.get_setting("bulk_password_pin")
-    if not correct_pin or entered_pin != correct_pin:
-        await message.answer(texts.BULK_PIN_WRONG, reply_markup=superadmin_kb(message.from_user.id))
-        return
-
-    try:
-        credentials = await nexra_panel.get_all_credentials()
-    except NexraPanelError as exc:
-        await message.answer(
-            texts.SYNC_FAILED.format(error=exc), reply_markup=superadmin_kb(message.from_user.id)
-        )
-        return
-    if not credentials:
-        await message.answer(texts.NO_CREDENTIALS, reply_markup=superadmin_kb(message.from_user.id))
-        return
-
-    lines = [texts.CREDENTIALS_LIST_HEADER]
-    chunks: list[str] = []
-    current = lines[0]
-    for admin in credentials:
-        line = texts.CREDENTIALS_LINE.format(
-            username=admin["username"],
-            telegram_id=admin.get("telegram_id") or "—",
-            password=admin["marzban_password"],
-        )
-        if len(current) + len(line) > 3500:
-            chunks.append(current)
-            current = ""
-        current += line
-    chunks.append(current)
-
-    for i, chunk in enumerate(chunks):
-        is_last = i == len(chunks) - 1
-        await message.answer(chunk, reply_markup=superadmin_kb(message.from_user.id) if is_last else None)
 
 
 @router.message(F.text == texts.BTN_ALL_PANELS)
@@ -632,13 +568,6 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
             pass
 
 
-@router.message(F.text == texts.BTN_BACKUP)
-async def manual_backup(message: Message, bot: Bot) -> None:
-    await message.answer(texts.BACKUP_RUNNING)
-    if not await send_backup(bot, targets=[message.from_user.id]):
-        await message.answer(texts.BACKUP_FAILED, reply_markup=superadmin_kb(message.from_user.id))
-
-
 @router.message(F.text == texts.BTN_TOGGLE_WEEKLY)
 async def start_toggle_weekly(message: Message, state: FSMContext) -> None:
     await state.set_state(ToggleWeekly.username)
@@ -754,3 +683,179 @@ async def sync_telegram_ids(message: Message) -> None:
     for a in updated:
         text += texts.SYNC_RESULT_LINE.format(username=a["username"], telegram_id=a["telegram_id"])
     await message.answer(text, reply_markup=superadmin_kb(message.from_user.id))
+
+
+# ---- add panel via bot --------------------------------------------------------
+
+@router.message(F.text == texts.BTN_ADD_PANEL)
+async def start_create_panel(message: Message, state: FSMContext) -> None:
+    await state.set_state(CreatePanel.name)
+    await message.answer(texts.ASK_PANEL_NAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(CreatePanel.name, ~F.text.in_(ALL_MENU_TEXTS))
+async def create_panel_name(message: Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer(texts.ASK_PANEL_NAME)
+        return
+    await state.update_data(panel_name=name)
+    await state.set_state(CreatePanel.url)
+    await message.answer(texts.ASK_PANEL_URL, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(CreatePanel.url, ~F.text.in_(ALL_MENU_TEXTS))
+async def create_panel_url(message: Message, state: FSMContext) -> None:
+    url = (message.text or "").strip()
+    if not url:
+        await message.answer(texts.ASK_PANEL_URL)
+        return
+    await state.update_data(panel_url=url)
+    await state.set_state(CreatePanel.username)
+    await message.answer(texts.ASK_PANEL_ADMIN_USER, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(CreatePanel.username, ~F.text.in_(ALL_MENU_TEXTS))
+async def create_panel_username(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_PANEL_ADMIN_USER)
+        return
+    await state.update_data(panel_admin_user=username)
+    await state.set_state(CreatePanel.password)
+    await message.answer(texts.ASK_PANEL_ADMIN_PASS, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(CreatePanel.password, ~F.text.in_(ALL_MENU_TEXTS))
+async def create_panel_finish(message: Message, state: FSMContext) -> None:
+    password = (message.text or "").strip()
+    if not password:
+        await message.answer(texts.ASK_PANEL_ADMIN_PASS)
+        return
+    data = await state.get_data()
+    await state.clear()
+    await message.answer(texts.CREATING_PANEL)
+
+    try:
+        result = await nexra_panel.create_panel(
+            name=data["panel_name"],
+            url=data["panel_url"],
+            username=data["panel_admin_user"],
+            password=password,
+        )
+    except NexraPanelError as exc:
+        await message.answer(
+            texts.PANEL_CREATED_FAIL.format(error=exc),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+
+    await message.answer(
+        texts.PANEL_CREATED_OK.format(name=result["name"]),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+# ---- per-admin pricing -------------------------------------------------------
+
+@router.message(F.text == texts.BTN_SET_ADMIN_PRICE)
+async def start_set_admin_price(message: Message, state: FSMContext) -> None:
+    await state.set_state(SetAdminPrice.admin_username)
+    await message.answer(texts.ASK_ADMIN_FOR_PRICE, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(SetAdminPrice.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_admin_price_username(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_ADMIN_FOR_PRICE)
+        return
+    # Verify admin exists via panel's ORM
+    with sessionLocal() as session:
+        admin_obj = crud.get_admin_by_username(session, username)
+    if not admin_obj:
+        await state.clear()
+        await message.answer(
+            texts.ADMIN_NOT_FOUND.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    current = db.get_admin_price(username)
+    current_text = f"\nقیمت فعلی: {current:,} تومان" if current is not None else ""
+    await state.update_data(admin_price_target=username)
+    await state.set_state(SetAdminPrice.price)
+    await message.answer(
+        texts.ASK_ADMIN_PRICE_VALUE.format(admin=username) + current_text,
+        reply_markup=keyboards.cancel_kb(),
+    )
+
+
+@router.message(SetAdminPrice.price, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_set_admin_price(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().replace(",", "")
+    try:
+        price = float(raw)
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(texts.INVALID_PRICE, reply_markup=superadmin_kb(message.from_user.id))
+        return
+    data = await state.get_data()
+    await state.clear()
+    admin = data["admin_price_target"]
+    if price == 0:
+        db.remove_admin_price(admin)
+        await message.answer(
+            texts.ADMIN_PRICE_CLEARED.format(admin=admin),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+    else:
+        db.set_admin_price(admin, price)
+        await message.answer(
+            texts.ADMIN_PRICE_SET.format(admin=admin, price=int(price)),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+
+
+@router.message(F.text == texts.BTN_LIST_ADMIN_PRICE)
+async def list_admin_prices(message: Message) -> None:
+    with db._connect() as conn:
+        rows = conn.execute(
+            "SELECT admin_username, price_per_gb FROM admin_prices ORDER BY admin_username"
+        ).fetchall()
+    if not rows:
+        await message.answer(texts.ADMIN_PRICES_NONE, reply_markup=superadmin_kb(message.from_user.id))
+        return
+    lines = [texts.ADMIN_PRICE_LINE.format(admin=r["admin_username"], price=int(r["price_per_gb"])) for r in rows]
+    await message.answer(
+        texts.ADMIN_PRICES_LIST.format(lines="\n".join(lines)),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+@router.message(F.text == texts.BTN_CLEAR_ADMIN_PRICE)
+async def start_clear_admin_price(message: Message, state: FSMContext) -> None:
+    await state.set_state(ClearAdminPrice.admin_username)
+    await message.answer(texts.ASK_ADMIN_FOR_PRICE, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ClearAdminPrice.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_clear_admin_price(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_ADMIN_FOR_PRICE)
+        return
+    current = db.get_admin_price(username)
+    if current is None:
+        await state.clear()
+        await message.answer(
+            texts.ADMIN_NOT_FOUND.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    db.remove_admin_price(username)
+    await state.clear()
+    await message.answer(
+        texts.ADMIN_PRICE_CLEARED.format(admin=username),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )

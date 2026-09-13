@@ -159,6 +159,14 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_prices (
+                admin_username TEXT PRIMARY KEY,
+                price_per_gb REAL NOT NULL
+            )
+            """
+        )
 
         # Columns added after the tables above first shipped.
         _ensure_column(conn, "topup_requests", "kind", "TEXT NOT NULL DEFAULT 'topup'")
@@ -322,6 +330,36 @@ def set_setting(key: str, value: str) -> None:
             """,
             (key, value),
         )
+
+
+def get_admin_price(admin_username: str) -> float | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT price_per_gb FROM admin_prices WHERE admin_username = ?",
+            (admin_username,),
+        ).fetchone()
+        return row["price_per_gb"] if row else None
+
+
+def set_admin_price(admin_username: str, price_per_gb: float) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO admin_prices (admin_username, price_per_gb) VALUES (?, ?)",
+            (admin_username, price_per_gb),
+        )
+
+
+def remove_admin_price(admin_username: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM admin_prices WHERE admin_username = ?", (admin_username,))
+
+
+def get_effective_price(admin_username: str) -> float:
+    per_admin = get_admin_price(admin_username)
+    if per_admin is not None:
+        return per_admin
+    raw = get_setting("price_per_gb")
+    return float(raw) if raw else 0.0
 
 
 @dataclass

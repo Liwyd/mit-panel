@@ -79,12 +79,13 @@ def superadmin_menu_kb() -> ReplyKeyboardMarkup:
 def panels_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
         texts.BTN_ALL_PANELS,
-        texts.BTN_GRANT_TRAFFIC,
         texts.BTN_CREATE_ADMIN,
+        texts.BTN_ADD_PANEL,
+        texts.BTN_GRANT_TRAFFIC,
         texts.BTN_SYNC_TELEGRAM_IDS,
-        texts.BTN_EXPORT_ALL_PASSWORDS,
+        texts.BTN_DELETE_TUTORIAL,
         texts.BTN_BACK,
-        layout=(2, 2, 1, 1),
+        layout=(1, 2, 1, 2, 1),
     )
 
 
@@ -123,10 +124,11 @@ def settings_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_TOGGLE_AUTO_APPROVE,
         texts.BTN_SET_PRICE,
         texts.BTN_SET_CARD,
+        texts.BTN_SET_ADMIN_PRICE,
+        texts.BTN_LIST_ADMIN_PRICE,
+        texts.BTN_CLEAR_ADMIN_PRICE,
         texts.BTN_TOGGLE_FORCE_JOIN,
         texts.BTN_SET_FORCE_JOIN_CHANNEL,
-        texts.BTN_SET_BULK_PIN,
-        texts.BTN_BACKUP,
         texts.BTN_BACK,
         layout=(1, 2, 2, 2, 1),
     )

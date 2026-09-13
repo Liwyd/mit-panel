@@ -83,8 +83,24 @@ class CreateAdmin(StatesGroup):
     telegram_id = State()
 
 
+class CreatePanel(StatesGroup):
+    name = State()
+    url = State()
+    username = State()
+    password = State()
+
+
 class SetPricePerGb(StatesGroup):
     value = State()
+
+
+class SetAdminPrice(StatesGroup):
+    admin_username = State()
+    price = State()
+
+
+class ClearAdminPrice(StatesGroup):
+    admin_username = State()
 
 
 class SetCardNumber(StatesGroup):
@@ -98,11 +114,3 @@ class SetForceJoinChannel(StatesGroup):
 class AddTutorial(StatesGroup):
     title = State()
     content = State()
-
-
-class SetBulkPin(StatesGroup):
-    value = State()
-
-
-class ExportCredentials(StatesGroup):
-    pin = State()
