@@ -393,27 +393,11 @@ ENVEOF
 
     # Self-update the CLI script from the freshly pulled repo
     inf "Updating CLI script..."
-    local NEW_CLI
-    NEW_CLI=$(mktemp)
-    # Extract CLI content between CLIEOF markers from the newly pulled install.sh
-    sed -n '/^CLIEOF$/,/^CLIEOF$/{//!p}' "$SRC/install.sh" > "$NEW_CLI" 2>/dev/null
-    if [ -s "$NEW_CLI" ]; then
-        sed -i "s|__SRC__|${SRC}|g" "$NEW_CLI"
-        cat > /usr/local/bin/mit-panel << HDR
-#!/bin/bash
-set -e
-
-SRC="${SRC}"
-cd "\$SRC"
-
-HDR
-        cat "$NEW_CLI" >> /usr/local/bin/mit-panel
-        chmod +x /usr/local/bin/mit-panel
+    if bash "$SRC/install.sh" --install-cli 2>/dev/null; then
         ok "CLI script updated."
     else
-        wn "Could not update CLI script. Edit manually if needed."
+        wn "Could not update CLI script. Run: bash $SRC/install.sh --install-cli"
     fi
-    rm -f "$NEW_CLI"
 
     echo ""
     ok "Update complete!"
@@ -610,4 +594,8 @@ main() {
     done
 }
 
-main "$@"
+if [[ "${1:-}" == "--install-cli" ]]; then
+    install_cli
+else
+    main "$@"
+fi
