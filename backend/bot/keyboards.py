@@ -31,11 +31,12 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
 
 
 def prospect_menu_kb() -> ReplyKeyboardMarkup:
-    """Someone we have no business with yet — no panel, never billed. Only the way
-    in: no wallet, and so no card number, until there is something to pay."""
+    """Shown to users who have no panel yet."""
     kb = ReplyKeyboardBuilder()
+    kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_MY_PANELS)
-    kb.adjust(1)
+    kb.button(text=texts.BTN_MY_REFERRAL)
+    kb.adjust(2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -129,8 +130,9 @@ def settings_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_CLEAR_ADMIN_PRICE,
         texts.BTN_TOGGLE_FORCE_JOIN,
         texts.BTN_SET_FORCE_JOIN_CHANNEL,
+        texts.BTN_MANAGE_REFERRALS,
         texts.BTN_BACK,
-        layout=(1, 2, 2, 2, 1),
+        layout=(1, 2, 2, 2, 1, 1),
     )
 
 
@@ -348,5 +350,44 @@ def tutorials_list_kb(tutorials) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for t in tutorials:
         kb.button(text=t.title, callback_data=f"tutorial:{t.id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+# ---------------------------------------------------------------------------
+# Shop keyboards
+# ---------------------------------------------------------------------------
+
+def shop_amount_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for gb in (5, 10, 20, 50, 100):
+        kb.button(text=f"{gb} GB", callback_data=f"shop_gb:{gb}")
+    kb.button(text="💡 مقدار دلخواه", callback_data="shop_gb:custom")
+    kb.adjust(2, 2, 2, 1)
+    return kb.as_markup()
+
+
+def shop_panel_kb(panels: list[str]) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for p in panels:
+        kb.button(text=p, callback_data=f"shop_panel:{p}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def panel_request_approval_kb(request_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_APPROVE_REQUEST, callback_data=f"panel_req_approve:{request_id}")
+    kb.button(text=texts.BTN_REJECT_REQUEST, callback_data=f"panel_req_reject:{request_id}")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def referral_codes_kb(codes: list[dict]) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for c in codes:
+        status = "فعال" if c["enabled"] else "غیرفعال"
+        label = f"{c['code']} ({status})"
+        kb.button(text=label, callback_data=f"ref_disable:{c['id']}")
     kb.adjust(1)
     return kb.as_markup()

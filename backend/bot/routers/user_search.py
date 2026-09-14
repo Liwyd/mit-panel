@@ -18,8 +18,8 @@ from backend.bot.bills import open_bills
 from backend.bot.nav import ALL_MENU_TEXTS, superadmin_kb
 from backend.bot.states import DeductWallet, NewInvoice, SearchUser
 from backend.bot import db
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 router = Router(name="user_search")
@@ -35,8 +35,8 @@ async def _resolve(query: str) -> tuple[int | None, list[dict]]:
     query = query.strip().lstrip("@")
 
     try:
-        all_admins = await nexra_panel.list_all_admins()
-    except NexraPanelError:
+        all_admins = await panel_client.list_all_admins()
+    except PanelClientError:
         all_admins = []
 
     telegram_id: int | None = None

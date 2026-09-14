@@ -14,8 +14,8 @@ from aiogram import Bot
 from backend.bot import texts
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 # reviewed_by for an approval nobody pressed a button for.
@@ -101,8 +101,8 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
     try:
-        result = await nexra_panel.topup(customer, req.requested_gb, username=req.admin_username)
-    except NexraPanelError as exc:
+        result = await panel_client.topup(customer, req.requested_gb, username=req.admin_username)
+    except PanelClientError as exc:
         db.revert_to_pending(request_id)
         return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
 

@@ -114,3 +114,25 @@ class SetForceJoinChannel(StatesGroup):
 class AddTutorial(StatesGroup):
     title = State()
     content = State()
+
+
+class ShopBuy(StatesGroup):
+    panel = State()
+    amount_gb = State()
+    referral_code = State()
+    receipt = State()
+
+
+class ShopApprove(StatesGroup):
+    reason = State()
+
+
+class ReferralManage(StatesGroup):
+    owner = State()
+    code = State()
+    bonus = State()
+    price = State()
+
+
+class ReferralDisable(StatesGroup):
+    code_id = State()

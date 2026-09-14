@@ -19,6 +19,7 @@ from backend.bot.states import (
     GrantTraffic,
     GrantWallet,
     NewInvoice,
+    ReferralManage,
     SetAdminPrice,
     SetCardNumber,
     SetForceJoinChannel,
@@ -27,8 +28,9 @@ from backend.bot.states import (
 )
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.config import bot_config as settings
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 from backend.db.engin import sessionLocal
 from backend.db import crud
@@ -155,8 +157,8 @@ async def toggle_force_join(message: Message, bot: Bot) -> None:
 @router.message(F.text == texts.BTN_ALL_PANELS)
 async def list_all_panels(message: Message) -> None:
     try:
-        admins = await nexra_panel.list_all_admins()
-    except NexraPanelError as exc:
+        admins = await panel_client.list_all_admins()
+    except PanelClientError as exc:
         await message.answer(texts.SYNC_FAILED.format(error=exc))
         return
     if not admins:
@@ -219,8 +221,8 @@ async def finish_grant(message: Message, state: FSMContext, bot: Bot) -> None:
     username = data["grant_username"]
 
     try:
-        result = await nexra_panel.grant(username, amount)
-    except NexraPanelError as exc:
+        result = await panel_client.grant(username, amount)
+    except PanelClientError as exc:
         await message.answer(
             texts.GRANT_FAILED.format(error=exc), reply_markup=superadmin_kb(message.from_user.id)
         )
@@ -423,8 +425,8 @@ async def create_admin_password(message: Message, state: FSMContext) -> None:
     await state.update_data(new_password=password)
 
     try:
-        panels = await nexra_panel.list_panels()
-    except NexraPanelError as exc:
+        panels = await panel_client.list_panels()
+    except PanelClientError as exc:
         await state.clear()
         await message.answer(
             texts.CREATE_ADMIN_FAILED.format(error=exc),
@@ -523,7 +525,7 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
     await message.answer(texts.CREATING_ADMIN)
 
     try:
-        result = await nexra_panel.create_admin(
+        result = await panel_client.create_admin(
             username=data["new_username"],
             password=data["new_password"],
             panel=data["new_panel"],
@@ -531,7 +533,7 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
             expiry_days=data["new_expiry"],
             telegram_id=target_id,
         )
-    except NexraPanelError as exc:
+    except PanelClientError as exc:
         await message.answer(
             texts.CREATE_ADMIN_FAILED.format(error=exc),
             reply_markup=superadmin_kb(message.from_user.id),
@@ -539,13 +541,18 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
         return
 
     expiry = result.get("expiry_date")
+    panel_url = settings.panel_link_url
+    success_text = texts.CREATE_ADMIN_SUCCESS.format(
+        username=data["new_username"],
+        password=data["new_password"],
+        traffic_gb=data["new_traffic"],
+        expiry=expiry[:10] if expiry else "بدون انقضا",
+    )
+    link_text = texts.PANEL_LINK_INFO.format(
+        url=panel_url, username=data["new_username"], password=data["new_password"]
+    )
     await message.answer(
-        texts.CREATE_ADMIN_SUCCESS.format(
-            username=data["new_username"],
-            password=data["new_password"],
-            traffic_gb=data["new_traffic"],
-            expiry=expiry[:10] if expiry else "بدون انقضا",
-        ),
+        success_text + "\n\n" + link_text,
         reply_markup=superadmin_kb(message.from_user.id),
     )
 
@@ -555,15 +562,7 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
         db.ensure_user(target_id)
         db.set_user_linked(target_id, True)
         try:
-            await bot.send_message(
-                target_id,
-                texts.CREATE_ADMIN_SUCCESS.format(
-                    username=data["new_username"],
-                    password=data["new_password"],
-                    traffic_gb=data["new_traffic"],
-                    expiry=expiry[:10] if expiry else "بدون انقضا",
-                ),
-            )
+            await bot.send_message(target_id, success_text + "\n\n" + link_text)
         except Exception:
             pass
 
@@ -667,8 +666,8 @@ async def finish_broadcast(message: Message, state: FSMContext, bot: Bot) -> Non
 async def sync_telegram_ids(message: Message) -> None:
     await message.answer(texts.SYNC_RUNNING)
     try:
-        result = await nexra_panel.sync_telegram_ids()
-    except NexraPanelError as exc:
+        result = await panel_client.sync_telegram_ids()
+    except PanelClientError as exc:
         await message.answer(
             texts.SYNC_FAILED.format(error=exc), reply_markup=superadmin_kb(message.from_user.id)
         )
@@ -737,13 +736,13 @@ async def create_panel_finish(message: Message, state: FSMContext) -> None:
     await message.answer(texts.CREATING_PANEL)
 
     try:
-        result = await nexra_panel.create_panel(
+        result = await panel_client.create_panel(
             name=data["panel_name"],
             url=data["panel_url"],
             username=data["panel_admin_user"],
             password=password,
         )
-    except NexraPanelError as exc:
+    except PanelClientError as exc:
         await message.answer(
             texts.PANEL_CREATED_FAIL.format(error=exc),
             reply_markup=superadmin_kb(message.from_user.id),
@@ -857,5 +856,103 @@ async def finish_clear_admin_price(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         texts.ADMIN_PRICE_CLEARED.format(admin=username),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Referral code management
+# ---------------------------------------------------------------------------
+
+@router.message(F.text == texts.BTN_MANAGE_REFERRALS)
+async def start_manage_referrals(message: Message) -> None:
+    codes = db.list_referral_codes()
+    if not codes:
+        await message.answer(
+            texts.REFERRAL_CODES_NONE,
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    lines = [
+        texts.REFERRAL_CODE_LINE.format(
+            code=c["code"],
+            owner=c["owner_telegram_id"],
+            bonus=c["bonus_percent"],
+            price=int(c["price_per_gb"]),
+            status="فعال" if c["enabled"] else "غیرفعال",
+        )
+        for c in codes
+    ]
+    await message.answer(
+        texts.REFERRAL_CODES_HEADER + "\n".join(lines),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+@router.message(F.text == texts.BTN_ADD_REFERRAL_CODE)
+async def start_add_referral(message: Message, state: FSMContext) -> None:
+    await state.set_state(ReferralManage.owner)
+    await message.answer(texts.REFERRAL_ASK_OWNER, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ReferralManage.owner, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_referral_owner(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.lstrip("-").isdigit():
+        await message.answer(texts.REFERRAL_ASK_OWNER)
+        return
+    await state.update_data(ref_owner=int(raw))
+    await state.set_state(ReferralManage.code)
+    await message.answer(texts.REFERRAL_ASK_CODE_STR, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ReferralManage.code, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_referral_code_str(message: Message, state: FSMContext) -> None:
+    code = (message.text or "").strip()
+    if not code:
+        await message.answer(texts.REFERRAL_ASK_CODE_STR)
+        return
+    await state.update_data(ref_code=code)
+    await state.set_state(ReferralManage.bonus)
+    await message.answer(texts.REFERRAL_ASK_BONUS, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ReferralManage.bonus, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_referral_bonus(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().replace("%", "")
+    try:
+        bonus = float(raw)
+        if bonus <= 0 or bonus > 100:
+            raise ValueError
+    except ValueError:
+        await message.answer(texts.REFERRAL_ASK_BONUS)
+        return
+    await state.update_data(ref_bonus=bonus)
+    await state.set_state(ReferralManage.price)
+    await message.answer(texts.REFERRAL_ASK_PRICE, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ReferralManage.price, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_referral_price(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().replace(",", "")
+    try:
+        price = float(raw)
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(texts.REFERRAL_ASK_PRICE)
+        return
+
+    data = await state.get_data()
+    await state.clear()
+
+    db.create_referral_code(
+        telegram_id=data["ref_owner"],
+        code=data["ref_code"],
+        bonus_percent=data["ref_bonus"],
+        price_per_gb=price,
+    )
+    await message.answer(
+        texts.REFERRAL_CREATED,
         reply_markup=superadmin_kb(message.from_user.id),
     )

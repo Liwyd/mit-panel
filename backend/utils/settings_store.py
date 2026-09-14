@@ -26,6 +26,7 @@ DEFAULTS = {
     "bot_media_dir": "data/bot_media",
     "bot_min_gb": 200.0,
     "bot_max_gb": 10000.0,
+    "bot_panel_link_url": "https://wunli.draking.ir:4000/panpan/",
 }
 
 

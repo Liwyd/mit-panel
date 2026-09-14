@@ -19,8 +19,8 @@ from backend.bot.panels import choose_panel, owned_panel
 from backend.bot.states import TopUp
 from backend.bot import db
 from backend.bot.config import bot_config as settings
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 router = Router(name="topup")
@@ -138,8 +138,8 @@ async def pay_from_wallet(call: CallbackQuery, state: FSMContext, bot: Bot) -> N
         return
 
     try:
-        result = await nexra_panel.topup(telegram_id, gb, username=username)
-    except NexraPanelError as exc:
+        result = await panel_client.topup(telegram_id, gb, username=username)
+    except PanelClientError as exc:
         db.add_wallet_balance(telegram_id, price)  # refund
         await call.answer()
         await call.message.answer(
@@ -183,8 +183,8 @@ async def pay_weekly_credit(call: CallbackQuery, state: FSMContext, bot: Bot) ->
     # Credit is the whole point here: the traffic lands now and is billed at the
     # end of the week, so there's no receipt or approval step.
     try:
-        result = await nexra_panel.topup(telegram_id, gb, username=username)
-    except NexraPanelError as exc:
+        result = await panel_client.topup(telegram_id, gb, username=username)
+    except PanelClientError as exc:
         await call.answer()
         await call.message.answer(
             texts.WEEKLY_TOPUP_FAILED.format(error=exc), reply_markup=keyboards.main_menu_kb()

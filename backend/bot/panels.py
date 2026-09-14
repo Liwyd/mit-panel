@@ -13,7 +13,7 @@ import logging
 
 from backend.bot import keyboards, texts
 from backend.bot import db
-from backend.bot import panel_client as nexra_panel
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def safe_get_admins(message: Message) -> list[dict] | None:
     and the user is told what happened rather than being met with silence.
     """
     try:
-        admins = await nexra_panel.get_admins(message.from_user.id)
+        admins = await panel_client.get_admins(message.from_user.id)
     except Exception as exc:
         logger.error(f"panel lookup failed for {message.from_user.id}: {exc}")
         await message.answer(texts.PANEL_UNREACHABLE)
@@ -55,7 +55,7 @@ def format_panel_line(admin: dict) -> str:
 async def owned_panel(telegram_id: int, username: str) -> dict | None:
     """Fetch one panel only if this Telegram account actually owns it — callback
     data is user-supplied, so it can't be trusted to name their own panel."""
-    admins = await nexra_panel.get_admins(telegram_id)
+    admins = await panel_client.get_admins(telegram_id)
     return next((a for a in admins if a["username"] == username), None)
 
 

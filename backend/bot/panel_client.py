@@ -1,7 +1,6 @@
 """Adapter that wraps the panel's CRUD/service layer for the bot.
 
-Replaces the HTTP-based NexraPanelClient with direct Python function calls.
-All functions return dicts matching the original NexraPanelClient interface
+All functions return dicts matching the expected interface
 so the bot's existing code requires minimal changes.
 """
 
@@ -144,8 +143,8 @@ async def create_admin(
             marzban_inbounds=json.dumps(inbounds) if inbounds else None,
             marzban_password=password,
             traffic=int(traffic_gb * 1024**3),
-            update_return_traffic=False,
-            delete_return_traffic=False,
+            update_return_traffic=True,
+            delete_return_traffic=True,
             expiry_date=expiry_date,
             telegram_id=telegram_id,
         )
@@ -323,3 +322,87 @@ async def sync_telegram_ids() -> dict:
                     skipped.append(admin.username)
 
     return {"updated": updated, "skipped_conflicts": skipped}
+
+
+async def create_admin_for_shop(
+    username: str,
+    password: str,
+    panel: str,
+    traffic_gb: float,
+    telegram_id: int,
+) -> dict:
+    """Create a new admin for a shop purchase — return traffic enabled, no expiry."""
+    with _session() as db:
+        if crud.get_admin_by_username(db, username):
+            raise PanelClientError("An admin with that username already exists")
+
+        panel_obj = crud.get_panel_by_name(db, panel)
+        if not panel_obj:
+            raise PanelClientError(f"No panel named '{panel}'")
+        if panel_obj.panel_type != "marzban":
+            raise PanelClientError("Only Marzban panels can be provisioned here")
+
+        from backend.services.marzban.api import APIService as MarzbanAPI
+
+        sudo_api = MarzbanAPI(
+            url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
+        )
+
+        try:
+            marzban_status, detail = await sudo_api.create_admin(
+                username, password, telegram_id
+            )
+        except Exception as e:
+            raise PanelClientError(f"Could not reach Marzban: {e}")
+
+        if marzban_status != 200:
+            raise PanelClientError(
+                f"Marzban refused to create the admin (status {marzban_status}). {detail}"
+            )
+
+        try:
+            inbounds = await sudo_api.get_inbounds()
+        except Exception:
+            inbounds = {}
+
+        from backend.schema._input import AdminInput
+
+        admin_input = AdminInput(
+            username=username,
+            password=password,
+            is_active=True,
+            panel=panel,
+            inbound_id=None,
+            flow=None,
+            marzban_inbounds=json.dumps(inbounds) if inbounds else None,
+            marzban_password=password,
+            traffic=int(traffic_gb * 1024**3),
+            update_return_traffic=True,
+            delete_return_traffic=True,
+            expiry_date=None,
+            telegram_id=telegram_id,
+        )
+        crud.add_admin(db, admin_input)
+
+        return {
+            "username": username,
+            "password": password,
+            "panel": panel,
+            "traffic_gb": traffic_gb,
+        }
+
+
+async def topup_by_username(username: str, added_gb: float) -> dict:
+    """Credit traffic to an admin by Marzban username (used for referral bonus)."""
+    added_bytes = int(added_gb * 1024**3)
+    with _session() as db:
+        admin = crud.get_admin_by_username(db, username)
+        if not admin:
+            raise PanelClientError("No admin with that username")
+        crud.grant_admin_traffic(db, admin, added_bytes)
+        return {
+            "username": admin.username,
+            "telegram_id": admin.telegram_id,
+            "new_traffic_bytes": admin.traffic,
+            "new_initial_traffic_bytes": admin.initial_traffic,
+        }

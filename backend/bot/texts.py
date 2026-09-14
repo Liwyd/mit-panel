@@ -627,3 +627,68 @@ AUTO_APPROVE_FAILED_NOTICE = (
     "⚠️ تأیید خودکار رسید #{id} انجام نشد و برای بررسی دستی باقی ماند.\n"
     "علت: {reason}"
 )
+
+
+# --- shop mode ---
+SHOP_WELCOME = "🛒 فروشگاه MIT Panel\n\nیکی از پلن‌های زیر را انتخاب کنید:"
+SHOP_ASK_TRAFFIC = "📦 چند گیگابایت ترافیک نیاز دارید؟"
+SHOP_CUSTOM_AMOUNT = "💡 مقدار دلخواه را وارد کنید (GB):"
+SHOP_ASK_PANEL = "🖥 پنل مورد نظر را انتخاب کنید:"
+SHOP_PANEL_INFO = "🖥 پنل: {panel}\n📦 ترافیک: {gb} GB\n💰 قیمت: {price:,} تومان"
+SHOP_CARD_INSTRUCTIONS = (
+    "💳 کارت بانکی:\n<code>{card}</code>\n\n"
+    "مبلغ {price:,} تومان را به این کارت واریز کنید\n"
+    "و سپس رسید پرداخت را ارسال نمایید."
+)
+SHOP_RECEIPT_PROMPT = "🧾 رسید پرداخت را ارسال کنید:"
+SHOP_REQUEST_SUBMITTED = "✅ درخواست شما ثبت شد و در انتظار بررسی مدیریت است."
+SHOP_REQUEST_APPROVED = (
+    "🎉 پنل شما آماده است!\n\n"
+    "🔗 لینک پنل: {url}\n"
+    "👤 نام کاربری: <code>{username}</code>\n"
+    "🔑 رمز عبور: <code>{password}</code>"
+)
+SHOP_REQUEST_REJECTED = "❌ درخواست شما رد شد.\nعلت: {reason}"
+SHOP_ALREADY_PENDING = "⚠️ شما یک درخواست در حال بررسی دارید. لطفاً منتظر بمانید."
+SHOP_PANELS_HEADER = "🖥 پنل‌های موجود:"
+
+# --- referral ---
+REFERRAL_ASK_CODE = "🔑 کد رفرال را وارد کنید (یا رد شید):"
+REFERRAL_INVALID = "❌ کد رفرال نامعتبر یا غیرفعال است."
+REFERRAL_APPLIED = "✅ کد رفرال اعمال شد! قیمت ویژه: {price:,} تومان/GB"
+REFERRAL_BONUS_NOTIFY = "🎉 {gb} GB ترافیک رایگان از رفرال {user} به پنل شما اضافه شد!"
+REFERRAL_CODE_SET = "✅ کد رفرال «{code}» برای شما ایجاد شد.\nاین کد را با کاربران خود به اشتراک بگذارید."
+REFERRAL_CODE_EXISTS = "⚠️ شما از قبل کد رفرال دارید: {code}"
+REFERRAL_NO_CODE = "ℹ️ شما هنوز کد رفرال ندارید."
+REFERRAL_CODES_HEADER = "🔑 کدهای رفرال:\n\n"
+REFERRAL_CODE_LINE = "• کد: {code} | مالک: {owner} | بونوس: {bonus}% | قیمت: {price:,} | وضعیت: {status}"
+REFERRAL_CODES_NONE = "ℹ️ هیچ کد رفرالی ثبت نشده."
+REFERRAL_ASK_OWNER = "👤 آیدی عددی مالک رفرال را وارد کنید:"
+REFERRAL_ASK_CODE_STR = "🔑 کد رفرال را وارد کنید:"
+REFERRAL_ASK_BONUS = "📊 درصد بونوس رفرال را وارد کنید (مثلاً 12):"
+REFERRAL_ASK_PRICE = "💰 قیمت هر GB برای کاربران رفرالی را وارد کنید (تومان):"
+REFERRAL_CREATED = "✅ کد رفرال ایجاد شد."
+
+# --- panel link ---
+PANEL_LINK_INFO = (
+    "🔗 لینک پنل: {url}\n"
+    "👤 نام کاربری: <code>{username}</code>\n"
+    "🔑 رمز عبور: <code>{password}</code>"
+)
+
+# --- panel request approval (superadmin) ---
+PANEL_REQUEST_HEADER = "🛒 درخواست پنل جدید از @{username} (ID: <code>{telegram_id}</code>)"
+PANEL_REQUEST_INFO = "🖥 پنل: {panel}\n📦 ترافیک: {gb} GB\n💰 مبلغ: {price:,} تومان"
+PANEL_REQUEST_APPROVED = "✅ درخواست پنل تأیید و ایجاد شد."
+PANEL_REQUEST_REJECTED = "❌ درخواست پنل رد شد."
+
+# --- button labels ---
+BTN_SKIP = "⏭ رد شدن"
+BTN_MY_REFERRAL = "🔑 کد رفرال من"
+BTN_REQUEST_PANEL = "🛒 درخواست پنل"
+BTN_MANAGE_REFERRALS = "🔑 مدیریت رفرال‌ها"
+BTN_ADD_REFERRAL_CODE = "➕ افزودن کد رفرال"
+BTN_LIST_REFERRAL_CODES = "📋 لیست کدهای رفرال"
+BTN_DISABLE_REFERRAL = "🚫 غیرفعال کردن کد"
+BTN_APPROVE_REQUEST = "✅ تأیید"
+BTN_REJECT_REQUEST = "❌ رد"

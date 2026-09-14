@@ -67,6 +67,15 @@ ALL_MENU_TEXTS = {
     texts.BTN_SEARCH_USER,
     texts.BTN_PARTNERSHIP,
     texts.BTN_WALLET_CUSTOM,
+    texts.BTN_SKIP,
+    texts.BTN_MY_REFERRAL,
+    texts.BTN_REQUEST_PANEL,
+    texts.BTN_MANAGE_REFERRALS,
+    texts.BTN_ADD_REFERRAL_CODE,
+    texts.BTN_LIST_REFERRAL_CODES,
+    texts.BTN_DISABLE_REFERRAL,
+    texts.BTN_APPROVE_REQUEST,
+    texts.BTN_REJECT_REQUEST,
 }
 
 

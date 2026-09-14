@@ -17,8 +17,8 @@ from backend.bot import keyboards, texts
 from backend.bot.forecast import today_stamp
 from backend.bot import db
 from backend.bot.config import bot_config as settings
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,8 @@ def bucket_for(remaining_gb: float) -> tuple[str, str] | None:
 async def scan_once(bot: Bot) -> int:
     """One pass over every panel. Returns how many warnings were sent."""
     try:
-        admins = await nexra_panel.list_all_admins()
-    except NexraPanelError as exc:
+        admins = await panel_client.list_all_admins()
+    except PanelClientError as exc:
         logger.warning(f"traffic warning scan skipped: {exc}")
         return 0
 

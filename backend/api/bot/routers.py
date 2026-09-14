@@ -218,7 +218,7 @@ async def grant_admin_traffic(
 
 @router.post(
     "/admin/change-password",
-    description="Change an admin's password directly in Marzban, then mirror it in Nexra",
+    description="Change an admin's password directly in Marzban, then mirror it in MIT Panel",
 )
 async def change_admin_marzban_password(
     payload: BotChangePasswordInput,

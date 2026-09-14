@@ -35,12 +35,8 @@ class _BotConfig:
         ]
 
     @property
-    def nexra_panel_api_url(self) -> str:
-        return ""
-
-    @property
-    def nexra_panel_bot_api_key(self) -> str:
-        return ""
+    def panel_link_url(self) -> str:
+        return get_settings().get("bot_panel_link_url", "https://wunli.draking.ir:4000/panpan/")
 
     @property
     def sqlite_path(self) -> str:

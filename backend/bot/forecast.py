@@ -21,7 +21,7 @@ from aiogram import Bot
 from backend.bot import keyboards, texts
 from backend.bot import db
 from backend.bot.config import bot_config as settings
-from backend.bot import panel_client as nexra_panel
+from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ def render(username: str, remaining_bytes: int) -> tuple[str, bool] | None:
 async def send_daily_forecasts(bot: Bot) -> int:
     """Push every linked admin their panels' forecast."""
     try:
-        admins = await nexra_panel.list_all_admins()
+        admins = await panel_client.list_all_admins()
     except Exception as exc:
         logger.warning(f"forecast run skipped: {exc}")
         return 0

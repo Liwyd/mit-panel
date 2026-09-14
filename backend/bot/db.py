@@ -168,6 +168,53 @@ def init_db() -> None:
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS panel_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                username TEXT,
+                panel_name TEXT NOT NULL,
+                traffic_gb REAL NOT NULL,
+                receipt_path TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                reviewed_at TEXT,
+                reviewed_by INTEGER,
+                referral_code_id INTEGER
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS referral_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_telegram_id INTEGER NOT NULL,
+                code TEXT NOT NULL UNIQUE,
+                bonus_percent REAL NOT NULL DEFAULT 12.0,
+                price_per_gb REAL NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS referral_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code_id INTEGER NOT NULL,
+                buyer_telegram_id INTEGER NOT NULL,
+                buyer_username TEXT,
+                traffic_gb REAL NOT NULL,
+                bonus_granted_gb REAL NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
         # Columns added after the tables above first shipped.
         _ensure_column(conn, "topup_requests", "kind", "TEXT NOT NULL DEFAULT 'topup'")
         _ensure_column(conn, "bot_users", "is_linked", "INTEGER NOT NULL DEFAULT 0")
@@ -851,3 +898,104 @@ def get_tutorial(tutorial_id: int) -> Tutorial | None:
             "SELECT * FROM tutorials WHERE id = ?", (tutorial_id,)
         ).fetchone()
         return Tutorial(**dict(row)) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Panel requests (shop purchases)
+# ---------------------------------------------------------------------------
+
+def create_panel_request(telegram_id: int, panel_name: str, traffic_gb: float, receipt_path: str, referral_code_id: int | None = None) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO panel_requests (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id) VALUES (?, ?, ?, ?, ?)",
+            (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id),
+        )
+        return cur.lastrowid
+
+
+def get_panel_request(request_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM panel_requests WHERE id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_pending_panel_requests() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM panel_requests WHERE status = 'pending' ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_panel_request_reviewed(
+    request_id: int, status: str, reviewed_by: int, reason: str | None = None
+) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE panel_requests SET status = ?, reject_reason = ?, reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status = 'pending'",
+            (status, reason, reviewed_by, request_id),
+        )
+        return cur.rowcount == 1
+
+
+# ---------------------------------------------------------------------------
+# Referral codes
+# ---------------------------------------------------------------------------
+
+def get_referral_code(code_str: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM referral_codes WHERE code = ? AND enabled = 1", (code_str,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_referral_code_by_owner(telegram_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM referral_codes WHERE owner_telegram_id = ? AND enabled = 1",
+            (telegram_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def create_referral_code(telegram_id: int, code: str, bonus_percent: float, price_per_gb: float) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO referral_codes (owner_telegram_id, code, bonus_percent, price_per_gb) VALUES (?, ?, ?, ?)",
+            (telegram_id, code, bonus_percent, price_per_gb),
+        )
+        return cur.lastrowid
+
+
+def disable_referral_code(code_id: int) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE referral_codes SET enabled = 0 WHERE id = ?", (code_id,)
+        )
+        return cur.rowcount == 1
+
+
+def list_referral_codes() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute("SELECT * FROM referral_codes ORDER BY created_at").fetchall()
+        return [dict(r) for r in rows]
+
+
+def create_referral_usage(
+    code_id: int, buyer_tg_id: int, buyer_username: str | None, traffic_gb: float, bonus_gb: float
+) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO referral_usage (code_id, buyer_telegram_id, buyer_username, traffic_gb, bonus_granted_gb) VALUES (?, ?, ?, ?, ?)",
+            (code_id, buyer_tg_id, buyer_username, traffic_gb, bonus_gb),
+        )
+        return cur.lastrowid
+
+
+def get_referral_owner(code_id: int) -> int | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT owner_telegram_id FROM referral_codes WHERE id = ?", (code_id,)
+        ).fetchone()
+        return row["owner_telegram_id"] if row else None

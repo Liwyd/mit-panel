@@ -2,7 +2,7 @@
 
 The admin must prove they know the current password first — the panel API
 verifies it by authenticating to Marzban as that admin, then performs the change
-with its sudo credentials and mirrors it into Nexra. The panel's own service
+with its sudo credentials. The panel's own service
 account is rejected server-side, so it can never be changed from here.
 """
 
@@ -17,8 +17,8 @@ from backend.bot.nav import ALL_MENU_TEXTS
 from backend.bot.panels import choose_panel, owned_panel
 from backend.bot.states import ChangePassword
 from backend.bot.config import bot_config as settings
-from backend.bot.panel_client import PanelClientError as NexraPanelError
-from backend.bot import panel_client as nexra_panel
+from backend.bot.panel_client import PanelClientError
+from backend.bot import panel_client
 
 router = Router(name="change_password")
 
@@ -70,13 +70,13 @@ async def get_new_password(message: Message, state: FSMContext, bot: Bot) -> Non
     username = data["panel_username"]
 
     try:
-        await nexra_panel.change_password(
+        await panel_client.change_password(
             telegram_id=message.from_user.id,
             current_password=data["current_password"],
             new_password=new_password,
             username=username,
         )
-    except NexraPanelError as exc:
+    except PanelClientError as exc:
         # 403 from the panel means either a wrong current password or the
         # protected service account; both should stop here without changing anything.
         text = (
