@@ -17,6 +17,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import db, keyboards, texts
+from backend.bot import panel_client
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
@@ -54,6 +55,15 @@ def _resolve_price(panel_name: str, referral_code_id: int | None = None) -> floa
 async def request_panel_start(message: Message, state: FSMContext) -> None:
     # Block superadmins — they use the admin flow
     if message.from_user.id in settings.superadmin_id_list:
+        return
+
+    # 1 panel per account limit
+    try:
+        existing_panels = await panel_client.get_admins(message.from_user.id)
+    except Exception:
+        existing_panels = []
+    if existing_panels:
+        await message.answer(texts.SHOP_ALREADY_HAS_PANEL)
         return
 
     # Check for existing pending request
@@ -269,8 +279,12 @@ async def _show_invoice(message: Message, state: FSMContext) -> None:
 
 # ── 6. Receipt received ──────────────────────────────────────────────────
 
-@router.message(ShopBuy.receipt, F.photo)
+@router.message(ShopBuy.receipt)
 async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
+    if not message.photo:
+        await message.answer(texts.NOT_A_PHOTO)
+        return
+
     data = await state.get_data()
     await state.clear()
 

@@ -126,11 +126,22 @@ async def show_forecast(message: Message) -> None:
 
 @router.message(F.text == texts.BTN_CREATE_PANEL)
 async def create_panel_stub(message: Message, state: FSMContext) -> None:
-    if not await SuperadminFilter()(message):
-        await message.answer(texts.CREATE_PANEL_SOON)
+    if await SuperadminFilter()(message):
+        await state.set_state(CreatePanel.name)
+        await message.answer(texts.ASK_PANEL_NAME, reply_markup=keyboards.cancel_kb())
         return
-    await state.set_state(CreatePanel.name)
-    await message.answer(texts.ASK_PANEL_NAME, reply_markup=keyboards.cancel_kb())
+    # Regular admin — redirect to shop flow (1 panel per account)
+    from backend.bot import panel_client
+    try:
+        admins = await panel_client.get_admins(message.from_user.id)
+    except Exception:
+        admins = []
+    if admins:
+        await message.answer(texts.SHOP_ALREADY_HAS_PANEL)
+        return
+    # Redirect to shop: trigger the same flow as BTN_REQUEST_PANEL
+    from backend.bot.routers.shop import request_panel_start
+    await request_panel_start(message, state)
 
 
 @router.message(F.text == texts.BTN_CANCEL)

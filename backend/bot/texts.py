@@ -653,6 +653,7 @@ SHOP_REQUEST_APPROVED = (
 )
 SHOP_REQUEST_REJECTED = "❌ درخواست شما رد شد.\nعلت: {reason}"
 SHOP_ALREADY_PENDING = "⚠️ شما یک درخواست در حال بررسی دارید. لطفاً منتظر بمانید."
+SHOP_ALREADY_HAS_PANEL = "⚠️ شما از قبل یک پنل دارید. هر اکانت تلگرام فقط امکان داشتن یک پنل را دارد."
 SHOP_PANELS_HEADER = "🖥 پنل‌های موجود:"
 
 # --- referral ---
