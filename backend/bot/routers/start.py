@@ -10,10 +10,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import keyboards, texts
+from backend.bot import panel_client
 from backend.bot.filters import SuperadminFilter
 from backend.bot.forecast import render
 from backend.bot.nav import cancel_and_show_menu, forget_section, menu_kb_for
-from backend.bot.panels import format_panel_line, safe_get_admins
+from backend.bot.panels import format_panel_line, format_referral_panel_line, safe_get_admins
 from backend.bot.states import CreatePanel
 from backend.bot import db
 from backend.bot.config import bot_config as settings
@@ -81,7 +82,14 @@ async def my_panels(message: Message) -> None:
     admins = await safe_get_admins(message)
     if admins is None:
         return
-    if not admins:
+
+    # Fetch referral panels (purchased via this user's referral codes)
+    try:
+        referral_panels = await panel_client.get_referral_panels(message.from_user.id)
+    except Exception:
+        referral_panels = []
+
+    if not admins and not referral_panels:
         # Same button for everyone: with no panel it becomes the activation
         # screen, carrying the numeric ID they need to forward to support.
         await message.answer(
@@ -89,8 +97,13 @@ async def my_panels(message: Message) -> None:
             reply_markup=keyboards.panel_request_kb(),
         )
         return
-    text = texts.PANELS_LIST_HEADER + "".join(format_panel_line(a) for a in admins)
-    await message.answer(text)
+
+    parts: list[str] = []
+    if admins:
+        parts.append(texts.PANELS_LIST_HEADER + "".join(format_panel_line(a) for a in admins))
+    if referral_panels:
+        parts.append(texts.REFERRAL_PANELS_HEADER + "".join(format_referral_panel_line(p) for p in referral_panels))
+    await message.answer("".join(parts))
 
 
 @router.message(F.text == texts.BTN_BACK)

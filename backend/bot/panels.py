@@ -52,6 +52,16 @@ def format_panel_line(admin: dict) -> str:
     )
 
 
+def format_referral_panel_line(panel: dict) -> str:
+    return texts.REFERRAL_PANEL_LINE.format(
+        username=panel["username"],
+        remaining_gb=bytes_to_gb(panel.get("traffic")),
+        initial_gb=bytes_to_gb(panel.get("initial_traffic")),
+        code=panel.get("referral_code", "—"),
+        buyer_id=panel.get("buyer_tg_id", "—"),
+    )
+
+
 async def owned_panel(telegram_id: int, username: str) -> dict | None:
     """Fetch one panel only if this Telegram account actually owns it — callback
     data is user-supplied, so it can't be trusted to name their own panel."""

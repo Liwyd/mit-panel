@@ -1011,3 +1011,20 @@ def get_referral_owner(code_id: int) -> int | None:
             "SELECT owner_telegram_id FROM referral_codes WHERE id = ?", (code_id,)
         ).fetchone()
         return row["owner_telegram_id"] if row else None
+
+
+def get_referral_panels(owner_telegram_id: int) -> list[dict]:
+    """Return all panels purchased via this owner's referral codes."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT ru.buyer_username, ru.buyer_telegram_id, ru.traffic_gb,
+                   ru.bonus_granted_gb, ru.created_at, rc.code
+            FROM referral_usage ru
+            JOIN referral_codes rc ON rc.id = ru.code_id
+            WHERE rc.owner_telegram_id = ?
+            ORDER BY ru.created_at DESC
+            """,
+            (owner_telegram_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]

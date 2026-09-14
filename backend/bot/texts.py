@@ -259,6 +259,13 @@ PANEL_LINE = (
 )
 PANEL_EXPIRY_LINE = "📅 انقضا: {expiry}"
 PANEL_NO_EXPIRY = "📅 بدون تاریخ انقضا"
+REFERRAL_PANELS_HEADER = "\n\n🎁 پنل‌های رفرال:\n\n"
+REFERRAL_PANEL_LINE = (
+    "▫️ <b>{username}</b> (🎁 رفرال)\n"
+    "   📊 موجودی: {remaining_gb:.2f} / {initial_gb:.2f} گیگابایت\n"
+    "   🔗 کد: {code}\n"
+    "   👤 خریدار: {buyer_id}\n"
+)
 CHOOSE_PANEL = "▪️ لطفاً پنل موردنظر را انتخاب نمایید:"
 
 WARN_100 = (

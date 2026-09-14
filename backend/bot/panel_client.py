@@ -53,6 +53,34 @@ async def get_admin(telegram_id: int) -> dict | None:
     return admins[0] if len(admins) == 1 else None
 
 
+async def get_referral_panels(telegram_id: int) -> list[dict]:
+    """Panels purchased via this user's referral codes (marked as referrals)."""
+    from backend.bot import db as bot_db
+
+    usages = bot_db.get_referral_panels(telegram_id)
+    result = []
+    for u in usages:
+        username = u.get("buyer_username")
+        if not username:
+            continue
+        with _session() as db:
+            admin = crud.get_admin_by_username(db, username)
+        if admin:
+            result.append({
+                "username": admin.username,
+                "telegram_id": admin.telegram_id,
+                "traffic": admin.traffic or 0,
+                "initial_traffic": admin.initial_traffic or 0,
+                "is_active": admin.is_active,
+                "panel": admin.panel,
+                "marzban_password": None,
+                "is_referral": True,
+                "referral_code": u.get("code"),
+                "buyer_tg_id": u.get("buyer_telegram_id"),
+            })
+    return result
+
+
 async def list_all_admins() -> list[dict]:
     """All admins across all panels."""
     with _session() as db:
