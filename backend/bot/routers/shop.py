@@ -198,7 +198,8 @@ async def shop_get_username(message: Message, state: FSMContext) -> None:
                     url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
                 )
                 existing = await sudo_api.get_user(username)
-                if existing and existing is not False:
+                # Marzban returns {"detail": "User not found"} for non-existent users
+                if existing and isinstance(existing, dict) and "username" in existing:
                     await message.answer(texts.SHOP_USERNAME_TAKEN)
                     return
     except Exception:
