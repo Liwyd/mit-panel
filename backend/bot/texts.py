@@ -441,7 +441,7 @@ NO_MY_INVOICES = "✅ فاکتور پرداخت‌نشده‌ای ندارید."
 
 BTN_CREATE_ADMIN = "🆕 ساخت پنل جدید (ادمین)"
 ASK_NEW_ADMIN_USERNAME = "🆕 نام کاربری پنل جدید را وارد نمایید:"
-ASK_NEW_ADMIN_PASSWORD = "🔑 رمز عبور پنل جدید را وارد نمایید:"
+ASK_NEW_ADMIN_PASSWORD = "🔑 رمز عبور پنل جدید را وارد نمایید:\n(حداقل ۸ کاراکتر، ترکیب حروف و عدد)"
 ASK_NEW_ADMIN_PANEL = "▪️ پنل مرزبان مقصد را انتخاب نمایید:"
 ASK_NEW_ADMIN_TRAFFIC = "📊 حجم اولیه را به گیگابایت وارد نمایید (۰ برای بدون حجم):"
 ASK_NEW_ADMIN_EXPIRY = "📅 مدت اعتبار را به روز وارد نمایید (یا «-» برای بدون انقضا):"
@@ -632,6 +632,10 @@ SHOP_WELCOME = "🛒 فروشگاه MIT Panel\n\nیکی از پلن‌های ز�
 SHOP_ASK_TRAFFIC = "📦 چند گیگابایت ترافیک نیاز دارید؟"
 SHOP_CUSTOM_AMOUNT = "💡 مقدار دلخواه را وارد کنید (GB):"
 SHOP_ASK_PANEL = "🖥 پنل مورد نظر را انتخاب کنید:"
+SHOP_ASK_USERNAME = "👤 نام کاربری دلخواه خود را وارد کنید:"
+SHOP_ASK_PASSWORD = "🔑 رمز عبور دلخواه خود را وارد کنید:\n(حداقل ۸ کاراکتر، ترکیب حروف و عدد)"
+SHOP_USERNAME_TAKEN = "⚠️ این نام کاربری قبلاً استفاده شده. نام دیگری وارد کنید."
+SHOP_PASSWORD_WEAK = "⚠️ رمز عبور باید حداقل ۸ کاراکتر و شامل حروف و عدد باشد."
 SHOP_PANEL_INFO = "🖥 پنل: {panel}\n📦 ترافیک: {gb} GB\n💰 قیمت: {price:,} تومان"
 SHOP_CARD_INSTRUCTIONS = (
     "💳 کارت بانکی:\n<code>{card}</code>\n\n"
@@ -644,7 +648,8 @@ SHOP_REQUEST_APPROVED = (
     "🎉 پنل شما آماده است!\n\n"
     "🔗 لینک پنل: {url}\n"
     "👤 نام کاربری: <code>{username}</code>\n"
-    "🔑 رمز عبور: <code>{password}</code>"
+    "🔑 رمز عبور: <code>{password}</code>\n\n"
+    "برای مدیریت پنل خود از منوی زیر استفاده کنید."
 )
 SHOP_REQUEST_REJECTED = "❌ درخواست شما رد شد.\nعلت: {reason}"
 SHOP_ALREADY_PENDING = "⚠️ شما یک درخواست در حال بررسی دارید. لطفاً منتظر بمانید."
@@ -697,8 +702,9 @@ DELETE_ADMIN_ASK = "👤 نام کاربری پنلی که می‌خواهید �
 DELETE_ADMIN_CONFIRM = "⚠️ آیا از حذف پنل «{username}» مطمئن هستید؟"
 DELETE_ADMIN_YES = "✅ بله، حذف شود"
 DELETE_ADMIN_NO = "❌ خیر، انصراف"
-DELETE_ADMIN_SUCCESS = (
+DELETE_ADMIN_SUCCESS_SUPERADMIN = (
     "✅ پنل «{username}» از MIT Panel حذف شد.\n\n"
     "⚠️ لطفاً پنل مربوطه را به صورت دستی از مرزبان نیز حذف نمایید."
 )
+DELETE_ADMIN_SUCCESS_OWNER = "⚠️ پنل شما با نام کاربری «{username}» حذف شد."
 DELETE_ADMIN_FAILED = "⚠️ حذف پنل ناموفق بود: {error}"

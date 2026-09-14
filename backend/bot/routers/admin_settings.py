@@ -412,6 +412,12 @@ async def create_admin_username(message: Message, state: FSMContext) -> None:
     if not username:
         await message.answer(texts.ASK_NEW_ADMIN_USERNAME)
         return
+    # Check if username is already taken in MIT Panel
+    with sessionLocal() as session:
+        existing = crud.get_admin_by_username(session, username)
+    if existing:
+        await message.answer(texts.SHOP_USERNAME_TAKEN)
+        return
     await state.update_data(new_username=username)
     await state.set_state(CreateAdmin.password)
     await message.answer(texts.ASK_NEW_ADMIN_PASSWORD, reply_markup=keyboards.cancel_kb())
@@ -422,6 +428,9 @@ async def create_admin_password(message: Message, state: FSMContext) -> None:
     password = (message.text or "").strip()
     if not password:
         await message.answer(texts.INVALID_PASSWORD)
+        return
+    if len(password) < 8 or not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        await message.answer(texts.SHOP_PASSWORD_WEAK)
         return
     await state.update_data(new_password=password)
 
@@ -1005,17 +1014,17 @@ async def finish_delete_admin(call: CallbackQuery, state: FSMContext) -> None:
 
     # Notify superadmin
     await call.message.answer(
-        texts.DELETE_ADMIN_SUCCESS.format(username=username),
+        texts.DELETE_ADMIN_SUCCESS_SUPERADMIN.format(username=username),
         reply_markup=superadmin_kb(call.from_user.id),
     )
 
-    # Notify owner if they have a telegram_id
+    # Notify owner if they have a telegram_id — simple message, no Marzban note
     telegram_id = result.get("telegram_id")
     if telegram_id:
         try:
             await call.bot.send_message(
                 telegram_id,
-                texts.DELETE_ADMIN_SUCCESS.format(username=username),
+                texts.DELETE_ADMIN_SUCCESS_OWNER.format(username=username),
             )
         except Exception:
             pass

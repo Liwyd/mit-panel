@@ -145,7 +145,7 @@ async def _ask_referral_code(message: Message, state: FSMContext) -> None:
 async def shop_skip_referral(call: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(shop_referral_code_id=None)
     await call.answer()
-    await _show_invoice(call.message, state)
+    await _ask_username(call.message, state)
 
 
 @router.message(ShopBuy.referral_code, ~F.text.in_(ALL_MENU_TEXTS))
@@ -155,7 +155,7 @@ async def shop_get_referral_code(message: Message, state: FSMContext) -> None:
     # Skip
     if not raw or raw == texts.BTN_SKIP:
         await state.update_data(shop_referral_code_id=None)
-        await _show_invoice(message, state)
+        await _ask_username(message, state)
         return
 
     code_row = db.get_referral_code(raw)
@@ -166,6 +166,71 @@ async def shop_get_referral_code(message: Message, state: FSMContext) -> None:
     await state.update_data(shop_referral_code_id=code_row["id"])
     price = code_row["price_per_gb"]
     await message.answer(texts.REFERRAL_APPLIED.format(price=int(price)))
+    await _ask_username(message, state)
+
+
+# ── 5. Username ─────────────────────────────────────────────────────────
+
+async def _ask_username(message: Message, state: FSMContext) -> None:
+    await state.set_state(ShopBuy.username)
+    await message.answer(texts.SHOP_ASK_USERNAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ShopBuy.username, ~F.text.in_(ALL_MENU_TEXTS))
+async def shop_get_username(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.SHOP_ASK_USERNAME)
+        return
+
+    # Check if username is already taken in Marzban
+    try:
+        from backend.bot import panel_client
+        panels = await panel_client.list_panels()
+        if panels:
+            from backend.services.marzban.api import APIService as MarzbanAPI
+            from backend.db.engin import sessionLocal
+            from backend.db import crud
+            with sessionLocal() as db_session:
+                panel_obj = crud.get_panel_by_name(db_session, panels[0])
+            if panel_obj:
+                sudo_api = MarzbanAPI(
+                    url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
+                )
+                existing = await sudo_api.get_user(username)
+                if existing and existing is not False:
+                    await message.answer(texts.SHOP_USERNAME_TAKEN)
+                    return
+    except Exception:
+        pass  # If Marzban check fails, allow the username
+
+    await state.update_data(shop_username=username)
+    await _ask_password(message, state)
+
+
+# ── 6. Password ────────────────────────────────────────────────────────
+
+def _is_strong_password(pw: str) -> bool:
+    if len(pw) < 8:
+        return False
+    has_letter = any(c.isalpha() for c in pw)
+    has_digit = any(c.isdigit() for c in pw)
+    return has_letter and has_digit
+
+
+async def _ask_password(message: Message, state: FSMContext) -> None:
+    await state.set_state(ShopBuy.password)
+    await message.answer(texts.SHOP_ASK_PASSWORD, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(ShopBuy.password, ~F.text.in_(ALL_MENU_TEXTS))
+async def shop_get_password(message: Message, state: FSMContext) -> None:
+    password = (message.text or "").strip()
+    if not _is_strong_password(password):
+        await message.answer(texts.SHOP_PASSWORD_WEAK)
+        return
+
+    await state.update_data(shop_password=password)
     await _show_invoice(message, state)
 
 
@@ -211,6 +276,8 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
     panel_name = data["shop_panel"]
     gb = data["shop_gb"]
     referral_code_id = data.get("shop_referral_code_id")
+    desired_username = data.get("shop_username")
+    desired_password = data.get("shop_password")
 
     # Download receipt
     photo = message.photo[-1]
@@ -229,6 +296,8 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         traffic_gb=gb,
         receipt_path=receipt_path,
         referral_code_id=referral_code_id,
+        desired_username=desired_username,
+        desired_password=desired_password,
     )
 
     await message.answer(texts.SHOP_REQUEST_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id))
@@ -270,9 +339,9 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
 
     await call.answer()
 
-    # Generate credentials
-    username = f"shop_{req['telegram_id']}"
-    password = uuid.uuid4().hex[:12]
+    # Use user-provided credentials
+    username = req.get("desired_username") or f"shop_{req['telegram_id']}"
+    password = req.get("desired_password") or uuid.uuid4().hex[:12]
 
     try:
         from backend.bot import panel_client
@@ -297,12 +366,16 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
     # Panel link
     panel_url = settings.panel_link_url
 
-    # Send credentials to buyer
+    # Send credentials to buyer + full menu (transition from prospect to linked)
     creds_text = texts.SHOP_REQUEST_APPROVED.format(
         url=panel_url, username=username, password=password
     )
     try:
-        await bot.send_message(req["telegram_id"], creds_text)
+        await bot.send_message(
+            req["telegram_id"],
+            creds_text,
+            reply_markup=keyboards.main_menu_kb(),
+        )
     except Exception:
         logger.error(f"Failed to send credentials to buyer {req['telegram_id']}")
 

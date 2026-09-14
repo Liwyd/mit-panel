@@ -120,6 +120,8 @@ class ShopBuy(StatesGroup):
     panel = State()
     amount_gb = State()
     referral_code = State()
+    username = State()
+    password = State()
     receipt = State()
 
 

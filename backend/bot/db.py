@@ -182,7 +182,9 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 reviewed_at TEXT,
                 reviewed_by INTEGER,
-                referral_code_id INTEGER
+                referral_code_id INTEGER,
+                desired_username TEXT,
+                desired_password TEXT
             )
             """
         )
@@ -904,11 +906,19 @@ def get_tutorial(tutorial_id: int) -> Tutorial | None:
 # Panel requests (shop purchases)
 # ---------------------------------------------------------------------------
 
-def create_panel_request(telegram_id: int, panel_name: str, traffic_gb: float, receipt_path: str, referral_code_id: int | None = None) -> int:
+def create_panel_request(
+    telegram_id: int,
+    panel_name: str,
+    traffic_gb: float,
+    receipt_path: str,
+    referral_code_id: int | None = None,
+    desired_username: str | None = None,
+    desired_password: str | None = None,
+) -> int:
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO panel_requests (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id) VALUES (?, ?, ?, ?, ?)",
-            (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id),
+            "INSERT INTO panel_requests (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id, desired_username, desired_password) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id, desired_username, desired_password),
         )
         return cur.lastrowid
 
