@@ -248,33 +248,47 @@ async def shop_get_password(message: Message, state: FSMContext) -> None:
 # ── 5. Show invoice ──────────────────────────────────────────────────────
 
 async def _show_invoice(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    panel_name = data["shop_panel"]
-    gb = data["shop_gb"]
-    referral_code_id = data.get("shop_referral_code_id")
-    price_per_gb = _resolve_price(panel_name, referral_code_id)
-    total = int(gb * price_per_gb)
+    try:
+        data = await state.get_data()
+        panel_name = data["shop_panel"]
+        gb = data["shop_gb"]
+        referral_code_id = data.get("shop_referral_code_id")
+        price_per_gb = _resolve_price(panel_name, referral_code_id)
+        total = int(gb * price_per_gb)
 
-    if total <= 0:
-        await message.answer(texts.PRICE_NOT_SET, reply_markup=await menu_kb_for(message.from_user.id))
+        if total <= 0:
+            await message.answer(
+                texts.PRICE_NOT_SET,
+                reply_markup=await menu_kb_for(message.from_user.id),
+            )
+            await state.clear()
+            return
+
+        await state.update_data(shop_total=total)
+        await state.set_state(ShopBuy.receipt)
+
+        card = db.get_setting("card_number") or ""
+        if card:
+            await message.answer(
+                texts.SHOP_PANEL_INFO.format(panel=panel_name, gb=gb, price=total),
+            )
+            await message.answer(
+                texts.SHOP_CARD_INSTRUCTIONS.format(card=card, price=total),
+            )
+            await message.answer(texts.SHOP_RECEIPT_PROMPT)
+        else:
+            await message.answer(texts.CARD_NOT_CONFIGURED)
+            await state.clear()
+    except Exception as exc:
+        logger.error("_show_invoice crashed: %s", exc, exc_info=True)
         await state.clear()
-        return
-
-    await state.update_data(shop_total=total)
-    await state.set_state(ShopBuy.receipt)
-
-    card = db.get_setting("card_number") or ""
-    if card:
-        await message.answer(
-            texts.SHOP_PANEL_INFO.format(panel=panel_name, gb=gb, price=total),
-        )
-        await message.answer(
-            texts.SHOP_CARD_INSTRUCTIONS.format(card=card, price=total),
-        )
-        await message.answer(texts.SHOP_RECEIPT_PROMPT)
-    else:
-        await message.answer(texts.CARD_NOT_CONFIGURED)
-        await state.clear()
+        try:
+            await message.answer(
+                "❌ خطایی رخ داد. لطفاً دوباره تلاش کنید.",
+                reply_markup=keyboards.cancel_kb(),
+            )
+        except Exception:
+            pass
 
 
 # ── 6. Receipt received ──────────────────────────────────────────────────
@@ -285,57 +299,74 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         await message.answer(texts.NOT_A_PHOTO)
         return
 
-    data = await state.get_data()
-    await state.clear()
+    try:
+        data = await state.get_data()
+        await state.clear()
 
-    panel_name = data["shop_panel"]
-    gb = data["shop_gb"]
-    referral_code_id = data.get("shop_referral_code_id")
-    desired_username = data.get("shop_username")
-    desired_password = data.get("shop_password")
+        panel_name = data["shop_panel"]
+        gb = data["shop_gb"]
+        referral_code_id = data.get("shop_referral_code_id")
+        desired_username = data.get("shop_username")
+        desired_password = data.get("shop_password")
 
-    # Download receipt
-    photo = message.photo[-1]
-    ext = "jpg"
-    filename = f"shop_{message.from_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
-    media_dir = settings.media_dir
-    os.makedirs(media_dir, exist_ok=True)
-    receipt_path = os.path.join(media_dir, filename)
-    file = await bot.get_file(photo.file_id)
-    await bot.download_file(file.file_path, receipt_path)
+        # Download receipt
+        photo = message.photo[-1]
+        ext = "jpg"
+        filename = f"shop_{message.from_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+        media_dir = settings.media_dir
+        os.makedirs(media_dir, exist_ok=True)
+        receipt_path = os.path.join(media_dir, filename)
+        await bot.download(photo, destination=receipt_path)
 
-    # Create panel request
-    request_id = db.create_panel_request(
-        telegram_id=message.from_user.id,
-        panel_name=panel_name,
-        traffic_gb=gb,
-        receipt_path=receipt_path,
-        referral_code_id=referral_code_id,
-        desired_username=desired_username,
-        desired_password=desired_password,
-    )
+        # Create panel request
+        request_id = db.create_panel_request(
+            telegram_id=message.from_user.id,
+            panel_name=panel_name,
+            traffic_gb=gb,
+            receipt_path=receipt_path,
+            referral_code_id=referral_code_id,
+            desired_username=desired_username,
+            desired_password=desired_password,
+        )
 
-    await message.answer(texts.SHOP_REQUEST_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id))
+        await message.answer(
+            texts.SHOP_REQUEST_SUBMITTED,
+            reply_markup=await menu_kb_for(message.from_user.id),
+        )
 
-    # Notify superadmins — send the receipt photo with approval buttons
-    price_per_gb = _resolve_price(panel_name, referral_code_id)
-    total = int(gb * price_per_gb)
-    username = message.from_user.username or ""
-    caption = (
-        texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=message.from_user.id)
-        + "\n\n"
-        + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
-    )
-    for sid in settings.superadmin_id_list:
+        # Notify superadmins — send the receipt photo with approval buttons
+        price_per_gb = _resolve_price(panel_name, referral_code_id)
+        total = int(gb * price_per_gb)
+        username = message.from_user.username or ""
+        caption = (
+            texts.PANEL_REQUEST_HEADER.format(
+                username=username, telegram_id=message.from_user.id
+            )
+            + "\n\n"
+            + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
+        )
+        for sid in settings.superadmin_id_list:
+            try:
+                await bot.send_photo(
+                    sid,
+                    photo=photo.file_id,
+                    caption=caption,
+                    reply_markup=keyboards.panel_request_approval_kb(request_id),
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to notify superadmin %s of shop request: %s",
+                    sid, exc,
+                )
+    except Exception as exc:
+        logger.error("shop_get_receipt crashed: %s", exc, exc_info=True)
         try:
-            await bot.send_photo(
-                sid,
-                photo=photo.file_id,
-                caption=caption,
-                reply_markup=keyboards.panel_request_approval_kb(request_id),
+            await message.answer(
+                "❌ خطایی رخ داد. لطفاً دوباره تلاش کنید.",
+                reply_markup=await menu_kb_for(message.from_user.id),
             )
         except Exception:
-            logger.error(f"Failed to notify superadmin {sid} of shop request")
+            pass
 
 
 # ── 7. Superadmin approves ───────────────────────────────────────────────
