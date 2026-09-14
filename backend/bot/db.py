@@ -227,6 +227,8 @@ def init_db() -> None:
         # When a non-payment warning was last sent for a bill.
         _ensure_column(conn, "invoices", "last_warned_at", "TEXT")
         _ensure_column(conn, "debts", "last_warned_at", "TEXT")
+        _ensure_column(conn, "panel_requests", "desired_username", "TEXT")
+        _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
 
 
 @dataclass
