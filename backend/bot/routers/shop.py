@@ -137,8 +137,15 @@ async def _ask_referral_code(message: Message, state: FSMContext) -> None:
     await state.set_state(ShopBuy.referral_code)
     await message.answer(
         texts.REFERRAL_ASK_CODE,
-        reply_markup=keyboards.cancel_kb(),
+        reply_markup=keyboards.referral_skip_kb(),
     )
+
+
+@router.callback_query(F.data == "shop_skip_referral", ShopBuy.referral_code)
+async def shop_skip_referral(call: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(shop_referral_code_id=None)
+    await call.answer()
+    await _show_invoice(call.message, state)
 
 
 @router.message(ShopBuy.referral_code, ~F.text.in_(ALL_MENU_TEXTS))

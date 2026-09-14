@@ -136,3 +136,7 @@ class ReferralManage(StatesGroup):
 
 class ReferralDisable(StatesGroup):
     code_id = State()
+
+
+class DeleteAdmin(StatesGroup):
+    username = State()

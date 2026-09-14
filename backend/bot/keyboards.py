@@ -31,23 +31,20 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
 
 
 def prospect_menu_kb() -> ReplyKeyboardMarkup:
-    """Shown to users who have no panel yet."""
+    """Shown to users who have no panel yet — shop-style."""
     kb = ReplyKeyboardBuilder()
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_MY_PANELS)
-    kb.button(text=texts.BTN_MY_REFERRAL)
-    kb.adjust(2, 1)
+    kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)
 
 
 def panel_request_kb() -> ReplyKeyboardMarkup:
-    """Shown alongside the activation notice, so the two ways of asking for a
-    panel sit where someone actually looks for them."""
+    """Shown when user has no panels — redirect to shop."""
     kb = ReplyKeyboardBuilder()
-    kb.button(text=texts.BTN_PARTNERSHIP)
-    kb.button(text=texts.BTN_CREATE_PANEL)
+    kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_BACK)
-    kb.adjust(1, 1, 1)
+    kb.adjust(1, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -84,9 +81,10 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_ADD_PANEL,
         texts.BTN_GRANT_TRAFFIC,
         texts.BTN_SYNC_TELEGRAM_IDS,
+        texts.BTN_DELETE_ADMIN,
         texts.BTN_DELETE_TUTORIAL,
         texts.BTN_BACK,
-        layout=(1, 2, 1, 2, 1),
+        layout=(1, 2, 1, 2, 1, 1),
     )
 
 
@@ -360,10 +358,10 @@ def tutorials_list_kb(tutorials) -> InlineKeyboardMarkup:
 
 def shop_amount_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    for gb in (5, 10, 20, 50, 100):
-        kb.button(text=f"{gb} GB", callback_data=f"shop_gb:{gb}")
-    kb.button(text="💡 مقدار دلخواه", callback_data="shop_gb:custom")
-    kb.adjust(2, 2, 2, 1)
+    for gb in texts.TOPUP_PRESETS:
+        kb.button(text=f"{gb:,} GB", callback_data=f"shop_gb:{gb}")
+    kb.button(text=texts.BTN_TOPUP_CUSTOM, callback_data="shop_gb:custom")
+    kb.adjust(2, 2, 1)
     return kb.as_markup()
 
 
@@ -390,4 +388,19 @@ def referral_codes_kb(codes: list[dict]) -> InlineKeyboardMarkup:
         label = f"{c['code']} ({status})"
         kb.button(text=label, callback_data=f"ref_disable:{c['id']}")
     kb.adjust(1)
+    return kb.as_markup()
+
+
+def referral_skip_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_SKIP, callback_data="shop_skip_referral")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def delete_admin_confirm_kb(username: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.DELETE_ADMIN_YES, callback_data=f"del_admin_yes:{username}")
+    kb.button(text=texts.DELETE_ADMIN_NO, callback_data="del_admin_no")
+    kb.adjust(2)
     return kb.as_markup()

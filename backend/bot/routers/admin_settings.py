@@ -16,6 +16,7 @@ from backend.bot.states import (
     ClearAdminPrice,
     CreateAdmin,
     CreatePanel,
+    DeleteAdmin,
     GrantTraffic,
     GrantWallet,
     NewInvoice,
@@ -543,26 +544,22 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
     expiry = result.get("expiry_date")
     panel_url = settings.panel_link_url
     success_text = texts.CREATE_ADMIN_SUCCESS.format(
+        url=panel_url,
         username=data["new_username"],
         password=data["new_password"],
         traffic_gb=data["new_traffic"],
         expiry=expiry[:10] if expiry else "بدون انقضا",
     )
-    link_text = texts.PANEL_LINK_INFO.format(
-        url=panel_url, username=data["new_username"], password=data["new_password"]
-    )
     await message.answer(
-        success_text + "\n\n" + link_text,
+        success_text,
         reply_markup=superadmin_kb(message.from_user.id),
     )
 
     if target_id:
-        # The menu is built from this cached flag, so without it the new owner
-        # would keep seeing the unlinked menu until their next /start.
         db.ensure_user(target_id)
         db.set_user_linked(target_id, True)
         try:
-            await bot.send_message(target_id, success_text + "\n\n" + link_text)
+            await bot.send_message(target_id, success_text)
         except Exception:
             pass
 
@@ -955,4 +952,80 @@ async def get_referral_price(message: Message, state: FSMContext) -> None:
     await message.answer(
         texts.REFERRAL_CREATED,
         reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Delete admin (panel)
+# ---------------------------------------------------------------------------
+
+@router.message(F.text == texts.BTN_DELETE_ADMIN)
+async def start_delete_admin(message: Message, state: FSMContext) -> None:
+    await state.set_state(DeleteAdmin.username)
+    await message.answer(texts.DELETE_ADMIN_ASK, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(DeleteAdmin.username, ~F.text.in_(ALL_MENU_TEXTS))
+async def confirm_delete_admin(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.DELETE_ADMIN_ASK)
+        return
+    with sessionLocal() as session:
+        admin_obj = crud.get_admin_by_username(session, username)
+    if not admin_obj:
+        await state.clear()
+        await message.answer(
+            texts.ADMIN_NOT_FOUND.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    await state.update_data(delete_admin_target=username)
+    await message.answer(
+        texts.DELETE_ADMIN_CONFIRM.format(username=username),
+        reply_markup=keyboards.delete_admin_confirm_kb(username),
+    )
+
+
+@router.callback_query(F.data.startswith("del_admin_yes:"))
+async def finish_delete_admin(call: CallbackQuery, state: FSMContext) -> None:
+    username = call.data.split(":", 1)[1]
+    await state.clear()
+    await call.answer()
+
+    try:
+        from backend.bot import panel_client
+        result = await panel_client.delete_admin_by_username(username)
+    except Exception as exc:
+        await call.message.answer(
+            texts.DELETE_ADMIN_FAILED.format(error=exc),
+            reply_markup=superadmin_kb(call.from_user.id),
+        )
+        return
+
+    # Notify superadmin
+    await call.message.answer(
+        texts.DELETE_ADMIN_SUCCESS.format(username=username),
+        reply_markup=superadmin_kb(call.from_user.id),
+    )
+
+    # Notify owner if they have a telegram_id
+    telegram_id = result.get("telegram_id")
+    if telegram_id:
+        try:
+            await call.bot.send_message(
+                telegram_id,
+                texts.DELETE_ADMIN_SUCCESS.format(username=username),
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data == "del_admin_no")
+async def cancel_delete_admin(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await call.answer("لغو شد")
+    await call.message.answer(
+        texts.CANCELLED,
+        reply_markup=superadmin_kb(call.from_user.id),
     )

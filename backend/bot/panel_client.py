@@ -406,3 +406,23 @@ async def topup_by_username(username: str, added_gb: float) -> dict:
             "new_traffic_bytes": admin.traffic,
             "new_initial_traffic_bytes": admin.initial_traffic,
         }
+
+
+async def delete_admin_by_username(username: str) -> dict:
+    """Delete an admin from MIT Panel DB only.
+
+    Marzban deletion must be done manually — returns a flag indicating this.
+    """
+    with _session() as db:
+        admin = crud.get_admin_by_username(db, username)
+        if not admin:
+            raise PanelClientError("No admin with that username")
+        telegram_id = admin.telegram_id
+        panel_name = admin.panel
+        crud.remove_admin(db, admin.id)
+        return {
+            "username": username,
+            "telegram_id": telegram_id,
+            "panel": panel_name,
+            "needs_marzban_cleanup": True,
+        }

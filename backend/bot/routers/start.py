@@ -63,7 +63,7 @@ async def start(message: Message, bot: Bot) -> None:
 
     if not admins:
         await message.answer(
-            texts.START_UNLINKED.format(telegram_id=message.from_user.id),
+            texts.START_UNLINKED,
             reply_markup=await menu_kb_for(message.from_user.id),
         )
         return
@@ -85,7 +85,7 @@ async def my_panels(message: Message) -> None:
         # Same button for everyone: with no panel it becomes the activation
         # screen, carrying the numeric ID they need to forward to support.
         await message.answer(
-            texts.PANEL_ACTIVATION.format(telegram_id=message.from_user.id),
+            texts.PANEL_ACTIVATION,
             reply_markup=keyboards.panel_request_kb(),
         )
         return
