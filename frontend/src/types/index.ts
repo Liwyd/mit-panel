@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+const USERNAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/
+const USERNAME_RULE = 'Only letters, numbers, underscores, dots and hyphens. Must start with a letter or number.'
+
 // Auth Types
 export interface DecodedToken {
     sub: string
@@ -14,7 +17,8 @@ export const loginSchema = z.object({
         .string()
         .min(1, 'Username is required')
         .min(3, 'Username must be at least 3 characters')
-        .max(50, 'Username must be less than 50 characters'),
+        .max(50, 'Username must be less than 50 characters')
+        .regex(USERNAME_REGEX, USERNAME_RULE),
     password: z
         .string()
         .min(1, 'Password is required')
@@ -30,7 +34,8 @@ export const adminSchema = z.object({
         .string()
         .min(1, 'Username is required')
         .min(3, 'Username must be at least 3 characters')
-        .max(50, 'Username must be less than 50 characters'),
+        .max(50, 'Username must be less than 50 characters')
+        .regex(USERNAME_REGEX, USERNAME_RULE),
 
     password: z.string()
     .optional()
@@ -160,7 +165,8 @@ export const panelSchema = z.object({
         .string()
         .min(1, 'Username is required')
         .min(3, 'Username must be at least 3 characters')
-        .max(50, 'Username must be less than 50 characters'),
+        .max(50, 'Username must be less than 50 characters')
+        .regex(USERNAME_REGEX, USERNAME_RULE),
 
     password: z
         .string()
@@ -235,7 +241,8 @@ export const userSchema = z.object({
     email: z
         .string()
         .min(1, 'Username/Email is required')
-        .max(100, 'Maximum 100 characters'),
+        .max(100, 'Maximum 100 characters')
+        .regex(USERNAME_REGEX, USERNAME_RULE),
 
     totalGb: z
         .number()

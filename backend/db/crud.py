@@ -72,11 +72,16 @@ def update_admin_values(
         if admin_input.marzban_password is not None:
             admin.marzban_password = admin_input.marzban_password
         admin.marzban_all_inbounds = admin_input.marzban_all_inbounds
+        # When the superadmin increases traffic via the web panel, bump
+        # initial_traffic by the same delta so the "Remaining / Initial" display
+        # stays accurate.  If traffic was reduced, initial_traffic must NOT drop
+        # (the admin already consumed that quota).
+        traffic_delta = admin_input.traffic - (admin.traffic or 0)
         admin.traffic = admin_input.traffic
-        # NOTE: initial_traffic (the admin's total granted quota) is intentionally
-        # NOT overwritten here. Editing an admin must only adjust the remaining
-        # budget, otherwise the originally granted total would be silently reset
-        # to whatever traffic is left (see traffic-accounting design).
+        if traffic_delta > 0:
+            admin.initial_traffic = (admin.initial_traffic or 0) + traffic_delta
+        # NOTE: initial_traffic is intentionally NOT decreased when traffic is
+        # lowered — the originally granted total must reflect lifetime grants.
         admin.update_return_traffic = admin_input.update_return_traffic
         admin.delete_return_traffic = admin_input.delete_return_traffic
         admin.expiry_date = admin_input.expiry_date
