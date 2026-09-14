@@ -233,19 +233,21 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
 
     await message.answer(texts.SHOP_REQUEST_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id))
 
-    # Notify superadmins
+    # Notify superadmins — send the receipt photo with approval buttons
     price_per_gb = _resolve_price(panel_name, referral_code_id)
     total = int(gb * price_per_gb)
     username = message.from_user.username or ""
+    caption = (
+        texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=message.from_user.id)
+        + "\n\n"
+        + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
+    )
     for sid in settings.superadmin_id_list:
         try:
-            await bot.send_message(
+            await bot.send_photo(
                 sid,
-                texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=message.from_user.id),
-            )
-            await bot.send_message(
-                sid,
-                texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total),
+                photo=photo.file_id,
+                caption=caption,
                 reply_markup=keyboards.panel_request_approval_kb(request_id),
             )
         except Exception:
@@ -429,12 +431,28 @@ async def list_pending_panel_requests(message: Message, bot: Bot) -> None:
         username = req.get("username") or str(req["telegram_id"])
         price_per_gb = db.get_effective_price(req["panel_name"])
         total = int(req["traffic_gb"] * price_per_gb)
-        await message.answer(
-            texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=req["telegram_id"]),
-        )
-        await message.answer(
-            texts.PANEL_REQUEST_INFO.format(
+        caption = (
+            texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=req["telegram_id"])
+            + "\n\n"
+            + texts.PANEL_REQUEST_INFO.format(
                 panel=req["panel_name"], gb=req["traffic_gb"], price=total
-            ),
+            )
+        )
+        receipt_path = req.get("receipt_path")
+        if receipt_path and os.path.isfile(receipt_path):
+            from aiogram.types import FSInputFile
+            try:
+                await bot.send_photo(
+                    message.from_user.id,
+                    photo=FSInputFile(receipt_path),
+                    caption=caption,
+                    reply_markup=keyboards.panel_request_approval_kb(req["id"]),
+                )
+                continue
+            except Exception:
+                pass
+        # Fallback: text only
+        await message.answer(
+            caption,
             reply_markup=keyboards.panel_request_approval_kb(req["id"]),
         )
