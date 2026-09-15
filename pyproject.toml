@@ -22,5 +22,4 @@ dependencies = [
     "python-multipart",
     "aiogram>=3.29,<4",
     "tzdata>=2025",
-    "Pillow",
 ]

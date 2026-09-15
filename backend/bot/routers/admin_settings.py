@@ -408,14 +408,16 @@ async def start_create_admin(message: Message, state: FSMContext) -> None:
 
 @router.message(CreateAdmin.username, ~F.text.in_(ALL_MENU_TEXTS))
 async def create_admin_username(message: Message, state: FSMContext) -> None:
-    username = (message.text or "").strip()
+    username = (message.text or "").strip().lower()
     if not username:
         await message.answer(texts.ASK_NEW_ADMIN_USERNAME)
         return
-    # Check if username is already taken in MIT Panel
-    with sessionLocal() as session:
-        existing = crud.get_admin_by_username(session, username)
-    if existing:
+    # Check if username is already taken (MIT Panel DB + all Marzban panels)
+    try:
+        taken = await panel_client.check_username_taken(username)
+    except Exception:
+        taken = False
+    if taken:
         await message.answer(texts.SHOP_USERNAME_TAKEN)
         return
     await state.update_data(new_username=username)
@@ -939,7 +941,7 @@ async def get_referral_bonus(message: Message, state: FSMContext) -> None:
 
 
 @router.message(ReferralManage.price, ~F.text.in_(ALL_MENU_TEXTS))
-async def get_referral_price(message: Message, state: FSMContext) -> None:
+async def get_referral_price(message: Message, state: FSMContext, bot: Bot) -> None:
     raw = (message.text or "").strip().replace(",", "")
     try:
         price = float(raw)
@@ -962,6 +964,20 @@ async def get_referral_price(message: Message, state: FSMContext) -> None:
         texts.REFERRAL_CREATED,
         reply_markup=superadmin_kb(message.from_user.id),
     )
+
+    # Notify the referral owner about their new code
+    owner_tid = data["ref_owner"]
+    try:
+        await bot.send_message(
+            owner_tid,
+            texts.REFERRAL_REQUEST_APPROVED_NOTIFY.format(
+                code=data["ref_code"],
+                bonus=int(data["ref_bonus"]),
+                price=int(price),
+            ),
+        )
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

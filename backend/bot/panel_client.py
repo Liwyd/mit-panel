@@ -88,6 +88,32 @@ async def list_all_admins() -> list[dict]:
         return [_admin_to_dict(a) for a in admins]
 
 
+async def check_username_taken(username: str) -> bool:
+    """Check if a username exists in MIT Panel DB or any Marzban panel."""
+    # Fast check: MIT Panel DB
+    with _session() as db:
+        if crud.get_admin_by_username(db, username):
+            return True
+
+    # Check each Marzban panel via API
+    with _session() as db:
+        marzban_panels = [
+            p for p in crud.get_all_panels(db) if p.panel_type == "marzban"
+        ]
+    for panel in marzban_panels:
+        from backend.services.marzban.api import APIService as MarzbanAPI
+        sudo_api = MarzbanAPI(
+            url=panel.url, username=panel.username, password=panel.password
+        )
+        try:
+            admins = await sudo_api.get_admins()
+            if any(a.get("username") == username for a in admins):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 async def topup(telegram_id: int, added_gb: float, username: str | None = None) -> dict:
     """Credit traffic to a panel and return the result dict."""
     added_bytes = int(added_gb * 1024**3)

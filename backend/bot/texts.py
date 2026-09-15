@@ -651,6 +651,7 @@ SHOP_CARD_INSTRUCTIONS = (
 )
 SHOP_RECEIPT_PROMPT = "🧾 رسید پرداخت را ارسال کنید:"
 SHOP_REQUEST_SUBMITTED = "✅ درخواست شما ثبت شد و در انتظار بررسی مدیریت است."
+SHOP_RECEIPT_WARNING = "\n\n⚠️ لطفاً رسید پرداخت را مجدداً ارسال نکنید. درخواست شما ثبت شده و در حال بررسی است."
 SHOP_REQUEST_APPROVED = (
     "🎉 پنل شما آماده است!\n\n"
     "🔗 لینک پنل: {url}\n"
@@ -764,7 +765,7 @@ REFERRAL_BENEFITS_NO_PANEL = (
     "• می‌تونی همکارات رو زیر مجموعه خودت کنی\n"
     "• درصدی از خرید اونها رو خودت رایگان هدیه بگیری\n\n"
     "💡 برای مصارف بالا و با هماهنگی مدیریت فعال می‌شود.\n\n"
-    "آیا می‌خواهید درخواست کد رفرال ثبت کنید؟"
+    "⚠️ برای درخواست کد رفرال، ابتدا باید پنل خریداری کنید."
 )
 
 # --- superadmin referral request management ---
@@ -773,6 +774,7 @@ BTN_REJECT_REFERRAL = "❌ رد درخواست"
 SUPERADMIN_REFERRAL_REQUEST = (
     "📝 درخواست کد رفرال جدید\n\n"
     "👤 کاربر: @{username} (ID: <code>{user_id}</code>)\n"
+    "{panel_info}"
     "📅 تاریخ: {date}"
 )
 ASK_REJECT_REFERRAL_REASON = "💬 دلیل رد درخواست را وارد کنید (یا انصراف بزنید):"

@@ -137,6 +137,12 @@ async def shop_get_amount_text(message: Message, state: FSMContext) -> None:
     except ValueError:
         await message.answer(texts.INVALID_AMOUNT_GB)
         return
+    if gb < settings.min_gb:
+        await message.answer(texts.BELOW_MIN_GB.format(min_gb=settings.min_gb))
+        return
+    if gb > settings.max_gb:
+        await message.answer(texts.ABOVE_MAX_GB.format(max_gb=settings.max_gb))
+        return
     await state.update_data(shop_gb=gb)
     await _ask_referral_code(message, state)
 
@@ -188,32 +194,19 @@ async def _ask_username(message: Message, state: FSMContext) -> None:
 
 @router.message(ShopBuy.username, ~F.text.in_(ALL_MENU_TEXTS))
 async def shop_get_username(message: Message, state: FSMContext) -> None:
-    username = (message.text or "").strip()
+    username = (message.text or "").strip().lower()
     if not username:
         await message.answer(texts.SHOP_ASK_USERNAME)
         return
 
-    # Check if username is already taken in Marzban
+    # Check if username is already taken (MIT Panel DB + all Marzban panels)
     try:
-        from backend.bot import panel_client
-        panels = await panel_client.list_panels()
-        if panels:
-            from backend.services.marzban.api import APIService as MarzbanAPI
-            from backend.db.engin import sessionLocal
-            from backend.db import crud
-            with sessionLocal() as db_session:
-                panel_obj = crud.get_panel_by_name(db_session, panels[0])
-            if panel_obj:
-                sudo_api = MarzbanAPI(
-                    url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
-                )
-                existing = await sudo_api.get_user(username)
-                # Marzban returns {"detail": "User not found"} for non-existent users
-                if existing and isinstance(existing, dict) and "username" in existing:
-                    await message.answer(texts.SHOP_USERNAME_TAKEN)
-                    return
+        taken = await panel_client.check_username_taken(username)
     except Exception:
-        pass  # If Marzban check fails, allow the username
+        taken = False
+    if taken:
+        await message.answer(texts.SHOP_USERNAME_TAKEN)
+        return
 
     await state.update_data(shop_username=username)
     await _ask_password(message, state)
@@ -330,7 +323,7 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         )
 
         await message.answer(
-            texts.SHOP_REQUEST_SUBMITTED,
+            texts.SHOP_REQUEST_SUBMITTED + texts.SHOP_RECEIPT_WARNING,
             reply_markup=await menu_kb_for(message.from_user.id),
         )
 

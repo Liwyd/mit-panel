@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import logging
 import os
-import tempfile
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.media_group import MediaGroupBuilder
 
 from backend.bot import keyboards, texts
 from backend.bot import panel_client
@@ -180,7 +180,7 @@ async def support_handler(message: Message) -> None:
     await message.answer(texts.SUPPORT_TEXT.format(user_id=message.from_user.id))
 
 
-# ── Panel preview (collage) ──────────────────────────────────────────────
+# ── Panel preview (media group) ──────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
 
@@ -192,62 +192,19 @@ for _name in ("loginpage.png", "panel.png"):
         _PANEL_PREVIEW_IMAGES.append(_path)
 
 
-def _make_collage(paths: list[str], max_width: int = 1200) -> str:
-    """Create a side-by-side collage of 2 images. Returns temp file path."""
-    from PIL import Image
-
-    imgs = [Image.open(p) for p in paths]
-    if len(imgs) == 1:
-        # Single image: just resize
-        img = imgs[0].copy()
-        ratio = max_width / img.width
-        img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
-        out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-        img.save(out, "JPEG", quality=90)
-        return out.name
-
-    # Two images: place side by side
-    h = max(img.height for img in imgs)
-    resized = []
-    for img in imgs:
-        ratio = h / img.height
-        new_w = int(img.width * ratio)
-        new_h = int(img.height * ratio)
-        # Limit each image to half the max width
-        if new_w > max_width // 2:
-            new_w = max_width // 2
-            new_h = int(img.height * (new_w / img.width))
-        resized.append(img.resize((new_w, new_h), Image.LANCZOS))
-
-    total_w = sum(im.width for im in resized)
-    canvas = Image.new("RGB", (total_w, h), (0, 0, 0))
-    x = 0
-    for im in resized:
-        canvas.paste(im, (x, 0))
-        x += im.width
-    out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-    canvas.save(out, "JPEG", quality=90)
-    return out.name
-
-
 @router.message(F.text == texts.BTN_PANEL_PREVIEW)
 async def panel_preview_handler(message: Message) -> None:
     if not _PANEL_PREVIEW_IMAGES:
         await message.answer("⚠️ تصاویر پنل یافت نشد.")
         return
     try:
-        collage_path = _make_collage(_PANEL_PREVIEW_IMAGES)
         from aiogram.types import FSInputFile
-        await message.answer_photo(
-            photo=FSInputFile(collage_path),
-            caption=texts.PANEL_PREVIEW_CAPTION,
-        )
-        try:
-            os.unlink(collage_path)
-        except OSError:
-            pass
+        builder = MediaGroupBuilder(caption=texts.PANEL_PREVIEW_CAPTION)
+        for path in _PANEL_PREVIEW_IMAGES:
+            builder.add_photo(media=FSInputFile(path))
+        await message.answer_media_group(media=builder.build())
     except Exception:
-        logger.exception("Failed to create panel preview collage")
+        logger.exception("Failed to send panel preview media group")
         await message.answer("⚠️ خطا در نمایش تصویر پنل.")
 
 
@@ -271,21 +228,22 @@ async def referral_request_handler(message: Message, state: FSMContext, bot: Bot
         admins = []
 
     if not admins:
-        # User without panel — show benefits first with inline confirm
-        from aiogram.utils.keyboard import InlineKeyboardBuilder
-        kb = InlineKeyboardBuilder()
-        kb.button(text="✅ بله، درخواست بده", callback_data="ref_req_confirm_no_panel")
-        kb.button(text="❌ انصراف", callback_data="ref_req_cancel_no_panel")
-        kb.adjust(2)
+        # User without panel — must buy a panel first
         await message.answer(
             texts.REFERRAL_BENEFITS_NO_PANEL,
-            reply_markup=kb.as_markup(),
+            reply_markup=keyboards.panel_request_kb(),
         )
         return
 
     # User has panel — create request directly
-    db.create_referral_request(message.from_user.id, message.from_user.username)
+    request_id = db.create_referral_request(message.from_user.id, message.from_user.username)
     await message.answer(texts.REFERRAL_REQUEST_SUBMITTED)
+
+    # Build panel info for superadmin
+    panel_info = ""
+    if admins:
+        a = admins[0]
+        panel_info = f"🖥 پنل: {a.get('panel', '—')}\n📦 ترافیک: {(a.get('traffic', 0) or 0) / 1024**3:.1f} GB\n"
 
     # Notify superadmins
     user = message.from_user
@@ -296,48 +254,13 @@ async def referral_request_handler(message: Message, state: FSMContext, bot: Bot
                 texts.SUPERADMIN_REFERRAL_REQUEST.format(
                     username=user.username or "—",
                     user_id=user.id,
+                    panel_info=panel_info,
                     date=user.date.strftime("%Y-%m-%d %H:%M"),
                 ),
-                reply_markup=keyboards.referral_request_approval_kb(user.id),
+                reply_markup=keyboards.referral_request_approval_kb(request_id),
             )
         except Exception:
             continue
-
-
-@router.callback_query(F.data == "ref_req_confirm_no_panel")
-async def referral_confirm_no_panel(call: CallbackQuery, bot: Bot) -> None:
-    """User without panel confirms they want a referral code."""
-    if call.from_user.id in settings.superadmin_id_list:
-        await call.answer("⛔")
-        return
-
-    existing = db.get_pending_referral_request(call.from_user.id)
-    if existing:
-        await call.answer(texts.REFERRAL_REQUEST_ALREADY_PENDING, show_alert=True)
-        return
-
-    db.create_referral_request(call.from_user.id, call.from_user.username)
-    await call.message.edit_text(texts.REFERRAL_REQUEST_SUBMITTED)
-
-    user = call.from_user
-    for superadmin_id in settings.superadmin_id_list:
-        try:
-            await bot.send_message(
-                superadmin_id,
-                texts.SUPERADMIN_REFERRAL_REQUEST.format(
-                    username=user.username or "—",
-                    user_id=user.id,
-                    date=user.date.strftime("%Y-%m-%d %H:%M"),
-                ),
-                reply_markup=keyboards.referral_request_approval_kb(user.id),
-            )
-        except Exception:
-            continue
-
-
-@router.callback_query(F.data == "ref_req_cancel_no_panel")
-async def referral_cancel_no_panel(call: CallbackQuery) -> None:
-    await call.message.edit_text("❌ درخواست لغو شد.")
 
 
 @router.callback_query(F.data.startswith("ref_req_approve:"))
