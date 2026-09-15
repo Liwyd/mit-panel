@@ -752,8 +752,9 @@ REFERRAL_REQUEST_ALREADY_PENDING = "⚠️ شما از قبل یک درخواس�
 REFERRAL_REQUEST_APPROVED_NOTIFY = (
     "🎉 درخواست کد رفرال شما تأیید شد!\n\n"
     "کد رفرال شما: <code>{code}</code>\n"
-    " бонус: {bonus}% | قیمت ویژه: {price:,} تومان/GB\n\n"
-    "این کد را با کاربران خود به اشتراک بگذارید."
+    "بونوس: {bonus}%\n"
+    "قیمت ادمین‌های شما به ازای هر گیگ: {price:,} تومان\n\n"
+    "این کد را با زیرمجموعه‌های خود به اشتراک بگذارید."
 )
 REFERRAL_REQUEST_REJECTED_NOTIFY = "❌ درخواست کد رفرال شما رد شد.\nعلت: {reason}"
 
