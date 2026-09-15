@@ -225,6 +225,7 @@ async def referral_request_handler(message: Message, state: FSMContext, bot: Bot
     try:
         admins = await panel_client.get_admins(message.from_user.id)
     except Exception:
+        logger.exception("get_admins() failed for referral request user=%s", message.from_user.id)
         admins = []
 
     if not admins:
@@ -255,12 +256,19 @@ async def referral_request_handler(message: Message, state: FSMContext, bot: Bot
                     username=user.username or "—",
                     user_id=user.id,
                     panel_info=panel_info,
-                    date=user.date.strftime("%Y-%m-%d %H:%M"),
+                    date=message.date.strftime("%Y-%m-%d %H:%M"),
                 ),
                 reply_markup=keyboards.referral_request_approval_kb(request_id),
             )
-        except Exception:
-            continue
+            logger.info(
+                "Referral request notification sent to superadmin %s for user %s (request_id=%s)",
+                superadmin_id, user.id, request_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to send referral request to superadmin %s: %s",
+                superadmin_id, exc,
+            )
 
 
 @router.callback_query(F.data.startswith("ref_req_approve:"))
