@@ -1,5 +1,6 @@
 import time
 import json
+import asyncio
 import requests
 from datetime import datetime, timedelta, timezone
 
@@ -7,11 +8,14 @@ from backend.schema._input import ClientInput, ClientUpdateInput
 
 
 class APIService:
-    _username: str | None = None
-    _cached_token: str | None = None
-    _cached_url: str | None = None
-    _token_time: float | None = None
+    # Per-(url, username) token cache.  Keys are "(url, username)" strings so
+    # that different panels or different admin accounts never overwrite each
+    # other's cached token.
+    _token_cache: dict[str, tuple[str, float]] = {}
     _token_ttl = 300
+    # Lock serialises concurrent logins for the *same* (url, username) to
+    # avoid flooding the panel with parallel token requests.
+    _login_locks: dict[str, asyncio.Lock] = {}
 
     def __init__(
         self, url: str, username: str, password: str, inbounds: dict | str | None = None
@@ -22,6 +26,7 @@ class APIService:
         self.token: str | None = None
         self.session = requests.Session()
         self.headers: dict[str, str] | None = None
+        self._cache_key = f"{self.url}|{self.username}"
 
         if isinstance(inbounds, str):
             try:
@@ -31,41 +36,29 @@ class APIService:
         else:
             self.inbounds = inbounds or {}
 
+    def _get_lock(self) -> asyncio.Lock:
+        if self._cache_key not in APIService._login_locks:
+            APIService._login_locks[self._cache_key] = asyncio.Lock()
+        return APIService._login_locks[self._cache_key]
+
     async def _login(self):
         now = time.time()
+        cached = APIService._token_cache.get(self._cache_key)
 
-        if (
-            APIService._username == self.username
-            and
-            APIService._cached_token
-            and APIService._cached_url == self.url
-            and APIService._token_time
-            and now - APIService._token_time < APIService._token_ttl
-        ):
-            self.token = APIService._cached_token
+        if cached and now - cached[1] < APIService._token_ttl:
+            self.token = cached[0]
             self.headers = {"Authorization": f"Bearer {self.token}"}
             return
 
-        token = (
-            requests.post(
-                f"{self.url}api/admin/token",
-                data={
-                    "username": self.username,
-                    "password": self.password,
-                },
-            )
-            .json()
-            .get("access_token")
-        )
+        lock = self._get_lock()
+        async with lock:
+            # Double-check after acquiring the lock
+            cached = APIService._token_cache.get(self._cache_key)
+            if cached and now - cached[1] < APIService._token_ttl:
+                self.token = cached[0]
+                self.headers = {"Authorization": f"Bearer {self.token}"}
+                return
 
-        APIService._cached_token = token
-        APIService._cached_url = self.url
-        APIService._token_time = now
-        self.token = token
-        self.headers = {"Authorization": f"Bearer {self.token}"}
-
-    async def test_connection(self) -> bool:
-        try:
             token = (
                 requests.post(
                     f"{self.url}api/admin/token",
@@ -77,7 +70,15 @@ class APIService:
                 .json()
                 .get("access_token")
             )
-            return True if token else False
+
+            APIService._token_cache[self._cache_key] = (token, time.time())
+            self.token = token
+            self.headers = {"Authorization": f"Bearer {self.token}"}
+
+    async def test_connection(self) -> bool:
+        try:
+            await self._login()
+            return bool(self.token)
         except Exception:
             return False
 
@@ -88,39 +89,19 @@ class APIService:
         return response
 
     async def get_user(self, username: str) -> dict | bool:
-        token = (
-            requests.post(
-                f"{self.url}api/admin/token",
-                data={
-                    "username": self.username,
-                    "password": self.password,
-                },
-            )
-            .json()
-            .get("access_token")
-        )
+        await self._login()
 
         user = requests.get(
             f"{self.url}api/user/{username}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {self.token}"},
         ).json()
         return user
 
     async def get_inbounds(self) -> dict:
-        token = (
-            requests.post(
-                f"{self.url}api/admin/token",
-                data={
-                    "username": self.username,
-                    "password": self.password,
-                },
-            )
-            .json()
-            .get("access_token")
-        )
+        await self._login()
         url = f"{self.url}api/inbounds"
 
-        response = self.session.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = self.session.get(url, headers={"Authorization": f"Bearer {self.token}"})
 
         # Transform to list of tags for each protocol
         inbounds = response.json()

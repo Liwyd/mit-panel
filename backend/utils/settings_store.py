@@ -7,12 +7,18 @@ small JSON file next to the database, so no DB migration is required.
 import os
 import json
 import threading
+import time
 
 DATA_DIR = os.environ.get("MITPANEL_DATA_DIR", "/app/data")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 LOGO_PATH = os.path.join(DATA_DIR, "logo")
 
 _lock = threading.Lock()
+
+# In-memory cache to avoid reading settings.json from disk on every call.
+_settings_cache: dict | None = None
+_settings_cache_time: float = 0
+_SETTINGS_CACHE_TTL = 10  # seconds
 
 DEFAULTS = {
     "login_title": "MIT Panel",
@@ -31,6 +37,11 @@ DEFAULTS = {
 
 
 def _read() -> dict:
+    global _settings_cache, _settings_cache_time
+    now = time.time()
+    if _settings_cache is not None and now - _settings_cache_time < _SETTINGS_CACHE_TTL:
+        return dict(_settings_cache)
+
     data = dict(DEFAULTS)
     try:
         if os.path.exists(SETTINGS_PATH):
@@ -41,6 +52,8 @@ def _read() -> dict:
                     data[key] = stored[key]
     except Exception:
         pass
+    _settings_cache = dict(data)
+    _settings_cache_time = now
     return data
 
 
@@ -51,6 +64,7 @@ def get_settings() -> dict:
 
 
 def update_settings(patch: dict) -> dict:
+    global _settings_cache, _settings_cache_time
     with _lock:
         data = _read()
         for key in DEFAULTS:
@@ -61,6 +75,9 @@ def update_settings(patch: dict) -> dict:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, SETTINGS_PATH)
+        # Invalidate cache so next read picks up the new file
+        _settings_cache = None
+        _settings_cache_time = 0
     return get_settings()
 
 

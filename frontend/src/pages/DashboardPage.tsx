@@ -207,19 +207,22 @@ export function DashboardPage() {
         if (userRole !== 'superadmin') return
 
         let cancelled = false
+        const controller = new AbortController()
 
         const load = async () => {
             try {
                 const includeAdmins = !marzbanAdminsLoaded
                 const overview = await dashboardAPI.getMarzbanOverview(marzbanPeriod, false, includeAdmins)
-                if (!cancelled) {
+                if (!cancelled && !controller.signal.aborted) {
                     setMarzban(overview)
                     if (includeAdmins && overview?.admins !== undefined) {
                         setMarzbanAdminsLoaded(true)
                     }
                 }
             } catch (err) {
-                console.warn('Failed to fetch Marzban overview:', err)
+                if (!cancelled && !controller.signal.aborted) {
+                    console.warn('Failed to fetch Marzban overview:', err)
+                }
             }
         }
 
@@ -228,26 +231,36 @@ export function DashboardPage() {
 
         return () => {
             cancelled = true
+            controller.abort()
             clearInterval(interval)
         }
     }, [userRole, marzbanPeriod, marzbanAdminsLoaded])
 
-    // Auto-refresh system info every 5 seconds for superadmin
+    // Auto-refresh system info every 15 seconds for superadmin
     useEffect(() => {
         if (userRole !== 'superadmin') return
+
+        const controller = new AbortController()
 
         const interval = setInterval(async () => {
             try {
                 const systemInfo = await dashboardAPI.getSystemInfo()
-                setDashboardData((prevData) =>
-                    prevData ? { ...prevData, system: systemInfo } : null
-                )
+                if (!controller.signal.aborted) {
+                    setDashboardData((prevData) =>
+                        prevData ? { ...prevData, system: systemInfo } : null
+                    )
+                }
             } catch (err) {
-                console.warn('Failed to refresh system info:', err)
+                if (!controller.signal.aborted) {
+                    console.warn('Failed to refresh system info:', err)
+                }
             }
-        }, 5000) // 5 seconds
+        }, 15000) // 15 seconds
 
-        return () => clearInterval(interval)
+        return () => {
+            controller.abort()
+            clearInterval(interval)
+        }
     }, [userRole])
 
     // Monitored servers: the agent heartbeats every ~10s, so polling faster
@@ -263,9 +276,18 @@ export function DashboardPage() {
     useEffect(() => {
         if (userRole !== 'superadmin') return
 
+        const controller = new AbortController()
+
         fetchServers()
-        const interval = setInterval(fetchServers, 10000)
-        return () => clearInterval(interval)
+        const interval = setInterval(() => {
+            if (!controller.signal.aborted) {
+                fetchServers()
+            }
+        }, 30000) // 30 seconds
+        return () => {
+            controller.abort()
+            clearInterval(interval)
+        }
     }, [userRole])
 
     const handleRebootServer = async () => {
