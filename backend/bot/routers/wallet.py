@@ -146,7 +146,7 @@ async def get_wallet_receipt(message: Message, state: FSMContext, bot: Bot) -> N
     )
 
     await message.answer(
-        texts.WALLET_CHARGE_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+        texts.WALLET_CHARGE_SUBMITTED + texts.RECEIPT_WARNING, reply_markup=await menu_kb_for(message.from_user.id)
     )
     await _send_to_superadmins(
         bot,
@@ -232,7 +232,7 @@ async def get_invoice_receipt(message: Message, state: FSMContext, bot: Bot) -> 
     )
 
     await message.answer(
-        texts.INVOICE_RECEIPT_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+        texts.INVOICE_RECEIPT_SUBMITTED + texts.RECEIPT_WARNING, reply_markup=await menu_kb_for(message.from_user.id)
     )
     await _send_to_superadmins(
         bot,
@@ -295,7 +295,7 @@ async def get_debt_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
     )
 
     await message.answer(
-        texts.SETTLEMENT_SUBMITTED, reply_markup=await menu_kb_for(message.from_user.id)
+        texts.SETTLEMENT_SUBMITTED + texts.RECEIPT_WARNING, reply_markup=await menu_kb_for(message.from_user.id)
     )
     await _send_to_superadmins(
         bot,

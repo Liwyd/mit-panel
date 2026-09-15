@@ -265,7 +265,7 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
         receipt_path=receipt_path,
     )
 
-    await message.answer(texts.REQUEST_SUBMITTED, reply_markup=keyboards.main_menu_kb())
+    await message.answer(texts.REQUEST_SUBMITTED + texts.RECEIPT_WARNING, reply_markup=keyboards.main_menu_kb())
 
     caption = (
         f"🧾 درخواست شارژ حجم جدید #{request_id}\n"
