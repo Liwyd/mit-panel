@@ -778,3 +778,12 @@ SUPERADMIN_REFERRAL_REQUEST = (
     "📅 تاریخ: {date}"
 )
 ASK_REJECT_REFERRAL_REASON = "💬 دلیل رد درخواست را وارد کنید (یا انصراف بزنید):"
+
+BTN_PENDING_REFERRAL_REQUESTS = "📋 درخواست‌های رفرال در انتظار"
+NO_PENDING_REFERRAL_REQUESTS = "ℹ️ در حال حاضر درخواست رفرال در انتظاری وجود ندارد."
+PENDING_REFERRAL_REQUEST_LINE = (
+    "📝 درخواست #{id}\n"
+    "👤 کاربر: @{username} (ID: <code>{telegram_id}</code>)\n"
+    "{panel_info}"
+    "📅 تاریخ: {date}"
+)

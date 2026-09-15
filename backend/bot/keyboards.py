@@ -70,16 +70,17 @@ def superadmin_menu_kb() -> ReplyKeyboardMarkup:
 
     Twenty-odd buttons on one keyboard filled the screen and buried the one
     thing that is actually time-critical — the pending requests — so everything
-    else moved a tap away, grouped by what it is for.
+    else moves a tap away, grouped by what it is for.
     """
     return _reply_kb(
         texts.BTN_PENDING_REQUESTS,
+        texts.BTN_PENDING_REFERRAL_REQUESTS,
         texts.BTN_SEC_PANELS,
         texts.BTN_SEC_FINANCE,
         texts.BTN_SEC_USERS,
         texts.BTN_TUTORIALS,
         texts.BTN_SEC_SETTINGS,
-        layout=(1, 2, 2, 1),
+        layout=(2, 2, 2, 1),
     )
 
 

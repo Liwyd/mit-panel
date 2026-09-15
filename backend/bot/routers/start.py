@@ -244,7 +244,14 @@ async def referral_request_handler(message: Message, state: FSMContext, bot: Bot
     panel_info = ""
     if admins:
         a = admins[0]
-        panel_info = f"🖥 پنل: {a.get('panel', '—')}\n📦 ترافیک: {(a.get('traffic', 0) or 0) / 1024**3:.1f} GB\n"
+        initial = (a.get("initial_traffic", 0) or 0) / 1024**3
+        remaining = (a.get("traffic", 0) or 0) / 1024**3
+        used = max(initial - remaining, 0)
+        panel_info = (
+            f"🖥 پنل: {a.get('panel', '—')}\n"
+            f"👤 یوزرنیم پنل: {a.get('username', '—')}\n"
+            f"📊 مصرف: {used:.1f} / {initial:.1f} گیگابایت\n"
+        )
 
     # Notify superadmins
     user = message.from_user
@@ -333,3 +340,50 @@ async def referral_request_reject(call: CallbackQuery) -> None:
         )
     except Exception:
         pass
+
+
+# ── Pending referral requests list (superadmin) ──────────────────────────
+
+@router.message(F.text == texts.BTN_PENDING_REFERRAL_REQUESTS)
+async def list_pending_referral_requests(message: Message, bot: Bot) -> None:
+    if message.from_user.id not in settings.superadmin_id_list:
+        return
+
+    pending = db.list_pending_referral_requests()
+    if not pending:
+        await message.answer(texts.NO_PENDING_REFERRAL_REQUESTS)
+        return
+
+    for req in pending:
+        telegram_id = req["telegram_id"]
+        username = req.get("username") or "—"
+        created_at = req.get("created_at") or "—"
+
+        # Try to fetch panel info for this user
+        panel_info = ""
+        try:
+            admins = await panel_client.get_admins(telegram_id)
+            if admins:
+                a = admins[0]
+                initial = (a.get("initial_traffic", 0) or 0) / 1024**3
+                remaining = (a.get("traffic", 0) or 0) / 1024**3
+                used = max(initial - remaining, 0)
+                panel_info = (
+                    f"🖥 پنل: {a.get('panel', '—')}\n"
+                    f"👤 یوزرنیم پنل: {a.get('username', '—')}\n"
+                    f"📊 مصرف: {used:.1f} / {initial:.1f} گیگابایت\n"
+                )
+        except Exception:
+            panel_info = "⚠️ خطا در دریافت اطلاعات پنل\n"
+
+        caption = texts.PENDING_REFERRAL_REQUEST_LINE.format(
+            id=req["id"],
+            username=username,
+            telegram_id=telegram_id,
+            panel_info=panel_info,
+            date=created_at,
+        )
+        await message.answer(
+            caption,
+            reply_markup=keyboards.referral_request_approval_kb(req["id"]),
+        )
