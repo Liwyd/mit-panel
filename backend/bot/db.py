@@ -230,6 +230,22 @@ def init_db() -> None:
         _ensure_column(conn, "panel_requests", "desired_username", "TEXT")
         _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
 
+        # Referral code requests (users request, superadmin approves)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS referral_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                username TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                reviewed_at TEXT,
+                reviewed_by INTEGER
+            )
+            """
+        )
+
 
 @dataclass
 class TopupRequest:
@@ -1028,3 +1044,44 @@ def get_referral_panels(owner_telegram_id: int) -> list[dict]:
             (owner_telegram_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Referral requests
+# ---------------------------------------------------------------------------
+
+def create_referral_request(telegram_id: int, username: str | None = None) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO referral_requests (telegram_id, username) VALUES (?, ?)",
+            (telegram_id, username),
+        )
+        return cur.lastrowid
+
+
+def get_pending_referral_request(telegram_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM referral_requests WHERE telegram_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+            (telegram_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def list_pending_referral_requests() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM referral_requests WHERE status = 'pending' ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_referral_request_reviewed(
+    request_id: int, status: str, reviewed_by: int, reason: str | None = None
+) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE referral_requests SET status = ?, reject_reason = ?, reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status = 'pending'",
+            (status, reason, reviewed_by, request_id),
+        )
+        return cur.rowcount == 1

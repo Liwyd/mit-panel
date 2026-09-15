@@ -4,6 +4,10 @@ user ever starts the bot."""
 
 from __future__ import annotations
 
+import logging
+import os
+import tempfile
+
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -167,3 +171,234 @@ async def recheck_join(call: CallbackQuery) -> None:
     # ForceJoinMiddleware only lets this callback through once membership is
     # confirmed (or the gate is off), so reaching this handler already means OK.
     await call.answer(texts.FORCE_JOIN_CONFIRMED, show_alert=True)
+
+
+# ── Support button ────────────────────────────────────────────────────────
+
+@router.message(F.text == texts.BTN_SUPPORT)
+async def support_handler(message: Message) -> None:
+    await message.answer(texts.SUPPORT_TEXT.format(user_id=message.from_user.id))
+
+
+# ── Panel preview (collage) ──────────────────────────────────────────────
+
+logger = logging.getLogger(__name__)
+
+# Resolve image paths once at import time
+_PANEL_PREVIEW_IMAGES: list[str] = []
+for _name in ("loginpage.png", "panel.png"):
+    _path = os.path.join(os.path.dirname(__file__), "..", "..", "..", _name)
+    if os.path.isfile(_path):
+        _PANEL_PREVIEW_IMAGES.append(_path)
+
+
+def _make_collage(paths: list[str], max_width: int = 1200) -> str:
+    """Create a side-by-side collage of 2 images. Returns temp file path."""
+    from PIL import Image
+
+    imgs = [Image.open(p) for p in paths]
+    if len(imgs) == 1:
+        # Single image: just resize
+        img = imgs[0].copy()
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        img.save(out, "JPEG", quality=90)
+        return out.name
+
+    # Two images: place side by side
+    h = max(img.height for img in imgs)
+    resized = []
+    for img in imgs:
+        ratio = h / img.height
+        new_w = int(img.width * ratio)
+        new_h = int(img.height * ratio)
+        # Limit each image to half the max width
+        if new_w > max_width // 2:
+            new_w = max_width // 2
+            new_h = int(img.height * (new_w / img.width))
+        resized.append(img.resize((new_w, new_h), Image.LANCZOS))
+
+    total_w = sum(im.width for im in resized)
+    canvas = Image.new("RGB", (total_w, h), (0, 0, 0))
+    x = 0
+    for im in resized:
+        canvas.paste(im, (x, 0))
+        x += im.width
+    out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+    canvas.save(out, "JPEG", quality=90)
+    return out.name
+
+
+@router.message(F.text == texts.BTN_PANEL_PREVIEW)
+async def panel_preview_handler(message: Message) -> None:
+    if not _PANEL_PREVIEW_IMAGES:
+        await message.answer("⚠️ تصاویر پنل یافت نشد.")
+        return
+    try:
+        collage_path = _make_collage(_PANEL_PREVIEW_IMAGES)
+        from aiogram.types import FSInputFile
+        await message.answer_photo(
+            photo=FSInputFile(collage_path),
+            caption=texts.PANEL_PREVIEW_CAPTION,
+        )
+        try:
+            os.unlink(collage_path)
+        except OSError:
+            pass
+    except Exception:
+        logger.exception("Failed to create panel preview collage")
+        await message.answer("⚠️ خطا در نمایش تصویر پنل.")
+
+
+# ── Referral code request ────────────────────────────────────────────────
+
+@router.message(F.text == texts.BTN_REQUEST_REFERRAL)
+async def referral_request_handler(message: Message, state: FSMContext, bot: Bot) -> None:
+    if message.from_user.id in settings.superadmin_id_list:
+        return
+
+    # Check if user already has a pending request
+    existing = db.get_pending_referral_request(message.from_user.id)
+    if existing:
+        await message.answer(texts.REFERRAL_REQUEST_ALREADY_PENDING)
+        return
+
+    # Check if user has a panel
+    try:
+        admins = await panel_client.get_admins(message.from_user.id)
+    except Exception:
+        admins = []
+
+    if not admins:
+        # User without panel — show benefits first with inline confirm
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        kb = InlineKeyboardBuilder()
+        kb.button(text="✅ بله، درخواست بده", callback_data="ref_req_confirm_no_panel")
+        kb.button(text="❌ انصراف", callback_data="ref_req_cancel_no_panel")
+        kb.adjust(2)
+        await message.answer(
+            texts.REFERRAL_BENEFITS_NO_PANEL,
+            reply_markup=kb.as_markup(),
+        )
+        return
+
+    # User has panel — create request directly
+    db.create_referral_request(message.from_user.id, message.from_user.username)
+    await message.answer(texts.REFERRAL_REQUEST_SUBMITTED)
+
+    # Notify superadmins
+    user = message.from_user
+    for superadmin_id in settings.superadmin_id_list:
+        try:
+            await bot.send_message(
+                superadmin_id,
+                texts.SUPERADMIN_REFERRAL_REQUEST.format(
+                    username=user.username or "—",
+                    user_id=user.id,
+                    date=user.date.strftime("%Y-%m-%d %H:%M"),
+                ),
+                reply_markup=keyboards.referral_request_approval_kb(user.id),
+            )
+        except Exception:
+            continue
+
+
+@router.callback_query(F.data == "ref_req_confirm_no_panel")
+async def referral_confirm_no_panel(call: CallbackQuery, bot: Bot) -> None:
+    """User without panel confirms they want a referral code."""
+    if call.from_user.id in settings.superadmin_id_list:
+        await call.answer("⛔")
+        return
+
+    existing = db.get_pending_referral_request(call.from_user.id)
+    if existing:
+        await call.answer(texts.REFERRAL_REQUEST_ALREADY_PENDING, show_alert=True)
+        return
+
+    db.create_referral_request(call.from_user.id, call.from_user.username)
+    await call.message.edit_text(texts.REFERRAL_REQUEST_SUBMITTED)
+
+    user = call.from_user
+    for superadmin_id in settings.superadmin_id_list:
+        try:
+            await bot.send_message(
+                superadmin_id,
+                texts.SUPERADMIN_REFERRAL_REQUEST.format(
+                    username=user.username or "—",
+                    user_id=user.id,
+                    date=user.date.strftime("%Y-%m-%d %H:%M"),
+                ),
+                reply_markup=keyboards.referral_request_approval_kb(user.id),
+            )
+        except Exception:
+            continue
+
+
+@router.callback_query(F.data == "ref_req_cancel_no_panel")
+async def referral_cancel_no_panel(call: CallbackQuery) -> None:
+    await call.message.edit_text("❌ درخواست لغو شد.")
+
+
+@router.callback_query(F.data.startswith("ref_req_approve:"))
+async def referral_request_approve(call: CallbackQuery, state: FSMContext) -> None:
+    if call.from_user.id not in settings.superadmin_id_list:
+        await call.answer("⛔")
+        return
+
+    request_id = int(call.data.split(":")[1])
+
+    # Get the request to find the user
+    with db._connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM referral_requests WHERE id = ? AND status = 'pending'",
+            (request_id,),
+        ).fetchone()
+    if not row:
+        await call.answer("⚠️ درخواست یافت نشد", show_alert=True)
+        return
+
+    # Mark approved
+    db.mark_referral_request_reviewed(request_id, "approved", call.from_user.id)
+    await call.answer("✅ تأیید شد")
+
+    # Now go to the normal referral code creation flow
+    await state.update_data(ref_owner=row["telegram_id"])
+    from backend.bot.states import ReferralManage
+    await state.set_state(ReferralManage.code)
+    await call.message.answer(
+        texts.REFERRAL_ASK_CODE_STR,
+        reply_markup=keyboards.cancel_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("ref_req_reject:"))
+async def referral_request_reject(call: CallbackQuery) -> None:
+    if call.from_user.id not in settings.superadmin_id_list:
+        await call.answer("⛔")
+        return
+
+    request_id = int(call.data.split(":")[1])
+
+    # Get the request to find the user
+    with db._connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM referral_requests WHERE id = ? AND status = 'pending'",
+            (request_id,),
+        ).fetchone()
+    if not row:
+        await call.answer("⚠️ درخواست یافت نشد", show_alert=True)
+        return
+
+    # Mark rejected
+    db.mark_referral_request_reviewed(request_id, "rejected", call.from_user.id)
+    await call.answer("❌ رد شد")
+
+    # Notify the user
+    try:
+        await call.bot.send_message(
+            row["telegram_id"],
+            texts.REFERRAL_REQUEST_REJECTED_NOTIFY.format(reason="درخواست شما توسط مدیریت رد شد."),
+        )
+    except Exception:
+        pass

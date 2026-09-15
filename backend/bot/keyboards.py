@@ -14,7 +14,10 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     kb.button(text=texts.BTN_FORECAST)
     kb.button(text=texts.BTN_MY_INVOICES)
     kb.button(text=texts.BTN_CREATE_PANEL)
-    kb.adjust(2, 2, 2, 2, 1)
+    kb.button(text=texts.BTN_REQUEST_REFERRAL)
+    kb.button(text=texts.BTN_PANEL_PREVIEW)
+    kb.button(text=texts.BTN_SUPPORT)
+    kb.adjust(2, 2, 2, 2, 1, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -26,7 +29,10 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
     kb.button(text=texts.BTN_WALLET)
     kb.button(text=texts.BTN_MY_INVOICES)
     kb.button(text=texts.BTN_MY_PANELS)
-    kb.adjust(2, 1)
+    kb.button(text=texts.BTN_REQUEST_REFERRAL)
+    kb.button(text=texts.BTN_PANEL_PREVIEW)
+    kb.button(text=texts.BTN_SUPPORT)
+    kb.adjust(2, 2, 2)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -35,7 +41,10 @@ def prospect_menu_kb() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_MY_PANELS)
-    kb.adjust(2)
+    kb.button(text=texts.BTN_REQUEST_REFERRAL)
+    kb.button(text=texts.BTN_PANEL_PREVIEW)
+    kb.button(text=texts.BTN_SUPPORT)
+    kb.adjust(2, 2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -402,5 +411,13 @@ def delete_admin_confirm_kb(username: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.DELETE_ADMIN_YES, callback_data=f"del_admin_yes:{username}")
     kb.button(text=texts.DELETE_ADMIN_NO, callback_data="del_admin_no")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def referral_request_approval_kb(request_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_APPROVE_REFERRAL, callback_data=f"ref_req_approve:{request_id}")
+    kb.button(text=texts.BTN_REJECT_REFERRAL, callback_data=f"ref_req_reject:{request_id}")
     kb.adjust(2)
     return kb.as_markup()

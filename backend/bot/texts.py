@@ -660,7 +660,13 @@ SHOP_REQUEST_APPROVED = (
 )
 SHOP_REQUEST_REJECTED = "❌ درخواست شما رد شد.\nعلت: {reason}"
 SHOP_ALREADY_PENDING = "⚠️ شما یک درخواست در حال بررسی دارید. لطفاً منتظر بمانید."
-SHOP_ALREADY_HAS_PANEL = "⚠️ شما از قبل یک پنل دارید. هر اکانت تلگرام فقط امکان داشتن یک پنل را دارد."
+SHOP_ALREADY_HAS_PANEL = (
+    "⚠️ شما از قبل یک پنل دارید. هر اکانت تلگرام فقط امکان داشتن یک پنل را دارد.\n\n"
+    "💡 اگر برای دیگران نیاز به پنل دارید، می‌توانید درخواست کد رفرال بدهید. "
+    "با کد رفرال، آن‌ها می‌توانند با تخفیف ویژه از ربات خرید کنند "
+    "و درصدی از خرید آن‌ها نیز به شما تعلق می‌گیرد.\n\n"
+    "📝 برای درخواست کد رفرال، از منوی زیر استفاده کنید."
+)
 SHOP_PANELS_HEADER = "🖥 پنل‌های موجود:"
 
 # --- referral ---
@@ -716,3 +722,57 @@ DELETE_ADMIN_SUCCESS_SUPERADMIN = (
 )
 DELETE_ADMIN_SUCCESS_OWNER = "⚠️ پنل شما با نام کاربری «{username}» حذف شد."
 DELETE_ADMIN_FAILED = "⚠️ حذف پنل ناموفق بود: {error}"
+
+# --- support ---
+BTN_SUPPORT = "📞 پشتیبانی"
+SUPPORT_TEXT = (
+    "📞 پشتیبانی MIT Panel\n\n"
+    "برای ارتباط با پشتیبانی، به اکانت زیر پیام دهید:\n\n"
+    "👉 @MITsupports\n\n"
+    "🆔 آیدی عددی شما: <code>{user_id}</code>\n"
+    "این آیدی را به پشتیبانی بدهید تا سریع‌تر به شما رسیدگی شود."
+)
+
+# --- panel preview (what does the panel look like) ---
+BTN_PANEL_PREVIEW = "🎨 ظاهر پنل چطوریه؟"
+PANEL_PREVIEW_CAPTION = (
+    "🌶 توی یک دقیقه پنلتو شارژ کن!\n\n"
+    "🎈 Channel: @MITVPN\n"
+    "🥤 Support: @MITsupports"
+)
+
+# --- referral code request ---
+BTN_REQUEST_REFERRAL = "📝 درخواست کد رفرال"
+REFERRAL_REQUEST_SUBMITTED = (
+    "✅ درخواست شما ثبت شد و منتظر تأیید ادمین است.\n"
+    "پس از تأیید، کد رفرال شما ایجاد خواهد شد."
+)
+REFERRAL_REQUEST_ALREADY_PENDING = "⚠️ شما از قبل یک درخواست رفرال در حال بررسی دارید."
+REFERRAL_REQUEST_APPROVED_NOTIFY = (
+    "🎉 درخواست کد رفرال شما تأیید شد!\n\n"
+    "کد رفرال شما: <code>{code}</code>\n"
+    " бонус: {bonus}% | قیمت ویژه: {price:,} تومان/GB\n\n"
+    "این کد را با کاربران خود به اشتراک بگذارید."
+)
+REFERRAL_REQUEST_REJECTED_NOTIFY = "❌ درخواست کد رفرال شما رد شد.\nعلت: {reason}"
+
+# --- referral request for users without panels ---
+REFERRAL_BENEFITS_NO_PANEL = (
+    "📝 درخواست کد رفرال\n\n"
+    "شما هنوز پنل ندارید.\n\n"
+    "✨ مزایای داشتن رفرال:\n"
+    "• می‌تونی همکارات رو زیر مجموعه خودت کنی\n"
+    "• درصدی از خرید اونها رو خودت رایگان هدیه بگیری\n\n"
+    "💡 برای مصارف بالا و با هماهنگی مدیریت فعال می‌شود.\n\n"
+    "آیا می‌خواهید درخواست کد رفرال ثبت کنید؟"
+)
+
+# --- superadmin referral request management ---
+BTN_APPROVE_REFERRAL = "✅ تأیید درخواست"
+BTN_REJECT_REFERRAL = "❌ رد درخواست"
+SUPERADMIN_REFERRAL_REQUEST = (
+    "📝 درخواست کد رفرال جدید\n\n"
+    "👤 کاربر: @{username} (ID: <code>{user_id}</code>)\n"
+    "📅 تاریخ: {date}"
+)
+ASK_REJECT_REFERRAL_REASON = "💬 دلیل رد درخواست را وارد کنید (یا انصراف بزنید):"

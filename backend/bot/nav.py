@@ -77,6 +77,11 @@ ALL_MENU_TEXTS = {
     texts.BTN_APPROVE_REQUEST,
     texts.BTN_REJECT_REQUEST,
     texts.BTN_DELETE_ADMIN,
+    texts.BTN_SUPPORT,
+    texts.BTN_PANEL_PREVIEW,
+    texts.BTN_REQUEST_REFERRAL,
+    texts.BTN_APPROVE_REFERRAL,
+    texts.BTN_REJECT_REFERRAL,
 }
 
 
