@@ -5,6 +5,9 @@ Two fixed points in the Persian week, both at 08:00 Asia/Tehran:
   • Friday — the end of the week: take what the wallet covers, tell each debtor
     what (if anything) is still outstanding, and send the superadmin the roster.
 
+For consumption-mode panels, Friday settlement also generates invoices based on
+actual weekly usage (configs created during the week).
+
 Each run is stamped with its ISO year-week so a restart, or the loop ticking
 more than once inside the same hour, can't double-send.
 """
@@ -13,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -41,6 +44,52 @@ def _week_stamp(now: datetime) -> str:
 
 def _already_ran(key: str, stamp: str) -> bool:
     return db.get_setting(key) == stamp
+
+
+def _calculate_weekly_consumption(username: str) -> int:
+    """Calculate bytes consumed during the current week (Saturday→Friday).
+
+    Uses traffic_history snapshots taken hourly by the warning scanner.
+    Consumption = decrease in remaining traffic, adjusted for any grants.
+    """
+    now = datetime.now(TEHRAN)
+    # Find Saturday of this week (Saturday=5 in Python weekday)
+    days_since_sat = (now.weekday() - 5) % 7
+    week_start = (now - timedelta(days=days_since_sat)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    since_date = week_start.strftime("%Y-%m-%d")
+
+    history = db.get_traffic_history(username, since_date)
+    if len(history) < 1:
+        return 0
+
+    first, last = history[0], history[-1]
+    # Same formula as forecast.py: (remaining_then - remaining_now) + (granted_now - granted_then)
+    consumed = (first["traffic_bytes"] - last["traffic_bytes"]) + (
+        last["initial_bytes"] - first["initial_bytes"]
+    )
+    return max(0, consumed)
+
+
+def _get_admin_telegram_id(username: str) -> int | None:
+    """Look up the Telegram ID for a panel username from the main DB."""
+    from backend.db.engin import sessionLocal
+    from backend.db import crud
+
+    with sessionLocal() as db_session:
+        admin = crud.get_admin_by_username(db_session, username)
+        if admin:
+            return admin.telegram_id
+    return None
+
+
+def _consumption_invoice_exists(telegram_id: int, username: str, week_stamp: str) -> bool:
+    """Check if a consumption invoice already exists for this admin this week."""
+    for inv in db.list_pending_invoices(telegram_id):
+        if inv.description and week_stamp in inv.description and username in inv.description:
+            return True
+    return False
 
 
 async def send_reminders(bot: Bot) -> int:
@@ -122,63 +171,138 @@ async def send_invoice_reminders(bot: Bot) -> int:
 
 
 async def run_settlement(bot: Bot) -> None:
-    """Friday: draw down wallets, tell each debtor where they stand, then report."""
-    debts = db.list_outstanding_debts()
-    if not debts:
-        for superadmin_id in settings.superadmin_id_list:
-            try:
-                await bot.send_message(superadmin_id, texts.WEEKLY_SETTLEMENT_NONE)
-            except Exception:
-                continue
-        return
+    """Friday: generate consumption invoices, draw down wallets for delayed debts,
+    tell each debtor where they stand, then report."""
+    now = datetime.now(TEHRAN)
+    stamp = _week_stamp(now)
 
-    # Wallet is per person, so settle once per owner rather than once per panel.
-    paid_by_panel: dict[str, int] = {}
-    for telegram_id in {d["telegram_id"] for d in debts if d["telegram_id"]}:
-        for entry in apply_wallet_to_debts(telegram_id):
-            paid_by_panel[entry["username"]] = entry["paid"]
+    # --- Phase 1: Consumption mode — generate invoices for actual usage ---
+    consumption_report_lines: list[str] = []
+    for username in db.list_consumption_enabled():
+        telegram_id = _get_admin_telegram_id(username)
+        if not telegram_id:
+            continue
 
-    report_lines: list[str] = []
-    for debt in debts:
-        username = debt["username"]
-        telegram_id = debt["telegram_id"]
-        paid = paid_by_panel.get(username, 0)
-        remaining = db.get_debt(username)
-        if remaining > 0:
-            # Survived its settlement date — from now on it gets chased daily.
-            db.mark_overdue(username)
+        consumed_bytes = _calculate_weekly_consumption(username)
+        if consumed_bytes <= 0:
+            continue
 
-        if telegram_id:
-            try:
-                if remaining <= 0:
-                    await bot.send_message(
-                        telegram_id,
-                        texts.WEEKLY_WALLET_SETTLED.format(
-                            username=username,
-                            paid=paid,
-                            balance=db.get_wallet_balance(telegram_id),
-                        ),
-                    )
-                else:
-                    await bot.send_message(
-                        telegram_id,
-                        texts.WEEKLY_WALLET_PARTIAL.format(
-                            username=username, paid=paid, remaining=remaining
-                        ),
-                        reply_markup=keyboards.pay_debt_kb(username),
-                    )
-            except Exception:
-                pass
+        price_per_gb = db.get_effective_price(username)
+        if not price_per_gb:
+            continue
 
-        report_lines.append(
-            texts.WEEKLY_SETTLEMENT_LINE.format(
+        from backend.bot.units import bytes_to_gb
+        consumed_gb = bytes_to_gb(consumed_bytes)
+        amount = round(consumed_gb * price_per_gb)
+        if amount <= 0:
+            continue
+
+        # Idempotency: skip if invoice already exists this week
+        if _consumption_invoice_exists(telegram_id, username, stamp):
+            continue
+
+        # Merge any existing delayed debt into the consumption invoice
+        existing_debt = db.get_debt(username)
+        if existing_debt > 0:
+            amount += existing_debt
+            db.clear_debt(username)
+
+        # Invoice deadline: next Friday (7 days)
+        due_at = (now + timedelta(days=7)).isoformat()
+        description = f"مصرف هفتگی پنل {username} — {stamp} ({consumed_gb:.1f} GB)"
+        db.create_invoice(
+            telegram_id=telegram_id,
+            amount=amount,
+            description=description,
+            due_at=due_at,
+        )
+
+        # Notify admin
+        try:
+            await bot.send_message(
+                telegram_id,
+                texts.CONSUMPTION_INVOICE_HEADER.format(
+                    username=username,
+                    consumed_gb=consumed_gb,
+                    amount=amount,
+                    due=describe_due(due_at),
+                ),
+            )
+        except Exception:
+            pass
+
+        consumption_report_lines.append(
+            texts.CONSUMPTION_INVOICE_SUPERADMIN.format(
                 username=username,
-                amount=remaining if remaining > 0 else paid,
-                note=texts.WEEKLY_SETTLEMENT_PAID_NOTE if remaining <= 0 else "",
+                telegram_id=telegram_id,
+                consumed_gb=consumed_gb,
+                amount=amount,
             )
         )
 
-    report = texts.WEEKLY_SETTLEMENT_LIST_HEADER + "".join(report_lines)
+    # --- Phase 2: Delayed mode — existing debt settlement (unchanged) ---
+    debts = db.list_outstanding_debts()
+    if debts:
+        # Wallet is per person, so settle once per owner rather than once per panel.
+        paid_by_panel: dict[str, int] = {}
+        for telegram_id in {d["telegram_id"] for d in debts if d["telegram_id"]}:
+            for entry in apply_wallet_to_debts(telegram_id):
+                paid_by_panel[entry["username"]] = entry["paid"]
+
+        delayed_report_lines: list[str] = []
+        for debt in debts:
+            username = debt["username"]
+            telegram_id = debt["telegram_id"]
+            paid = paid_by_panel.get(username, 0)
+            remaining = db.get_debt(username)
+            if remaining > 0:
+                # Survived its settlement date — from now on it gets chased daily.
+                db.mark_overdue(username)
+
+            if telegram_id:
+                try:
+                    if remaining <= 0:
+                        await bot.send_message(
+                            telegram_id,
+                            texts.WEEKLY_WALLET_SETTLED.format(
+                                username=username,
+                                paid=paid,
+                                balance=db.get_wallet_balance(telegram_id),
+                            ),
+                        )
+                    else:
+                        await bot.send_message(
+                            telegram_id,
+                            texts.WEEKLY_WALLET_PARTIAL.format(
+                                username=username, paid=paid, remaining=remaining
+                            ),
+                            reply_markup=keyboards.pay_debt_kb(username),
+                        )
+                except Exception:
+                    pass
+
+            delayed_report_lines.append(
+                texts.WEEKLY_SETTLEMENT_LINE.format(
+                    username=username,
+                    amount=remaining if remaining > 0 else paid,
+                    note=texts.WEEKLY_SETTLEMENT_PAID_NOTE if remaining <= 0 else "",
+                )
+            )
+    else:
+        delayed_report_lines = []
+
+    # --- Send combined report to superadmins ---
+    report_parts = []
+    if consumption_report_lines:
+        report_parts.append("📊 فاکتورهای مصرف هفتگی:\n\n" + "".join(consumption_report_lines))
+    if delayed_report_lines:
+        report_parts.append(
+            texts.WEEKLY_SETTLEMENT_LIST_HEADER + "".join(delayed_report_lines)
+        )
+    if not report_parts:
+        report_parts.append(texts.WEEKLY_SETTLEMENT_NONE)
+
+    report = "\n\n".join(report_parts)
     for superadmin_id in settings.superadmin_id_list:
         try:
             await bot.send_message(superadmin_id, report)

@@ -40,7 +40,7 @@ class DebtPayment(StatesGroup):
     receipt = State()
 
 
-class ToggleWeekly(StatesGroup):
+class TogglePaymentMode(StatesGroup):
     username = State()
 
 

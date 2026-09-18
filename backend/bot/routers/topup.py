@@ -176,8 +176,12 @@ async def pay_weekly_credit(call: CallbackQuery, state: FSMContext, bot: Bot) ->
     username, price, gb = data["panel_username"], data["total_price"], data["amount_gb"]
     telegram_id = call.from_user.id
 
-    if not db.is_weekly_enabled(username):
+    mode = db.get_weekly_mode(username)
+    if not mode:
         await call.answer(texts.WEEKLY_NOT_ENABLED, show_alert=True)
+        return
+    if mode == "consumption":
+        await call.answer(texts.CONSUMPTION_NOT_ALLOWED, show_alert=True)
         return
 
     # Credit is the whole point here: the traffic lands now and is billed at the

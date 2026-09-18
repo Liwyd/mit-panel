@@ -103,9 +103,10 @@ def finance_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_INVOICES,
         texts.BTN_NEW_INVOICE,
         texts.BTN_GRANT_WALLET,
-        texts.BTN_TOGGLE_WEEKLY,
+        texts.BTN_TOGGLE_DELAYED,
+        texts.BTN_TOGGLE_CONSUMPTION,
         texts.BTN_BACK,
-        layout=(2, 2, 1),
+        layout=(2, 2, 2, 1),
     )
 
 
@@ -177,13 +178,13 @@ def invoice_kb() -> InlineKeyboardMarkup:
 
 
 def payment_methods_kb() -> InlineKeyboardMarkup:
-    """Weekly credit is only usable by panels the superadmin enabled it for, but
+    """Delayed credit is only usable by panels the superadmin enabled it for, but
     the button is shown to everyone so those without it get a clear explanation
     rather than silently missing an option."""
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_PAY_CARD, callback_data="pay_method:card")
     kb.button(text=texts.BTN_PAY_WALLET, callback_data="pay_method:wallet")
-    kb.button(text=texts.BTN_PAY_WEEKLY, callback_data="pay_method:weekly")
+    kb.button(text=texts.BTN_PAY_DELAYED, callback_data="pay_method:weekly")
     kb.adjust(1)
     return kb.as_markup()
 

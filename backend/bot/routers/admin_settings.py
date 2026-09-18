@@ -25,7 +25,7 @@ from backend.bot.states import (
     SetCardNumber,
     SetForceJoinChannel,
     SetPricePerGb,
-    ToggleWeekly,
+    TogglePaymentMode,
 )
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
@@ -575,24 +575,51 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
             pass
 
 
-@router.message(F.text == texts.BTN_TOGGLE_WEEKLY)
-async def start_toggle_weekly(message: Message, state: FSMContext) -> None:
-    await state.set_state(ToggleWeekly.username)
-    enabled = db.list_weekly_enabled()
+@router.message(F.text == texts.BTN_TOGGLE_DELAYED)
+async def start_toggle_delayed(message: Message, state: FSMContext) -> None:
+    await state.update_data(payment_mode="delayed")
+    await state.set_state(TogglePaymentMode.username)
+    enabled = db.list_delayed_enabled()
     current = ("\n\nفعال‌ها: " + "، ".join(enabled)) if enabled else ""
-    await message.answer(texts.ASK_WEEKLY_USERNAME + current, reply_markup=keyboards.cancel_kb())
+    await message.answer(texts.ASK_PAYMENT_MODE_USERNAME + current, reply_markup=keyboards.cancel_kb())
 
 
-@router.message(ToggleWeekly.username, ~F.text.in_(ALL_MENU_TEXTS))
-async def finish_toggle_weekly(message: Message, state: FSMContext) -> None:
+@router.message(F.text == texts.BTN_TOGGLE_CONSUMPTION)
+async def start_toggle_consumption(message: Message, state: FSMContext) -> None:
+    await state.update_data(payment_mode="consumption")
+    await state.set_state(TogglePaymentMode.username)
+    enabled = db.list_consumption_enabled()
+    current = ("\n\nفعال‌ها: " + "، ".join(enabled)) if enabled else ""
+    await message.answer(texts.ASK_PAYMENT_MODE_USERNAME + current, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(TogglePaymentMode.username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_toggle_payment_mode(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
     await state.clear()
     username = (message.text or "").strip()
+    mode = data.get("payment_mode", "delayed")
     if not username:
-        await message.answer(texts.ASK_WEEKLY_USERNAME, reply_markup=superadmin_kb(message.from_user.id))
+        await message.answer(texts.ASK_PAYMENT_MODE_USERNAME, reply_markup=superadmin_kb(message.from_user.id))
         return
-    now_on = not db.is_weekly_enabled(username)
-    db.set_weekly_enabled(username, now_on)
-    template = texts.WEEKLY_ENABLED_ON if now_on else texts.WEEKLY_ENABLED_OFF
+
+    current_mode = db.get_weekly_mode(username)
+
+    if current_mode == mode:
+        # Already in this mode -> disable
+        db.set_weekly_enabled(username, False)
+        if mode == "delayed":
+            template = texts.DELAYED_ENABLED_OFF
+        else:
+            template = texts.CONSUMPTION_ENABLED_OFF
+    else:
+        # Enable this mode (switches from disabled or from the other mode)
+        db.set_weekly_mode(username, mode)
+        if mode == "delayed":
+            template = texts.DELAYED_ENABLED_ON
+        else:
+            template = texts.CONSUMPTION_ENABLED_ON
+
     await message.answer(
         template.format(username=username), reply_markup=superadmin_kb(message.from_user.id)
     )

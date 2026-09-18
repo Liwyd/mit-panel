@@ -229,6 +229,8 @@ def init_db() -> None:
         _ensure_column(conn, "debts", "last_warned_at", "TEXT")
         _ensure_column(conn, "panel_requests", "desired_username", "TEXT")
         _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
+        # Payment mode: 'delayed' (buy now pay later) or 'consumption' (pay for actual usage)
+        _ensure_column(conn, "weekly_payment", "mode", "TEXT NOT NULL DEFAULT 'delayed'")
 
         # Referral code requests (users request, superadmin approves)
         conn.execute(
@@ -545,6 +547,17 @@ def drain_wallet(telegram_id: int, up_to: int) -> int:
         return taken
 
 
+def get_weekly_mode(username: str) -> str | None:
+    """Return the payment mode ('delayed' or 'consumption'), or None if not enabled."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT enabled, mode FROM weekly_payment WHERE username = ?", (username,)
+        ).fetchone()
+        if not row or not row["enabled"]:
+            return None
+        return row["mode"] or "delayed"
+
+
 def is_weekly_enabled(username: str) -> bool:
     with _connect() as conn:
         row = conn.execute(
@@ -564,9 +577,37 @@ def set_weekly_enabled(username: str, enabled: bool) -> None:
         )
 
 
+def set_weekly_mode(username: str, mode: str) -> None:
+    """Enable weekly payment with a specific mode ('delayed' or 'consumption')."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO weekly_payment (username, enabled, mode) VALUES (?, 1, ?)
+            ON CONFLICT(username) DO UPDATE SET enabled = 1, mode = excluded.mode
+            """,
+            (username, mode),
+        )
+
+
 def list_weekly_enabled() -> list[str]:
     with _connect() as conn:
         rows = conn.execute("SELECT username FROM weekly_payment WHERE enabled = 1").fetchall()
+        return [r["username"] for r in rows]
+
+
+def list_consumption_enabled() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username FROM weekly_payment WHERE enabled = 1 AND mode = 'consumption'"
+        ).fetchall()
+        return [r["username"] for r in rows]
+
+
+def list_delayed_enabled() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username FROM weekly_payment WHERE enabled = 1 AND mode = 'delayed'"
+        ).fetchall()
         return [r["username"] for r in rows]
 
 

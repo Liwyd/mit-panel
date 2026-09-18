@@ -124,7 +124,7 @@ CARD_PAYMENT_INSTRUCTIONS = (
     "پس از واریز، تصویر رسید را ارسال نمایید."
 )
 
-BTN_PAY_WEEKLY = "🗓 پرداخت سر هفته"
+BTN_PAY_DELAYED = "🗓 پرداخت با تاخیر"
 WEEKLY_NOT_ENABLED = "🚫 این امکان برای شما فعال نیست!"
 WEEKLY_TOPUP_SUCCESS = (
     "✅ {added_gb:g} گیگابایت به پنل «{username}» اضافه شد.\n"
@@ -164,12 +164,33 @@ SETTLEMENT_APPROVED_WITH_CREDIT = (
     "💼 مبلغ اضافه ({excess:,} تومان) به کیف پول شما افزوده شد. موجودی: {balance:,} تومان"
 )
 
-BTN_TOGGLE_WEEKLY = "🗓 فعال/غیرفعال‌کردن پرداخت هفتگی"
-ASK_WEEKLY_USERNAME = "🗓 نام کاربری پنلی که می‌خواهید وضعیت پرداخت هفتگی‌اش تغییر کند را وارد نمایید:"
-WEEKLY_ENABLED_ON = "✅ پرداخت هفتگی برای پنل «{username}» فعال شد."
-WEEKLY_ENABLED_OFF = "🚫 پرداخت هفتگی برای پنل «{username}» غیرفعال شد."
+# --- consumption mode ---
+CONSUMPTION_INVOICE_HEADER = (
+    "📊 فاکتور مصرف هفتگی پنل «{username}»\n\n"
+    "📊 مصرف این هفته: {consumed_gb:.2f} گیگابایت\n"
+    "💰 مبلغ قابل پرداخت: {amount:,} تومان\n"
+    "⏳ مهلت پرداخت: {due}\n\n"
+    "برای پرداخت، از منوی «🧾 فاکتورهای من» اقدام نمایید."
+)
+CONSUMPTION_INVOICE_SUPERADMIN = (
+    "📊 فاکتور مصرف هفتگی صادر شد\n\n"
+    "▪️ پنل: {username}\n"
+    "👤 آیدی عددی: {telegram_id}\n"
+    "📊 مصرف: {consumed_gb:.2f} گیگابایت\n"
+    "💰 مبلغ: {amount:,} تومان"
+)
+CONSUMPTION_NO_USAGE = "📊 پنل «{username}»: مصرفی در این هفته ثبت نشده است."
+
+BTN_TOGGLE_DELAYED = "🗓 فعال/غیرفعال‌کردن پرداخت با تاخیر"
+BTN_TOGGLE_CONSUMPTION = "📊 فعال/غیرفعال‌کردن پرداخت مصرفی"
+ASK_PAYMENT_MODE_USERNAME = "🗓 نام کاربری پنلی که می‌خواهید وضعیت پرداخت آن تغییر کند را وارد نمایید:"
+DELAYED_ENABLED_ON = "✅ پرداخت با تاخیر برای پنل «{username}» فعال شد."
+DELAYED_ENABLED_OFF = "🚫 پرداخت با تاخیر برای پنل «{username}» غیرفعال شد."
+CONSUMPTION_ENABLED_ON = "✅ پرداخت مصرفی برای پنل «{username}» فعال شد."
+CONSUMPTION_ENABLED_OFF = "🚫 پرداخت مصرفی برای پنل «{username}» غیرفعال شد."
+CONSUMPTION_NOT_ALLOWED = "🚫 این پنل روی حالت پرداخت مصرفی است. امکان استفاده از پرداخت با تاخیر وجود ندارد."
 WEEKLY_USED_NOTIFY_SUPERADMIN = (
-    "🗓 خرید اعتباری (پرداخت سر هفته)\n\n"
+    "🗓 خرید اعتباری (پرداخت با تاخیر)\n\n"
     "▪️ پنل: {username}\n"
     "👤 آیدی عددی: {telegram_id}\n"
     "📊 حجم: {added_gb:g} گیگابایت\n"
