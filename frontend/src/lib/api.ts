@@ -13,7 +13,7 @@ import {
     ServerOutput,
     ServerCreatedOutput,
 } from '@/types'
-import { gbToBytes } from './traffic-converter'
+
 
 const api = getApiClient()
 
@@ -109,12 +109,7 @@ export const adminAPI = {
     },
 
     createAdmin: async (data: AdminFormData): Promise<AdminOutput> => {
-        const submitData = {
-            ...data,
-            traffic: gbToBytes(data.traffic),
-        }
-
-        const response = await api.post<ResponseModel<AdminOutput>>(`/superadmin/admin`, submitData)
+        const response = await api.post<ResponseModel<AdminOutput>>(`/superadmin/admin`, data)
 
         if (!response.data.success) {
             throw new Error(response.data.message || 'Failed to create admin')
@@ -124,14 +119,9 @@ export const adminAPI = {
     },
 
     updateAdmin: async (adminId: number, data: AdminFormData): Promise<AdminOutput> => {
-        const submitData = {
-            ...data,
-            traffic: gbToBytes(data.traffic),
-        }
-
         const response = await api.put<ResponseModel<AdminOutput>>(
             `/superadmin/admin/${adminId}`,
-            submitData
+            data
         )
 
         if (!response.data.success) {

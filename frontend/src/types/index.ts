@@ -85,6 +85,11 @@ export const adminSchema = z.object({
         .min(0, 'Traffic cannot be negative')
         .default(0),
 
+    initial_traffic: z
+        .number()
+        .min(0, 'Total quota cannot be negative')
+        .optional(),
+
     update_return_traffic: z
         .boolean()
         .default(false),

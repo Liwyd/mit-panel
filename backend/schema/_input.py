@@ -31,6 +31,7 @@ class AdminUpdateInput(BaseModel):
     marzban_password: Optional[str] = None
     marzban_all_inbounds: bool = False
     traffic: float
+    initial_traffic: Optional[float] = None
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
     expiry_date: datetime | None

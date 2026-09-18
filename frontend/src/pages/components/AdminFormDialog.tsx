@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { adminSchema, AdminFormData, AdminOutput } from '@/types'
 import { adminAPI, dashboardAPI } from '@/lib/api'
-import { bytesToGB } from '@/lib/traffic-converter'
+import { bytesToGB, gbToBytes } from '@/lib/traffic-converter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,6 +44,8 @@ export function AdminFormDialog({
     const [loadingInbounds, setLoadingInbounds] = useState(false)
     const [selectedInbounds, setSelectedInbounds] = useState<Record<string, string[]>>({})
     const [allInbounds, setAllInbounds] = useState(false)
+    const [originalInitialTraffic, setOriginalInitialTraffic] = useState(0)
+    const [originalTraffic, setOriginalTraffic] = useState(0)
 
     const {
         register,
@@ -63,6 +65,7 @@ export function AdminFormDialog({
             marzban_all_inbounds: false,
             flow: null,
             traffic: 0,
+            initial_traffic: 0,
             update_return_traffic: false,
             delete_return_traffic: false,
             is_active: true,
@@ -87,6 +90,9 @@ export function AdminFormDialog({
             setAllInbounds(admin.marzban_all_inbounds ?? false)
             setValue('flow', (admin as any).flow ?? null)
             setValue('traffic', bytesToGB(admin.traffic))
+            setValue('initial_traffic', bytesToGB(admin.initial_traffic || admin.traffic))
+            setOriginalTraffic(bytesToGB(admin.traffic))
+            setOriginalInitialTraffic(bytesToGB(admin.initial_traffic || admin.traffic))
             setValue('update_return_traffic', admin.update_return_traffic)
             setValue('delete_return_traffic', admin.delete_return_traffic)
             setValue('is_active', admin.is_active)
@@ -120,6 +126,8 @@ export function AdminFormDialog({
             setSelectedInbounds({})
             setAllInbounds(false)
             setMarzbanInbounds(null)
+            setOriginalTraffic(0)
+            setOriginalInitialTraffic(0)
         }
     }, [admin, isOpen, setValue, reset])
 
@@ -232,6 +240,8 @@ export function AdminFormDialog({
 
             const submitData: any = {
                 ...data,
+                traffic: gbToBytes(data.traffic),
+                initial_traffic: admin?.id ? gbToBytes(data.initial_traffic || 0) : undefined,
                 expiry_date: expiryForSubmit,
                 marzban_all_inbounds: allInbounds,
                 marzban_inbounds: Object.keys(finalInbounds).length > 0
@@ -462,7 +472,7 @@ export function AdminFormDialog({
 
                     {/* Traffic */}
                     <div className="space-y-2">
-                        <Label htmlFor="traffic">Traffic (GB)</Label>
+                        <Label htmlFor="traffic">Remaining Traffic (GB)</Label>
                         <Input
                             id="traffic"
                             type="number"
@@ -476,6 +486,36 @@ export function AdminFormDialog({
                             <p className="text-sm text-destructive">{errors.traffic.message}</p>
                         )}
                     </div>
+
+                    {/* Initial Traffic (Total Quota) */}
+                    {admin && (
+                        <div className="space-y-2">
+                            <Label htmlFor="initial_traffic">Total Quota (GB)</Label>
+                            <Input
+                                id="initial_traffic"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                placeholder="0"
+                                disabled={isSubmitting}
+                                {...register('initial_traffic', {
+                                    valueAsNumber: true,
+                                    onChange: (e) => {
+                                        const newInitial = parseFloat(e.target.value) || 0
+                                        const consumed = originalInitialTraffic - originalTraffic
+                                        const newRemaining = Math.max(newInitial - consumed, 0)
+                                        setValue('traffic', newRemaining)
+                                    },
+                                })}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Total traffic ever granted. Remaining is computed automatically.
+                            </p>
+                            {errors.initial_traffic && (
+                                <p className="text-sm text-destructive">{errors.initial_traffic.message}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Telegram ID - links this admin to the top-up bot */}
                     <div className="space-y-2">
