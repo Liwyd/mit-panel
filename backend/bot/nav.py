@@ -54,6 +54,7 @@ ALL_MENU_TEXTS = {
     texts.BTN_CHARGE_WALLET,
     texts.BTN_PAY_WALLET,
     texts.BTN_PAY_DELAYED,
+    texts.BTN_PAY_CONSUMPTION,
     texts.BTN_PAY_DEBT,
     texts.BTN_DEBTS,
     texts.BTN_TOGGLE_DELAYED,

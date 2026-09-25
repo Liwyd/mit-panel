@@ -178,13 +178,14 @@ def invoice_kb() -> InlineKeyboardMarkup:
 
 
 def payment_methods_kb() -> InlineKeyboardMarkup:
-    """Delayed credit is only usable by panels the superadmin enabled it for, but
-    the button is shown to everyone so those without it get a clear explanation
-    rather than silently missing an option."""
+    """Delayed and consumption credit are gated per panel by the superadmin, but
+    both buttons are shown to everyone so those without the mode get a clear
+    explanation rather than silently missing an option."""
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_PAY_CARD, callback_data="pay_method:card")
     kb.button(text=texts.BTN_PAY_WALLET, callback_data="pay_method:wallet")
     kb.button(text=texts.BTN_PAY_DELAYED, callback_data="pay_method:weekly")
+    kb.button(text=texts.BTN_PAY_CONSUMPTION, callback_data="pay_method:consumption")
     kb.adjust(1)
     return kb.as_markup()
 

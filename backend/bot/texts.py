@@ -116,6 +116,7 @@ INVOICE_TEXT = (
 )
 BTN_PAY = "💳 پرداخت"
 PAYMENT_METHODS_TEXT = "💳 لطفاً روش پرداخت را انتخاب نمایید:"
+PAYMENT_PROCESSING = "⏳ در حال پردازش درخواست قبلی…"
 BTN_PAY_CARD = "💳 کارت به کارت"
 CARD_NOT_CONFIGURED = "⚠️ شماره کارت هنوز توسط پشتیبانی تنظیم نشده است. لطفاً با پشتیبانی تماس بگیرید."
 CARD_PAYMENT_INSTRUCTIONS = (
@@ -188,7 +189,25 @@ DELAYED_ENABLED_ON = "✅ پرداخت با تاخیر برای پنل «{userna
 DELAYED_ENABLED_OFF = "🚫 پرداخت با تاخیر برای پنل «{username}» غیرفعال شد."
 CONSUMPTION_ENABLED_ON = "✅ پرداخت مصرفی برای پنل «{username}» فعال شد."
 CONSUMPTION_ENABLED_OFF = "🚫 پرداخت مصرفی برای پنل «{username}» غیرفعال شد."
-CONSUMPTION_NOT_ALLOWED = "🚫 این پنل روی حالت پرداخت مصرفی است. امکان استفاده از پرداخت با تاخیر وجود ندارد."
+CONSUMPTION_NOT_ALLOWED = (
+    "🚫 این پنل روی حالت پرداخت مصرفی است. "
+    "از «📊 پرداخت مصرفی هفتگی» استفاده نمایید."
+)
+BTN_PAY_CONSUMPTION = "📊 پرداخت مصرفی هفتگی"
+CONSUMPTION_PAY_NOT_ENABLED = "🚫 پرداخت مصرفی هفتگی برای این پنل فعال نیست!"
+CONSUMPTION_TOPUP_SUCCESS = (
+    "✅ {added_gb:g} گیگابایت به پنل «{username}» اضافه شد.\n"
+    "📊 موجودی جدید: {new_gb:.2f} گیگابایت\n\n"
+    "📊 در پایان هفته، فقط مجموع حجم‌هایی که در این هفته ساختید محاسبه شده "
+    "و فاکتور آن صادر می‌شود."
+)
+CONSUMPTION_TOPUP_NOTIFY_SUPERADMIN = (
+    "📊 شارژ حجم (پرداخت مصرفی هفتگی)\n\n"
+    "▪️ پنل: {username}\n"
+    "👤 آیدی عددی: {telegram_id}\n"
+    "📊 حجم: {added_gb:g} گیگابایت\n"
+    "🗓 صورتحساب در تسویه پایان هفته"
+)
 WEEKLY_USED_NOTIFY_SUPERADMIN = (
     "🗓 خرید اعتباری (پرداخت با تاخیر)\n\n"
     "▪️ پنل: {username}\n"

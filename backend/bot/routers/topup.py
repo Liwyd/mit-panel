@@ -1,7 +1,8 @@
 """Admin-facing top-up flow:
 pick panel (skipped if they own one) -> GB amount -> auto-computed invoice
--> پرداخت -> payment method (card-to-card only, for now) -> card number
--> receipt -> submit for review.
+-> پرداخت -> payment method (card receipt / wallet / delayed credit /
+consumption credit) -> granted immediately except for card, which needs a
+receipt -> submitted for review.
 """
 
 from __future__ import annotations
@@ -170,57 +171,125 @@ async def pay_from_wallet(call: CallbackQuery, state: FSMContext, bot: Bot) -> N
             continue
 
 
+# aiogram runs each update as its own task, so a double-tap on a payment button
+# can start two handlers before the first one clears the FSM state. Both credit
+# handlers claim the caller before touching the panel, so the second tap gets
+# "still processing" instead of a second grant.
+_in_flight_payments: set[int] = set()
+
+
 @router.callback_query(F.data == "pay_method:weekly", TopUp.awaiting_payment)
 async def pay_weekly_credit(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    username, price, gb = data["panel_username"], data["total_price"], data["amount_gb"]
     telegram_id = call.from_user.id
-
-    mode = db.get_weekly_mode(username)
-    if not mode:
-        await call.answer(texts.WEEKLY_NOT_ENABLED, show_alert=True)
+    if telegram_id in _in_flight_payments:
+        await call.answer(texts.PAYMENT_PROCESSING, show_alert=True)
         return
-    if mode == "consumption":
-        await call.answer(texts.CONSUMPTION_NOT_ALLOWED, show_alert=True)
-        return
-
-    # Credit is the whole point here: the traffic lands now and is billed at the
-    # end of the week, so there's no receipt or approval step.
+    _in_flight_payments.add(telegram_id)
     try:
-        result = await panel_client.topup(telegram_id, gb, username=username)
-    except PanelClientError as exc:
+        data = await state.get_data()
+        username, price, gb = data["panel_username"], data["total_price"], data["amount_gb"]
+
+        mode = db.get_weekly_mode(username)
+        if not mode:
+            await call.answer(texts.WEEKLY_NOT_ENABLED, show_alert=True)
+            return
+        if mode == "consumption":
+            await call.answer(texts.CONSUMPTION_NOT_ALLOWED, show_alert=True)
+            return
+
+        # Credit is the whole point here: the traffic lands now and is billed at the
+        # end of the week, so there's no receipt or approval step.
+        try:
+            result = await panel_client.topup(telegram_id, gb, username=username)
+        except PanelClientError as exc:
+            await call.answer()
+            await call.message.answer(
+                texts.WEEKLY_TOPUP_FAILED.format(error=exc), reply_markup=keyboards.main_menu_kb()
+            )
+            return
+
+        await state.clear()
+        db.clear_warning_bucket(username)
+        debt = db.add_debt(username, telegram_id, price)
+        new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
+
         await call.answer()
         await call.message.answer(
-            texts.WEEKLY_TOPUP_FAILED.format(error=exc), reply_markup=keyboards.main_menu_kb()
+            texts.WEEKLY_TOPUP_SUCCESS.format(
+                added_gb=gb, username=username, new_gb=new_gb, price=price, debt=debt
+            ),
+            reply_markup=keyboards.main_menu_kb(),
         )
+        for superadmin_id in settings.superadmin_id_list:
+            try:
+                await bot.send_message(
+                    superadmin_id,
+                    texts.WEEKLY_USED_NOTIFY_SUPERADMIN.format(
+                        username=username,
+                        telegram_id=telegram_id,
+                        added_gb=gb,
+                        price=price,
+                        debt=debt,
+                    ),
+                )
+            except Exception:
+                continue
+    finally:
+        _in_flight_payments.discard(telegram_id)
+
+
+@router.callback_query(F.data == "pay_method:consumption", TopUp.awaiting_payment)
+async def pay_consumption_credit(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    """Consumption-mode credit: the volume lands now, and Friday settlement
+    invoices only the volumes created during this week (weekly.run_settlement,
+    fed by the traffic_history snapshots) — no receipt, no debt entry here."""
+    telegram_id = call.from_user.id
+    if telegram_id in _in_flight_payments:
+        await call.answer(texts.PAYMENT_PROCESSING, show_alert=True)
         return
+    _in_flight_payments.add(telegram_id)
+    try:
+        data = await state.get_data()
+        username, gb = data["panel_username"], data["amount_gb"]
 
-    await state.clear()
-    db.clear_warning_bucket(username)
-    debt = db.add_debt(username, telegram_id, price)
-    new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
+        if db.get_weekly_mode(username) != "consumption":
+            await call.answer(texts.CONSUMPTION_PAY_NOT_ENABLED, show_alert=True)
+            return
 
-    await call.answer()
-    await call.message.answer(
-        texts.WEEKLY_TOPUP_SUCCESS.format(
-            added_gb=gb, username=username, new_gb=new_gb, price=price, debt=debt
-        ),
-        reply_markup=keyboards.main_menu_kb(),
-    )
-    for superadmin_id in settings.superadmin_id_list:
         try:
-            await bot.send_message(
-                superadmin_id,
-                texts.WEEKLY_USED_NOTIFY_SUPERADMIN.format(
-                    username=username,
-                    telegram_id=telegram_id,
-                    added_gb=gb,
-                    price=price,
-                    debt=debt,
-                ),
+            result = await panel_client.topup(telegram_id, gb, username=username)
+        except PanelClientError as exc:
+            await call.answer()
+            await call.message.answer(
+                texts.WEEKLY_TOPUP_FAILED.format(error=exc), reply_markup=keyboards.main_menu_kb()
             )
-        except Exception:
-            continue
+            return
+
+        await state.clear()
+        db.clear_warning_bucket(username)
+        new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
+
+        await call.answer()
+        await call.message.answer(
+            texts.CONSUMPTION_TOPUP_SUCCESS.format(
+                added_gb=gb, username=username, new_gb=new_gb
+            ),
+            reply_markup=keyboards.main_menu_kb(),
+        )
+        for superadmin_id in settings.superadmin_id_list:
+            try:
+                await bot.send_message(
+                    superadmin_id,
+                    texts.CONSUMPTION_TOPUP_NOTIFY_SUPERADMIN.format(
+                        username=username,
+                        telegram_id=telegram_id,
+                        added_gb=gb,
+                    ),
+                )
+            except Exception:
+                continue
+    finally:
+        _in_flight_payments.discard(telegram_id)
 
 
 @router.callback_query(F.data == "pay_method:card", TopUp.awaiting_payment)
