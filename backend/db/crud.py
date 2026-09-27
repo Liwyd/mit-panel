@@ -2,7 +2,14 @@ from datetime import datetime
 from secrets import token_hex
 from sqlalchemy.orm import Session
 
-from backend.db.model import Admins, Panels, News, SanaeiUsers, Servers
+from backend.db.model import (
+    Admins,
+    Panels,
+    News,
+    SanaeiUsers,
+    Servers,
+    MarzbanUsers,
+)
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
 
@@ -100,6 +107,19 @@ def remove_admin(db: Session, admin_id: int) -> bool:
 
 def reduce_admin_traffic(db: Session, admin: Admins, used_traffic) -> None:
     admin.traffic = max(admin.traffic - used_traffic, 0)
+    db.commit()
+
+
+def reduce_admin_traffic_debt(db: Session, admin: Admins, amount: int) -> None:
+    """Deduct quota without the zero floor that normal accounting uses.
+
+    This is only for the usage sync charging users created outside the bot.
+    Those can exceed everything the reseller ever bought, and clamping at
+    zero would erase the evidence: `traffic` is allowed to go negative so
+    the panel stops selling configs that have not been paid for, and the
+    size of the debt is what the invoice asks for.
+    """
+    admin.traffic -= amount
     db.commit()
 
 
@@ -254,6 +274,52 @@ def get_user_from_sanaei_table(db: Session, username: str) -> SanaeiUsers | None
 
 def get_all_users_from_sanaei_table(db: Session) -> list[SanaeiUsers] | None:
     return db.query(SanaeiUsers).all()
+
+
+def get_marzban_users_grouped(db: Session) -> dict[str, dict[str, MarzbanUsers]]:
+    """Every accounted-for Marzban user, bucketed by owning reseller."""
+    grouped: dict[str, dict[str, MarzbanUsers]] = {}
+    for row in db.query(MarzbanUsers).all():
+        grouped.setdefault(row.owner, {})[row.username] = row
+    return grouped
+
+
+def record_marzban_user(
+    db: Session, username: str, owner: str, data_limit: int = 0, source: str = "bot"
+) -> MarzbanUsers:
+    """Remember that `owner` is accounted for owning `username`.
+
+    Upsert rather than insert: a user whose limit is raised later must keep
+    one row, because the sync charges the delta against that stored limit.
+    """
+    row = (
+        db.query(MarzbanUsers)
+        .filter(MarzbanUsers.owner == owner, MarzbanUsers.username == username)
+        .first()
+    )
+    if row is None:
+        row = MarzbanUsers(
+            username=username, owner=owner, data_limit=data_limit, source=source
+        )
+        db.add(row)
+    else:
+        row.data_limit = data_limit
+        if source:
+            row.source = source
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def delete_marzban_user(db: Session, owner: str, username: str) -> None:
+    row = (
+        db.query(MarzbanUsers)
+        .filter(MarzbanUsers.owner == owner, MarzbanUsers.username == username)
+        .first()
+    )
+    if row is not None:
+        db.delete(row)
+        db.commit()
 
 def add_user_in_guard_table(db: Session, username: str, owner: str) -> None:
     user = SanaeiUsers(username=username, owner=owner)

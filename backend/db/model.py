@@ -1,6 +1,15 @@
 from datetime import datetime
 from .engin import Base
-from sqlalchemy import Column, DateTime, Integer, String, Boolean, BigInteger, Float
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    String,
+    Boolean,
+    BigInteger,
+    Float,
+    UniqueConstraint,
+)
 
 
 class Admins(Base):
@@ -59,6 +68,32 @@ class GuardUsers(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     owner = Column(String, nullable=False)
+
+
+class MarzbanUsers(Base):
+    """Which Marzban usernames each reseller is accounted for owning.
+
+    `admins.traffic` only tells you what is left today; it cannot tell you
+    whether a live user was created through the bot (already paid for) or
+    straight on the Marzban panel (owed). The usage sync compares this ledger
+    against what Marzban actually has, so without a row here a user is debt.
+    """
+
+    __tablename__ = "marzban_users"
+    __table_args__ = (
+        UniqueConstraint("owner", "username", name="uq_marzban_users_owner_username"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False, index=True)
+    owner = Column(String, nullable=False, index=True)
+    # Marzban's data_limit for that user: a raised limit means extra quota the
+    # reseller has not paid for yet, so the delta is charged, not the whole cap.
+    data_limit = Column(BigInteger, default=0, nullable=True)
+    # "bot" for users created through MIT Panel, "external" for ones the sync
+    # found on Marzban and had to charge for. Informational, for the report.
+    source = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=True)
 
 
 class Servers(Base):
