@@ -552,6 +552,15 @@ async def add_new_user(
                 },
             )
         admin_check.reduce_usage(user_input.total, user_input.total)
+        # Ledger row for the usage sync: this user was paid for here, so it
+        # must not be reported as debt later.
+        crud.record_marzban_user(
+            db,
+            username=user_input.email,
+            owner=admin_username,
+            data_limit=int(user_input.total or 0),
+            source="bot",
+        )
         return ResponseModel(
             success=True,
             message="User added successfully",
@@ -822,6 +831,15 @@ async def update_a_user(
             )
 
         admin_check.apply_update(old_total, new_total, used)
+        # Keep the ledger's stored limit in step: a raised limit is extra
+        # quota the sync charges for, so it must see the new figure.
+        crud.record_marzban_user(
+            db,
+            username=user_input.email,
+            owner=admin_username,
+            data_limit=new_total,
+            source="bot",
+        )
         return ResponseModel(
             success=True,
             message="User updated successfully",
@@ -1299,6 +1317,7 @@ async def delete_a_user(admin_username: str, uuid: str, db: Session) -> bool:
         logger.info(
             f"User {user_info['username']} deleted by admin {admin_username}, traffic returned: {round(traffic / (1024 ** 3), 2)} GB"
         )
+        crud.delete_marzban_user(db, owner=admin_username, username=username)
 
         return ResponseModel(
             success=True,
