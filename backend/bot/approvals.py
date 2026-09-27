@@ -72,7 +72,31 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
     if req.kind == "invoice":
         if not db.mark_invoice_paid(req.invoice_id):
             return Outcome(False, texts.INVOICE_ALREADY_PAID, alert=True, finished=True)
-        await _tell(bot, customer, texts.INVOICE_PAID_CUSTOMER.format(id=req.invoice_id))
+
+        invoice = db.get_invoice(req.invoice_id) if req.invoice_id else None
+        # An invoice raised by the usage sync buys GB back for one panel. Paying
+        # it has to credit that panel, or the reseller is left in debt with an
+        # invoice marked paid and no way to sell configs again.
+        grants_gb = bool(invoice and invoice.admin_username and invoice.traffic_gb > 0)
+        if grants_gb:
+            try:
+                await panel_client.topup(
+                    customer, invoice.traffic_gb, username=invoice.admin_username
+                )
+            except PanelClientError as exc:
+                # Money was taken but nothing was credited: undo both records
+                # so the receipt can be approved again rather than vanishing.
+                db.revert_invoice_to_pending(invoice.id)
+                db.revert_to_pending(request_id)
+                return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
+
+        await _tell(
+            bot,
+            customer,
+            texts.USAGE_SYNC_PAID_CUSTOMER
+            if grants_gb
+            else texts.INVOICE_PAID_CUSTOMER.format(id=req.invoice_id),
+        )
         return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
     if req.kind == "settlement":

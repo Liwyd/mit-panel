@@ -231,6 +231,10 @@ def init_db() -> None:
         _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
         # Payment mode: 'delayed' (buy now pay later) or 'consumption' (pay for actual usage)
         _ensure_column(conn, "weekly_payment", "mode", "TEXT NOT NULL DEFAULT 'delayed'")
+        # Which panel owes this invoice, and how much GB paying it buys back.
+        # Populated by the usage sync; older invoices carry neither.
+        _ensure_column(conn, "invoices", "admin_username", "TEXT")
+        _ensure_column(conn, "invoices", "traffic_gb", "REAL NOT NULL DEFAULT 0")
 
         # Referral code requests (users request, superadmin approves)
         conn.execute(
@@ -691,19 +695,31 @@ class Invoice:
     paid_at: str | None
     last_reminded_date: str | None
     last_warned_at: str | None = None
+    # Panel this invoice bills and the GB credit paying it grants. Zero/None
+    # for invoices raised by hand, which credit nothing.
+    admin_username: str | None = None
+    traffic_gb: float = 0.0
 
 
 def create_invoice(
-    *, telegram_id: int, amount: int, description: str | None, due_at: str | None
+    *,
+    telegram_id: int,
+    amount: int,
+    description: str | None,
+    due_at: str | None,
+    admin_username: str | None = None,
+    traffic_gb: float = 0.0,
 ) -> int:
     now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
         cur = conn.execute(
             """
-            INSERT INTO invoices (telegram_id, amount, description, due_at, status, created_at)
-            VALUES (?, ?, ?, ?, 'pending', ?)
+            INSERT INTO invoices
+                (telegram_id, amount, description, due_at, status, created_at,
+                 admin_username, traffic_gb)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
             """,
-            (telegram_id, amount, description, due_at, now),
+            (telegram_id, amount, description, due_at, now, admin_username, traffic_gb),
         )
         return cur.lastrowid
 
@@ -723,6 +739,21 @@ def list_pending_invoices(telegram_id: int | None = None) -> list[Invoice]:
     query += " ORDER BY created_at"
     with _connect() as conn:
         return [Invoice(**dict(r)) for r in conn.execute(query, params).fetchall()]
+
+
+def revert_invoice_to_pending(invoice_id: int) -> bool:
+    """Put a settled invoice back when granting its GB failed.
+
+    The approval that paid it is reverted separately, so this only has to
+    undo the status flip — otherwise nobody could ever pay the invoice again.
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE invoices SET status = 'pending', paid_at = NULL "
+            "WHERE id = ? AND status = 'paid'",
+            (invoice_id,),
+        )
+        return cur.rowcount == 1
 
 
 def mark_invoice_paid(invoice_id: int) -> bool:

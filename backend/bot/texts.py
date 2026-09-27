@@ -829,3 +829,13 @@ PENDING_REFERRAL_REQUEST_LINE = (
     "{panel_info}"
     "📅 تاریخ: {date}"
 )
+
+# ── Usage sync: users created outside the bot ──
+# Wording fixed on purpose: this is read out as a debt notice.
+USAGE_SYNC_INVOICE = (
+    "ربات تلگرامی فروش شما در حال ساخت کانفیگ هایی خارج از اعتبار پنل شما هست "
+    "{extra_gb} گیگ اضافه ساخته شده و بدهی شما {debt_gb} هست لطفا سریعتر نسبت به "
+    "تسویه این بدهی و شارژ مجدد پنل اقدام کنید درصورت عدم تسویه ربات فروش متوقف خواهد شد"
+)
+USAGE_SYNC_REPORT = "گزارش همگام‌سازی کاربران پنل‌ها\n\n{body}"
+USAGE_SYNC_PAID_CUSTOMER = "بدهی با موفقیت پرداخت شد اکنون باید پنل خود را برای ادامه فرایند شارژ کنید"
