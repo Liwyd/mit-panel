@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from backend.bot import db, texts
 from backend.bot.invoices import due_at_for
@@ -44,6 +44,12 @@ STAMP_KEY = "usage_sync_stamp"
 ENABLED_KEY = "usage_sync_enabled"
 RETRY_KEY = "usage_sync_retry_after"
 PAGE_SIZE = 500
+# Pacing. The sweep is meant to be unnoticeable on the server: panels are read
+# strictly one after another (never in parallel), with a pause between panels
+# and between the pages of a single panel, so no instant of the run has more
+# than one panel's worth of work in flight.
+BETWEEN_PANELS = 1.0  # seconds
+PAGE_DELAY = 0.25  # seconds between pages of one panel's user list
 
 GB = 1024**3
 
@@ -164,29 +170,66 @@ def new_debt(before: int, after: int) -> int:
     return max(0, -after) - max(0, -before)
 
 
-async def _sweep(bot: Bot) -> list[str]:
-    """Reconcile every Marzban panel. Returns the lines of the report."""
-    report: list[str] = []
-    with sessionLocal() as db:
-        panels = [p for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
-        ledger_all = crud.get_marzban_users_grouped(db)
+def _read_panel_users(panel) -> list[dict]:
+    """Read one panel's users, keeping only the fields the diff needs.
 
-        for panel in panels:
-            try:
-                report.extend(await _sync_panel(db, panel, ledger_all))
-            except Exception as exc:
-                logger.error(f"Usage sync failed for panel {panel.name}: {exc}")
-                report.append(f"❌ {panel.name}: خطا در همگام‌سازی ({exc})")
-    return report
-
-
-async def _sync_panel(db, panel, ledger_all) -> list[str]:
+    Runs in its own thread and its own event loop: the HTTP calls and the JSON
+    parsing are synchronous, so doing them on the main loop would freeze the
+    bot and the dashboard for as long as a panel takes to answer. Only the
+    three fields the comparison uses are kept — a panel's full user records are
+    large, and holding them all at once is the memory spike this sweep exists
+    to avoid.
+    """
     from backend.services.marzban.api import APIService
 
     api = APIService(url=panel.url, username=panel.username, password=panel.password)
     # Raises instead of returning a partial list: acting on one would prune
     # every ledger row the pagination never reached.
-    raw_users = await api.get_all_users_paginated(page_size=PAGE_SIZE)
+    raw_users = asyncio.run(
+        api.get_all_users_paginated(page_size=PAGE_SIZE, page_delay=PAGE_DELAY)
+    )
+
+    slim: list[dict] = []
+    for user in raw_users:
+        name = str(user.get("username") or "")
+        if not name:
+            continue
+        owner = str(((user.get("admin") or {}).get("username")) or "")
+        slim.append(
+            {
+                "username": name,
+                "data_limit": user.get("data_limit") or 0,
+                "admin": {"username": owner} if owner else None,
+            }
+        )
+    return slim
+
+
+def _sweep() -> list[str]:
+    """Reconcile every Marzban panel, one at a time. Returns the report lines.
+
+    Deliberately synchronous and sequential: this runs inside a worker thread,
+    so panels are never fetched concurrently and the server never sees more
+    than a single panel being read at once.
+    """
+    report: list[str] = []
+    with sessionLocal() as db:
+        panels = [p for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
+        ledger_all = crud.get_marzban_users_grouped(db)
+
+        for index, panel in enumerate(panels):
+            try:
+                report.extend(_sync_panel(db, panel, ledger_all))
+            except Exception as exc:
+                logger.error(f"Usage sync failed for panel {panel.name}: {exc}")
+                report.append(f"❌ {panel.name}: خطا در همگام‌سازی ({exc})")
+            if index + 1 < len(panels):
+                time.sleep(BETWEEN_PANELS)
+    return report
+
+
+def _sync_panel(db, panel, ledger_all) -> list[str]:
+    raw_users = _read_panel_users(panel)
     grouped = group_by_owner(raw_users)
 
     lines: list[str] = []
@@ -313,7 +356,10 @@ async def run_usage_sync(bot: Bot) -> None:
 
         db.set_setting(STAMP_KEY, _slot_stamp(now))
         try:
-            report = await _sweep(bot)
+            # Worker thread: the panel reads, JSON parsing and every database
+            # write happen off the main loop, which keeps answering Telegram
+            # and the dashboard throughout the sweep.
+            report = await asyncio.to_thread(_sweep)
         except Exception as exc:
             logger.error(f"Usage sync aborted: {exc}")
             # Let this slot try again shortly instead of waiting a full day.

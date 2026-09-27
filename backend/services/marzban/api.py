@@ -128,8 +128,14 @@ class APIService:
         total = payload.get("total")
         return users, int(total) if isinstance(total, int) else None
 
-    async def get_all_users_paginated(self, page_size: int = 500) -> list[dict]:
-        """Every user on the panel. Aborts rather than returning a partial read."""
+    async def get_all_users_paginated(
+        self, page_size: int = 500, page_delay: float = 0.0
+    ) -> list[dict]:
+        """Every user on the panel. Aborts rather than returning a partial read.
+
+        `page_delay` paces the requests so a very large panel is read over a
+        few seconds instead of being hit with back-to-back calls.
+        """
         collected: list[dict] = []
         offset = 0
         total: int | None = None
@@ -156,6 +162,8 @@ class APIService:
             elif len(page) < page_size:
                 break
             offset += len(page)
+            if page_delay > 0:
+                await asyncio.sleep(page_delay)
             if len(collected) > 500_000:
                 raise MarzbanAPIError("Refusing to page past 500k users")
 
