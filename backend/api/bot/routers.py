@@ -338,6 +338,24 @@ async def create_admin(
 
     sudo_api = MarzbanAPI(url=panel.url, username=panel.username, password=panel.password)
 
+    # Read the inbound set before creating anything. A Marzban admin created
+    # ahead of a failed read cannot be retried (Marzban answers "already
+    # exists"), and a row saved without inbounds serves configs that connect
+    # to nothing — which is how panels ended up without any inbound set.
+    try:
+        inbounds = await sudo_api.get_inbounds()
+    except Exception as e:
+        logger.error(f"Could not read inbounds from {payload.panel}: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"success": False, "message": f"Could not read the panel's inbounds: {e}"},
+        )
+    if not inbounds:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"success": False, "message": "The panel reports no inbounds"},
+        )
+
     # Create in Marzban first. If MIT Panel's row were written first and Marzban
     # then refused, the panel would list an admin that cannot actually serve anyone.
     try:
@@ -360,13 +378,6 @@ async def create_admin(
             },
         )
 
-    # Give the new admin every inbound the panel offers; the superadmin can
-    # narrow it afterwards in the panel UI.
-    try:
-        inbounds = await sudo_api.get_inbounds()
-    except Exception:
-        inbounds = {}
-
     expiry_date = None
     if payload.expiry_days:
         expiry_date = datetime.utcnow() + timedelta(days=payload.expiry_days)
@@ -378,8 +389,9 @@ async def create_admin(
         panel=payload.panel,
         inbound_id=None,
         flow=None,
-        marzban_inbounds=json.dumps(inbounds) if inbounds else None,
+        marzban_inbounds=json.dumps(inbounds),
         marzban_password=payload.password,
+        marzban_all_inbounds=True,
         traffic=int(payload.traffic_gb * 1024**3),
         update_return_traffic=False,
         delete_return_traffic=False,

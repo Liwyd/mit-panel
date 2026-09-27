@@ -23,3 +23,11 @@ dependencies = [
     "aiogram>=3.29,<4",
     "tzdata>=2025",
 ]
+
+# Test-only configuration.  Deliberately no `[dependency-groups]` entry: `uv run`
+# re-resolves the lockfile whenever pyproject.toml changes, and this repository
+# is started with `uv run` in production — a stale lock there would mean an
+# install attempt during boot.  Run the suite with a Python that has pytest.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

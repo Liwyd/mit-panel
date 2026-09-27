@@ -139,6 +139,96 @@ async def topup(telegram_id: int, added_gb: float, username: str | None = None) 
         }
 
 
+async def _read_panel_inbounds(sudo_api) -> dict:
+    """The full inbound set of a Marzban panel, or a refusal.
+
+    An empty set is never acceptable here: the row stores it as the panel's
+    inbound selection, and configs created against no inbounds connect to
+    nothing. Failures are surfaced instead of swallowed, which is what let a
+    panel get saved with no inbounds at all.
+    """
+    try:
+        inbounds = await sudo_api.get_inbounds()
+    except Exception as exc:
+        raise PanelClientError(
+            f"Could not read the panel's inbounds, so no panel was created: {exc}"
+        )
+    if not inbounds:
+        raise PanelClientError(
+            "The panel reports no inbounds, so no panel was created."
+        )
+    return inbounds
+
+
+async def _provision_marzban_admin(
+    db,
+    *,
+    username: str,
+    password: str,
+    panel_obj,
+    traffic_gb: float,
+    telegram_id: int | None,
+    expiry_date: datetime | None,
+) -> dict:
+    """Create a reseller in Marzban, then record it with every inbound.
+
+    Shared by both bot provisioning paths so they cannot drift apart — this
+    bug existed precisely because the same block was written twice. The
+    inbounds are read first on purpose: a Marzban admin created before a
+    failed read cannot be retried (Marzban answers "already exists"), which
+    would strand the pending request forever.
+    """
+    from backend.services.marzban.api import APIService as MarzbanAPI
+
+    sudo_api = MarzbanAPI(
+        url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
+    )
+
+    inbounds = await _read_panel_inbounds(sudo_api)
+
+    try:
+        marzban_status, detail = await sudo_api.create_admin(
+            username, password, telegram_id
+        )
+    except Exception as e:
+        raise PanelClientError(f"Could not reach Marzban: {e}")
+
+    if marzban_status != 200:
+        raise PanelClientError(
+            f"Marzban refused to create the admin (status {marzban_status}). {detail}"
+        )
+
+    from backend.schema._input import AdminInput
+
+    admin_input = AdminInput(
+        username=username,
+        password=password,
+        is_active=True,
+        panel=panel_obj.name,
+        inbound_id=None,
+        flow=None,
+        marzban_inbounds=json.dumps(inbounds),
+        marzban_password=password,
+        marzban_all_inbounds=True,
+        traffic=int(traffic_gb * 1024**3),
+        update_return_traffic=True,
+        delete_return_traffic=True,
+        expiry_date=expiry_date,
+        telegram_id=telegram_id,
+    )
+    crud.add_admin(db, admin_input)
+    return {"inbounds": inbounds}
+
+
+def _require_marzban_panel(db, panel: str):
+    panel_obj = crud.get_panel_by_name(db, panel)
+    if not panel_obj:
+        raise PanelClientError(f"No panel named '{panel}'")
+    if panel_obj.panel_type != "marzban":
+        raise PanelClientError("Only Marzban panels can be provisioned here")
+    return panel_obj
+
+
 async def create_admin(
     username: str,
     password: str,
@@ -152,63 +242,27 @@ async def create_admin(
         if crud.get_admin_by_username(db, username):
             raise PanelClientError("An admin with that username already exists")
 
-        panel_obj = crud.get_panel_by_name(db, panel)
-        if not panel_obj:
-            raise PanelClientError(f"No panel named '{panel}'")
-        if panel_obj.panel_type != "marzban":
-            raise PanelClientError("Only Marzban panels can be provisioned here")
-
-        from backend.services.marzban.api import APIService as MarzbanAPI
-
-        sudo_api = MarzbanAPI(
-            url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
-        )
-
-        try:
-            marzban_status, detail = await sudo_api.create_admin(
-                username, password, telegram_id
-            )
-        except Exception as e:
-            raise PanelClientError(f"Could not reach Marzban: {e}")
-
-        if marzban_status != 200:
-            raise PanelClientError(
-                f"Marzban refused to create the admin (status {marzban_status}). {detail}"
-            )
-
-        try:
-            inbounds = await sudo_api.get_inbounds()
-        except Exception:
-            inbounds = {}
+        panel_obj = _require_marzban_panel(db, panel)
 
         expiry_date = None
         if expiry_days:
             expiry_date = datetime.utcnow() + timedelta(days=expiry_days)
 
-        from backend.schema._input import AdminInput
-
-        admin_input = AdminInput(
+        result = await _provision_marzban_admin(
+            db,
             username=username,
             password=password,
-            is_active=True,
-            panel=panel,
-            inbound_id=None,
-            flow=None,
-            marzban_inbounds=json.dumps(inbounds) if inbounds else None,
-            marzban_password=password,
-            traffic=int(traffic_gb * 1024**3),
-            update_return_traffic=True,
-            delete_return_traffic=True,
-            expiry_date=expiry_date,
+            panel_obj=panel_obj,
+            traffic_gb=traffic_gb,
             telegram_id=telegram_id,
+            expiry_date=expiry_date,
         )
-        crud.add_admin(db, admin_input)
 
         return {
             "username": username,
             "panel": panel,
             "traffic_gb": traffic_gb,
-            "inbounds": inbounds,
+            "inbounds": result["inbounds"],
             "expiry_date": expiry_date.isoformat() if expiry_date else None,
         }
 
@@ -390,53 +444,17 @@ async def create_admin_for_shop(
         if crud.get_admin_by_username(db, username):
             raise PanelClientError("An admin with that username already exists")
 
-        panel_obj = crud.get_panel_by_name(db, panel)
-        if not panel_obj:
-            raise PanelClientError(f"No panel named '{panel}'")
-        if panel_obj.panel_type != "marzban":
-            raise PanelClientError("Only Marzban panels can be provisioned here")
+        panel_obj = _require_marzban_panel(db, panel)
 
-        from backend.services.marzban.api import APIService as MarzbanAPI
-
-        sudo_api = MarzbanAPI(
-            url=panel_obj.url, username=panel_obj.username, password=panel_obj.password
-        )
-
-        try:
-            marzban_status, detail = await sudo_api.create_admin(
-                username, password, telegram_id
-            )
-        except Exception as e:
-            raise PanelClientError(f"Could not reach Marzban: {e}")
-
-        if marzban_status != 200:
-            raise PanelClientError(
-                f"Marzban refused to create the admin (status {marzban_status}). {detail}"
-            )
-
-        try:
-            inbounds = await sudo_api.get_inbounds()
-        except Exception:
-            inbounds = {}
-
-        from backend.schema._input import AdminInput
-
-        admin_input = AdminInput(
+        await _provision_marzban_admin(
+            db,
             username=username,
             password=password,
-            is_active=True,
-            panel=panel,
-            inbound_id=None,
-            flow=None,
-            marzban_inbounds=json.dumps(inbounds) if inbounds else None,
-            marzban_password=password,
-            traffic=int(traffic_gb * 1024**3),
-            update_return_traffic=True,
-            delete_return_traffic=True,
-            expiry_date=None,
+            panel_obj=panel_obj,
+            traffic_gb=traffic_gb,
             telegram_id=telegram_id,
+            expiry_date=None,
         )
-        crud.add_admin(db, admin_input)
 
         return {
             "username": username,
