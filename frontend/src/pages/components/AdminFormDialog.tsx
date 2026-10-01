@@ -131,6 +131,18 @@ export function AdminFormDialog({
         }
     }, [admin, isOpen, setValue, reset])
 
+    // Editing a Marzban admin has to fetch the panel's inbound list too. It
+    // used to stay null on open, so the saved selection rendered as "No
+    // inbounds available", and ticking/unticking "select all" from that state
+    // wiped the set on save. `panels` is a dependency because the panel type
+    // is only known once they have loaded.
+    useEffect(() => {
+        if (!isOpen || !admin) return
+        const panelType = panels.find((p) => p.name === admin.panel)?.panel_type
+        if (panelType !== 'marzban') return
+        loadMarzbanInbounds(admin.panel, admin.marzban_all_inbounds ?? false)
+    }, [isOpen, admin, panels])
+
     const loadPanels = async () => {
         try {
             setLoadingPanels(true)
@@ -143,11 +155,17 @@ export function AdminFormDialog({
         }
     }
 
-    const loadMarzbanInbounds = async (panelName: string) => {
+    const loadMarzbanInbounds = async (panelName: string, selectAll = false) => {
         try {
             setLoadingInbounds(true)
             const inbounds = await adminAPI.getPanelInbounds(panelName)
             setMarzbanInbounds(inbounds)
+            // "Select all" is a saved state as well as a shortcut, so once the
+            // list is in, the individual ticks have to match it. Taken from the
+            // argument rather than the state to stay correct across renders.
+            if (selectAll && inbounds) {
+                setSelectedInbounds(inbounds)
+            }
         } catch (err) {
             console.error('Failed to load inbounds:', err)
             setMarzbanInbounds(null)
@@ -174,7 +192,7 @@ export function AdminFormDialog({
             setValue('flow', null)
         } else if (panelType === 'marzban') {
             // Load inbounds for marzban
-            loadMarzbanInbounds(panelName)
+            loadMarzbanInbounds(panelName, allInbounds)
             // Reset inbound_id and flow for marzban
             setValue('inbound_id', '')
             setValue('flow', null)
@@ -384,9 +402,10 @@ export function AdminFormDialog({
                                         setAllInbounds(checked)
                                         if (checked && marzbanInbounds) {
                                             setSelectedInbounds(marzbanInbounds)
-                                        } else if (!checked) {
-                                            setSelectedInbounds({})
                                         }
+                                        // Unticking only turns the shortcut off.
+                                        // Clearing the ticks with it would drop a
+                                        // hand-picked (or just loaded) set on save.
                                     }}
                                     className="rounded border border-input"
                                 />
