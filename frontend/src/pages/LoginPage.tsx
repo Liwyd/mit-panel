@@ -9,19 +9,35 @@ import logo from '@/assets/logo.png'
 
 const styles = `
 .nx-login-root{
-  position:fixed; inset:0; z-index:0;
+  position:fixed; inset:0; z-index:0; overflow:hidden;
   background:hsl(var(--background)); color:hsl(var(--foreground));
   display:flex; align-items:center; justify-content:center; padding:24px;
   -webkit-font-smoothing:antialiased;
   background-image:radial-gradient(ellipse 70% 50% at 50% -10%, hsl(var(--brand-blue) / .12), transparent 62%);
 }
+/* Slow drifting colour behind the card, in the panel's own blue. Blurred far
+   past the point of any visible edge, so it reads as light in the room rather
+   than as circles. */
+.nx-aurora{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;will-change:transform}
+.nx-aurora-1{width:46vw;height:46vw;min-width:380px;min-height:380px;top:-14%;left:-8%;
+  background:radial-gradient(circle, hsl(var(--brand-blue) / .62), transparent 70%);
+  animation:nx-drift-1 24s ease-in-out infinite alternate}
+.nx-aurora-2{width:40vw;height:40vw;min-width:320px;min-height:320px;bottom:-16%;right:-6%;
+  background:radial-gradient(circle, hsl(217 91% 55% / .50), transparent 70%);
+  animation:nx-drift-2 30s ease-in-out infinite alternate}
+.nx-aurora-3{width:34vw;height:34vw;min-width:280px;min-height:280px;top:34%;right:22%;
+  background:radial-gradient(circle, hsl(205 90% 60% / .42), transparent 70%);
+  animation:nx-drift-3 20s ease-in-out infinite alternate}
+@keyframes nx-drift-1{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(8vw,6vh,0) scale(1.14)}}
+@keyframes nx-drift-2{from{transform:translate3d(0,0,0) scale(1.08)}to{transform:translate3d(-7vw,-5vh,0) scale(1)}}
+@keyframes nx-drift-3{from{transform:translate3d(0,0,0) scale(.94)}to{transform:translate3d(-5vw,7vh,0) scale(1.12)}}
 .nx-card{
   width:100%; max-width:412px;
   background:var(--surface-gradient);
   border:1px solid hsl(var(--border));
   border-radius:1.75rem; padding:36px 32px 24px;
   box-shadow:inset 0 1px 0 0 var(--surface-highlight), var(--surface-shadow);
-  position:relative; overflow:hidden;
+  position:relative; overflow:hidden; z-index:1;
 }
 .nx-brand{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:hsl(var(--muted-foreground));margin-bottom:22px}
 .nx-dot{width:8px;height:8px;border-radius:50%;background:hsl(var(--brand-blue));box-shadow:0 0 12px 1px hsl(var(--brand-blue) / .5)}
@@ -42,7 +58,7 @@ const styles = `
 .nx-btn:active{transform:translateY(0)}
 .nx-btn:disabled{opacity:.55;cursor:default;transform:none}
 .nx-foot{margin-top:24px;padding-top:16px;border-top:1px solid hsl(var(--border));display:flex;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:hsl(var(--muted-foreground))}
-@media (prefers-reduced-motion:reduce){.nx-dot{animation:none}}
+@media (prefers-reduced-motion:reduce){.nx-dot{animation:none}.nx-aurora{animation:none}}
 `
 
 export function LoginPage() {
@@ -55,6 +71,18 @@ export function LoginPage() {
 
     useEffect(() => {
         settingsAPI.getBranding().then(setBranding).catch(() => { })
+    }, [])
+
+    // Light only, whatever the saved theme is. index.html skips the class on a
+    // direct hit; this covers arriving here from inside the app (logging out),
+    // and hands the theme back on the way out.
+    useEffect(() => {
+        const root = document.documentElement
+        const wasDark = root.classList.contains('dark')
+        root.classList.remove('dark')
+        return () => {
+            if (wasDark) root.classList.add('dark')
+        }
     }, [])
 
     useEffect(() => {
@@ -91,6 +119,9 @@ export function LoginPage() {
     return (
         <div className="nx-login-root">
             <style>{styles}</style>
+            <div className="nx-aurora nx-aurora-1" aria-hidden="true" />
+            <div className="nx-aurora nx-aurora-2" aria-hidden="true" />
+            <div className="nx-aurora nx-aurora-3" aria-hidden="true" />
             <main className="nx-card">
                 <div className="nx-brand"><span className="nx-dot" /> Panel Access</div>
 
