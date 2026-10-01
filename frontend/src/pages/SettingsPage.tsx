@@ -248,7 +248,7 @@ export function SettingsPage() {
 
         try {
             setAddingNews(true)
-            await superadminAPI.addNews(newNewsMessage, newNewsBanner)
+            await superadminAPI.addNews(newNewsMessage.trim(), newNewsBanner)
             resetNewsForm()
             fetchNews()
         } catch (err: any) {
@@ -722,7 +722,17 @@ export function SettingsPage() {
                                         className="p-3 bg-muted rounded-md border flex items-start justify-between gap-3"
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm break-words">{item.message}</p>
+                                            <div className="flex items-center gap-2">
+                                                {item.has_banner && (
+                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                                        <ImageIcon className="h-3 w-3" />
+                                                        Banner
+                                                    </span>
+                                                )}
+                                                {item.message && (
+                                                    <p className="text-sm break-words">{item.message}</p>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-muted-foreground mt-1">
                                                 {new Date(item.created_at).toLocaleString()}
                                             </p>
@@ -757,7 +767,9 @@ export function SettingsPage() {
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium">Message</label>
+                            <label className="text-sm font-medium">
+                                Message (optional if a banner is attached)
+                            </label>
                             <Textarea
                                 placeholder="Enter news message..."
                                 value={newNewsMessage}
