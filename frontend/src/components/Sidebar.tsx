@@ -6,19 +6,13 @@ import {
     Settings,
     LogOut,
     Zap,
+    LifeBuoy,
     HelpCircle,
     Sun,
     Moon,
     Server,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { logout, getUserRole } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
@@ -27,6 +21,9 @@ import { settingsAPI } from '@/lib/api'
 interface SidebarProps {
     onItemClick?: () => void
 }
+
+const TOPUP_BOT_URL = 'https://t.me/mitvpnpanelbot'
+const SUPPORT_URL = 'https://t.me/MITsupports'
 
 const navigationItems = [
     {
@@ -84,7 +81,6 @@ export function Sidebar({ onItemClick }: SidebarProps) {
     const location = useLocation()
     const navigate = useNavigate()
     const userRole = getUserRole()
-    const [showFinanceInfo, setShowFinanceInfo] = useState(false)
     const [version, setVersion] = useState('')
 
     useEffect(() => {
@@ -129,14 +125,29 @@ export function Sidebar({ onItemClick }: SidebarProps) {
             <div className="border-t p-4 space-y-2">
                 <ThemeToggleButton />
 
-                <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3"
-                    onClick={() => setShowFinanceInfo(true)}
+                {/* Straight to the bot rather than a dialog explaining there is
+                    one — topping up is the only thing this ever led to. */}
+                <a
+                    href={TOPUP_BOT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onItemClick}
+                    className={cn(buttonVariants({ variant: 'ghost' }), 'w-full justify-start gap-3')}
                 >
                     <Zap className="h-4 w-4" />
                     <span>Finance</span>
-                </Button>
+                </a>
+
+                <a
+                    href={SUPPORT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onItemClick}
+                    className={cn(buttonVariants({ variant: 'ghost' }), 'w-full justify-start gap-3')}
+                >
+                    <LifeBuoy className="h-4 w-4" />
+                    <span>Support</span>
+                </a>
 
                 <Button
                     variant="ghost"
@@ -153,20 +164,6 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                     </div>
                 )}
             </div>
-
-            <Dialog open={showFinanceInfo} onOpenChange={setShowFinanceInfo}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Zap className="h-5 w-5" />
-                            Finance
-                        </DialogTitle>
-                        <DialogDescription className="pt-2 text-sm sm:text-base leading-7 sm:leading-8 text-foreground" dir="rtl">
-                            برای شارژ پنل از ربات اختصاصی استفاده کنید.
-                        </DialogDescription>
-                    </DialogHeader>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }
