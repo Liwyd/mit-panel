@@ -165,3 +165,46 @@ def test_a_server_that_ignores_offset_does_not_loop_forever():
         asyncio.run(svc.get_all_users_paginated(page_size=50))
 
     assert len(session.calls) <= 3
+
+
+def test_nodes_status_normalises_marzban_enum():
+    """The dashboard maps these straight onto its Connected/Error/Disabled
+    badges, so an unexpected value must not reach the UI as-is."""
+    svc, session = service(
+        [
+            FakeResponse(
+                payload=[
+                    {"id": 1, "name": "eu-1", "status": "connected", "message": None},
+                    {"id": 2, "name": "de-2", "status": "ERROR", "message": "refused"},
+                    {"id": 3, "name": "fr-3", "status": None},
+                    {"id": 4, "name": "es-4", "status": "disabled", "message": None},
+                    {"id": 5, "name": "us-5", "status": "Online"},
+                ]
+            )
+        ]
+    )
+
+    nodes = asyncio.run(svc.get_nodes_status())
+
+    assert [(n["id"], n["status"]) for n in nodes] == [
+        (1, "connected"),
+        (2, "error"),
+        (3, "unknown"),
+        (4, "disabled"),
+        (5, "unknown"),
+    ]
+    assert session.calls[0]["timeout"] == marzban_api.REQUEST_TIMEOUT
+
+
+def test_nodes_status_degrades_to_empty_instead_of_failing_the_dashboard():
+    """`marzban_overview` already expects to be able to call this on panels
+    that do not expose /api/nodes at all."""
+    svc, _ = service([FakeResponse(status_code=404, text="not found")])
+
+    assert asyncio.run(svc.get_nodes_status()) == []
+
+
+def test_nodes_status_ignores_non_list_payloads():
+    svc, _ = service([FakeResponse(payload={"detail": "oops"})])
+
+    assert asyncio.run(svc.get_nodes_status()) == []

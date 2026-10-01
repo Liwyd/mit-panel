@@ -351,6 +351,47 @@ class APIService:
             return []
         return response.json().get("usages", [])
 
+    async def get_nodes_status(self) -> list[dict]:
+        """Connection status for every configured remote node.
+
+        Does not include the master itself, which api/nodes/usage reports
+        separately with a null node_id. Read-only GET /api/nodes, so a panel
+        too old to expose it answers 404 and the caller degrades to "unknown"
+        rather than failing the whole dashboard payload.
+        """
+        await self._login()
+        response = self.session.get(
+            f"{self.url}api/nodes",
+            headers=self.headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code != 200:
+            return []
+
+        nodes = response.json()
+        if not isinstance(nodes, list):
+            return []
+
+        # The dashboard maps these straight onto its Connected/Connecting/
+        # Error/Disabled badges, so a value outside Marzban's enum must not
+        # reach the UI verbatim.
+        known = {"connected", "connecting", "error", "disabled"}
+
+        out = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            status = str(node.get("status") or "").strip().lower()
+            out.append(
+                {
+                    "id": node.get("id"),
+                    "name": node.get("name"),
+                    "status": status if status in known else "unknown",
+                    "message": node.get("message"),
+                }
+            )
+        return out
+
     async def count_online_users(self, window_seconds: int = 180) -> int:
         """Marzban exposes no online counter, so the user list is scanned for
         an online_at inside the window. Callers should cache this."""
