@@ -11,9 +11,15 @@ import { HelpPage } from '@/pages/HelpPage'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
+// BASE_URL carries a trailing slash ("/dashboard/"), and React Router only
+// strips a basename when the URL starts with it in full — so a bare
+// "/dashboard" matched nothing and rendered a blank page, while "/dashboard/"
+// and "/dashboard/login" both worked. Without the slash both forms match.
+const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
+
 function App() {
     return (
-        <Router basename={import.meta.env.BASE_URL}>
+        <Router basename={ROUTER_BASENAME}>
             <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<LoginPage />} />
