@@ -2,6 +2,22 @@
 <html lang="en">
 
 <head>
+    <script>
+        // Runs before first paint. React only applies the saved theme once the
+        // sidebar mounts, so without this every load painted light first and
+        // then flipped to dark for users on the dark theme.
+        (function () {
+            try {
+                var theme = localStorage.getItem('theme')
+                if (!theme) {
+                    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+                }
+                document.documentElement.classList.toggle('dark', theme === 'dark')
+            } catch (e) {
+                // Storage blocked (private mode); the default theme stands.
+            }
+        })()
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
