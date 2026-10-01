@@ -30,6 +30,7 @@ import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_P
 import { useBannerImage } from '@/hooks/useBannerImage'
 import { ManageServersDialog } from './components/ManageServersDialog'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
+import { SegmentedBar } from '@/components/charts/SegmentedBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -977,14 +978,13 @@ export function DashboardPage() {
                                             </div>
 
                                             {hasMetrics && server.cpu_percent !== null && server.cpu_percent !== undefined ? (
-                                                <div className="flex flex-wrap items-center gap-5">
-                                                    <Gauge
+                                                <div className="grid min-w-[240px] flex-1 grid-cols-2 gap-x-5 gap-y-3 xl:grid-cols-4">
+                                                    <SegmentedBar
                                                         percent={server.cpu_percent}
                                                         label="CPU"
-                                                        size={72}
-                                                        thickness={7}
+                                                        caption={server.cpu_cores ? `${server.cpu_cores} cores` : undefined}
                                                     />
-                                                    <Gauge
+                                                    <SegmentedBar
                                                         percent={ramPercent ?? 0}
                                                         label="RAM"
                                                         caption={
@@ -992,21 +992,17 @@ export function DashboardPage() {
                                                                 ? `${bytesToGB(server.ram_used).toFixed(1)}/${bytesToGB(server.ram_total || 0).toFixed(1)} GB`
                                                                 : undefined
                                                         }
-                                                        size={72}
-                                                        thickness={7}
                                                     />
-                                                    <Gauge
+                                                    <SegmentedBar
                                                         percent={swapPercent ?? 0}
                                                         label="Swap"
                                                         caption={
                                                             server.swap_total
-                                                                ? `${bytesToGB(server.swap_used || 0).toFixed(1)}/${bytesToGB(server.swap_total).toFixed(1)} GB`
+                                                                ? `${bytesToGB(server.swap_used || 0).toFixed(1)}/${bytesToGB(server.swap_total || 0).toFixed(1)} GB`
                                                                 : 'None'
                                                         }
-                                                        size={72}
-                                                        thickness={7}
                                                     />
-                                                    <Gauge
+                                                    <SegmentedBar
                                                         percent={diskPercent ?? 0}
                                                         label="Storage"
                                                         caption={
@@ -1014,8 +1010,6 @@ export function DashboardPage() {
                                                                 ? `${bytesToGB(server.disk_used).toFixed(1)}/${bytesToGB(server.disk_total || 0).toFixed(1)} GB`
                                                                 : undefined
                                                         }
-                                                        size={72}
-                                                        thickness={7}
                                                     />
                                                 </div>
                                             ) : (
