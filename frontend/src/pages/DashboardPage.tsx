@@ -11,6 +11,7 @@ import {
     Trash2,
     RotateCcw,
     UserX,
+    UserCog,
     Server,
     Clock,
     Wifi,
@@ -25,7 +26,7 @@ import { dashboardAPI, userAPI, serverAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
 import { formatDate, formatExpiryWithDays, cn } from '@/lib/utils'
 import { getUserRole } from '@/lib/auth'
-import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, NewsFeedItem, ServerOutput } from '@/types'
+import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, MarzbanNodeStatus, NewsFeedItem, ServerOutput } from '@/types'
 import { useBannerImage } from '@/hooks/useBannerImage'
 import { ManageServersDialog } from './components/ManageServersDialog'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
@@ -150,6 +151,19 @@ const SERVER_STATUS_META: Record<string, { dot: string; label: string }> = {
     disconnected: { dot: 'bg-destructive', label: 'Disconnected' },
 }
 
+// Marzban's own node enum, matching the Active/Inactive badge convention the
+// rest of the dashboard uses rather than an unlabelled coloured dot.
+const NODE_STATUS_BADGE: Record<
+    MarzbanNodeStatus,
+    { variant: 'secondary' | 'destructive' | 'outline' | 'success' | 'gold'; label: string }
+> = {
+    connected: { variant: 'success', label: 'Connected' },
+    connecting: { variant: 'gold', label: 'Connecting' },
+    error: { variant: 'destructive', label: 'Error' },
+    disabled: { variant: 'outline', label: 'Disabled' },
+    unknown: { variant: 'outline', label: 'Unknown' },
+}
+
 function ServerStatusDot({ status }: { status: string }) {
     const meta = SERVER_STATUS_META[status] || SERVER_STATUS_META.disconnected
     return (
@@ -182,6 +196,7 @@ export function DashboardPage() {
     const [marzban, setMarzban] = useState<MarzbanOverview | null>(null)
     const [marzbanPeriod, setMarzbanPeriod] = useState<MarzbanPeriod>('1d')
     const [marzbanAdminsLoaded, setMarzbanAdminsLoaded] = useState(false)
+    const [statsRefreshing, setStatsRefreshing] = useState(false)
     const [servers, setServers] = useState<ServerOutput[]>([])
     const [showManageServers, setShowManageServers] = useState(false)
     const [serverToReboot, setServerToReboot] = useState<number | null>(null)
@@ -324,6 +339,35 @@ export function DashboardPage() {
             setError(err?.message || 'Failed to fetch dashboard data')
         } finally {
             setLoading(false)
+        }
+    }
+
+    // One button, both halves of the panel's own numbers: the overview and the
+    // host system info sit on separate timers, so waiting for them means the
+    // screen shows figures up to 15s old. `force` also clears the backend's
+    // cached overview rather than serving it again.
+    const handleRefreshStats = async () => {
+        if (statsRefreshing) return
+        setStatsRefreshing(true)
+        try {
+            const includeAdmins = !marzbanAdminsLoaded
+            const [overview, systemInfo] = await Promise.all([
+                dashboardAPI.getMarzbanOverview(marzbanPeriod, true, includeAdmins),
+                userRole === 'superadmin'
+                    ? dashboardAPI.getSystemInfo().catch(() => null)
+                    : Promise.resolve(null),
+            ])
+            setMarzban(overview)
+            if (includeAdmins && overview?.admins !== undefined) {
+                setMarzbanAdminsLoaded(true)
+            }
+            if (systemInfo) {
+                setDashboardData((prev) => (prev ? { ...prev, system: systemInfo } : prev))
+            }
+        } catch (err) {
+            console.warn('Failed to refresh stats:', err)
+        } finally {
+            setStatsRefreshing(false)
         }
     }
 
@@ -472,6 +516,30 @@ export function DashboardPage() {
             {/* Marzban Overview - superadmin only */}
             {userRole === 'superadmin' && marzban && (
                 <div className="space-y-4">
+                    {/* Which Marzban this data came from, and a way to stop
+                        waiting for the next silent poll. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="text-lg font-black leading-tight">
+                            {marzban.panel}
+                            {marzban.version && (
+                                <span className="ml-2 text-sm font-bold text-muted-foreground">
+                                    v{marzban.version}
+                                </span>
+                            )}
+                        </h2>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRefreshStats}
+                            disabled={statsRefreshing}
+                        >
+                            <RefreshCw
+                                className={cn('h-4 w-4', statsRefreshing && 'animate-spin')}
+                            />
+                            <span>Refresh</span>
+                        </Button>
+                    </div>
+
                     {/* Headline rings */}
                     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                         <Card>
@@ -619,13 +687,9 @@ export function DashboardPage() {
                                             const share = marzban.nodes.total
                                                 ? (node.usage / marzban.nodes.total) * 100
                                                 : 0
-                                            const statusColor = {
-                                                connected: 'bg-emerald-500',
-                                                connecting: 'bg-yellow-500',
-                                                error: 'bg-red-500',
-                                                disabled: 'bg-gray-400',
-                                                unknown: 'bg-gray-400',
-                                            }[node.status] || 'bg-gray-400'
+                                            const badge =
+                                                NODE_STATUS_BADGE[node.status] ??
+                                                NODE_STATUS_BADGE.unknown
                                             return (
                                                 <div
                                                     key={`${node.name}-${index}`}
@@ -641,7 +705,9 @@ export function DashboardPage() {
                                                     <span className="min-w-0 flex-1 truncate text-sm font-bold">
                                                         {node.name}
                                                     </span>
-                                                    <span className={cn('h-2 w-2 shrink-0 rounded-full', statusColor)} title={node.status} />
+                                                    <Badge variant={badge.variant} className="shrink-0">
+                                                        {badge.label}
+                                                    </Badge>
                                                     <span className="tabular text-sm font-extrabold">
                                                         {formatTraffic(node.usage)}
                                                     </span>
@@ -661,7 +727,7 @@ export function DashboardPage() {
 
             {/* SuperAdmin Stats Row */}
             {userRole === 'superadmin' && dashboardData && (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     {/* Total Panels */}
                     {dashboardData.panels && (
                         <Card>
@@ -707,6 +773,27 @@ export function DashboardPage() {
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Marzban admins with no MIT Panel account. They can serve
+                        users nobody in this panel knows about, so a non-zero
+                        count is worth a look. Fetched once on load, then kept
+                        across the silent overview polls. */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Marzban-only Admins</CardTitle>
+                            <UserCog className="h-4 w-4 text-amber-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {marzban?.admins ? marzban.admins.marzban_only.toLocaleString() : '—'}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {marzban?.admins
+                                    ? `${marzban.admins.mit.toLocaleString()} linked to a panel account`
+                                    : 'Requires an active Marzban panel'}
+                            </p>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 
