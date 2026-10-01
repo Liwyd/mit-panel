@@ -8,6 +8,10 @@
         // then flipped to dark for users on the dark theme.
         (function () {
             try {
+                // The login page is light only, so it never takes the class.
+                // Covers a direct hit; LoginPage handles arriving from inside
+                // the app, and hands the theme back on the way out.
+                if (/\/login\/?$/.test(window.location.pathname)) return
                 var theme = localStorage.getItem('theme')
                 if (!theme) {
                     theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
