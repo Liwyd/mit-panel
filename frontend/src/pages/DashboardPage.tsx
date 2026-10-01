@@ -112,10 +112,10 @@ function NewsSlide({ item }: { item: NewsFeedItem }) {
 function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
     const [index, setIndex] = useState(0)
 
-    // Land on a valid slide if the list shrinks (an item was removed) or changes.
-    useEffect(() => {
-        setIndex((current) => (current >= items.length ? 0 : current))
-    }, [items.length])
+    // Derived rather than corrected in an effect: if the list shrinks while a
+    // high index is selected, the modulo keeps the visible slide valid without
+    // an extra render.
+    const activeIndex = items.length > 0 ? index % items.length : 0
 
     useEffect(() => {
         if (items.length < 2) return
@@ -125,14 +125,17 @@ function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
         return () => clearInterval(timer)
     }, [items.length])
 
-    const goTo = (i: number) => setIndex(((i % items.length) + items.length) % items.length)
+    const goTo = (i: number) => {
+        if (!items.length) return
+        setIndex(((i % items.length) + items.length) % items.length)
+    }
 
     return (
         <div>
             <div className="overflow-hidden">
                 <div
                     className="flex transition-transform duration-500 ease-out"
-                    style={{ transform: `translateX(-${index * 100}%)` }}
+                    style={{ transform: `translateX(-${activeIndex * 100}%)` }}
                 >
                     {items.map((item) => (
                         <div key={item.id} className="w-full flex-shrink-0">
@@ -144,7 +147,7 @@ function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
 
             {items.length > 1 && (
                 <div className="flex items-center justify-center gap-3 pt-3">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(index - 1)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(activeIndex - 1)}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <div className="flex items-center gap-1.5">
@@ -156,12 +159,12 @@ function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
                                 aria-label={`Go to slide ${i + 1}`}
                                 className={cn(
                                     'h-1.5 rounded-full transition-all',
-                                    i === index ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30'
+                                    i === activeIndex ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30'
                                 )}
                             />
                         ))}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(index + 1)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(activeIndex + 1)}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
