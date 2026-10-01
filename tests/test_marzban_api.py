@@ -10,6 +10,8 @@ panels with more users than a single page return would look almost empty.
 
 import asyncio
 
+import requests
+
 import pytest
 
 from backend.services.marzban import api as marzban_api
@@ -208,3 +210,62 @@ def test_nodes_status_ignores_non_list_payloads():
     svc, _ = service([FakeResponse(payload={"detail": "oops"})])
 
     assert asyncio.run(svc.get_nodes_status()) == []
+
+
+class _TokenResponse:
+    def __init__(self, status_code, payload=None):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} for token")
+
+
+def test_verify_credentials_false_only_when_marzban_rejects(monkeypatch):
+    monkeypatch.setattr(
+        marzban_api.requests, "post", lambda *a, **k: _TokenResponse(401, {})
+    )
+    svc, _ = service()
+
+    assert asyncio.run(svc.verify_credentials()) is False
+
+
+def test_verify_credentials_raises_when_the_panel_cannot_be_asked(monkeypatch):
+    """The whole point: an unreachable panel must not be reported as a wrong
+    password, so the caller's 502 branch has to be reachable."""
+    def boom(*a, **k):
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(marzban_api.requests, "post", boom)
+    svc, _ = service()
+
+    with pytest.raises(requests.ConnectionError):
+        asyncio.run(svc.verify_credentials())
+
+
+def test_verify_credentials_raises_on_a_server_side_failure(monkeypatch):
+    monkeypatch.setattr(
+        marzban_api.requests, "post", lambda *a, **k: _TokenResponse(503, {})
+    )
+    svc, _ = service()
+
+    with pytest.raises(requests.HTTPError):
+        asyncio.run(svc.verify_credentials())
+
+
+def test_verify_credentials_accepts_a_real_token(monkeypatch):
+    seen = {}
+
+    def post(url, **kwargs):
+        seen.update(kwargs)
+        return _TokenResponse(200, {"access_token": "t"})
+
+    monkeypatch.setattr(marzban_api.requests, "post", post)
+    svc, _ = service()
+
+    assert asyncio.run(svc.verify_credentials()) is True
+    assert seen["timeout"] == marzban_api.REQUEST_TIMEOUT

@@ -253,9 +253,11 @@ async def change_admin_marzban_password(
 
     # Prove the requester knows the current password by authenticating to Marzban
     # as that admin — the authoritative check, rather than trusting MIT Panel's copy.
+    # verify_credentials (not test_connection) so an unreachable panel is reported
+    # as unreachable instead of being read as a wrong password.
     verify_api = MarzbanAPI(url=panel.url, username=admin.username, password=payload.current_password)
     try:
-        current_ok = await verify_api.test_connection()
+        current_ok = await verify_api.verify_credentials()
     except Exception as e:
         logger.error(f"Marzban unreachable while verifying password for {admin.username}: {e}")
         return JSONResponse(

@@ -350,12 +350,13 @@ async def change_password(
 
         from backend.services.marzban.api import APIService as MarzbanAPI
 
-        # Verify current password
+        # Verify current password. verify_credentials (not test_connection) so an
+        # unreachable panel surfaces as unreachable, not as a wrong password.
         verify_api = MarzbanAPI(
             url=panel_obj.url, username=admin.username, password=current_password
         )
         try:
-            current_ok = await verify_api.test_connection()
+            current_ok = await verify_api.verify_credentials()
         except Exception as e:
             raise PanelClientError(f"Could not reach Marzban: {e}")
 

@@ -95,6 +95,26 @@ class APIService:
         except Exception:
             return False
 
+    async def verify_credentials(self) -> bool:
+        """Whether Marzban accepts these credentials.
+
+        Returns False only when Marzban actually rejects them, and raises when
+        it couldn't be asked. test_connection() swallows both into False, which
+        makes an unreachable Marzban indistinguishable from a wrong password —
+        and tells the customer their own password was wrong. Callers that show
+        a password-specific message must use this one and let the raise
+        through, so their "could not reach the panel" branch can fire.
+        """
+        response = requests.post(
+            f"{self.url}api/admin/token",
+            data={"username": self.username, "password": self.password},
+            timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code in (401, 403, 422):
+            return False
+        response.raise_for_status()
+        return bool(response.json().get("access_token"))
+
     async def get_users(self):
         await self._login()
         url = f"{self.url}api/users"
