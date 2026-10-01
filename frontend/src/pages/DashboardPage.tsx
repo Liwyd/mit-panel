@@ -63,17 +63,106 @@ import { PageLayout } from '@/components/PageLayout'
 
 function NewsSlide({ item }: { item: NewsFeedItem }) {
     const bannerUrl = useBannerImage(item.id, item.has_banner)
+
+    // Edge-to-edge: no card padding around the image, and a capped height
+    // instead of a fixed aspect ratio — on a wide desktop viewport an
+    // aspect-ratio box scaled to full width would tower over the dashboard.
+    // Height grows per breakpoint and object-cover crops the width, so the
+    // banner stays a sane size however wide the container is.
+    if (item.has_banner) {
+        return (
+            <div className="w-full">
+                {bannerUrl ? (
+                    <img
+                        src={bannerUrl}
+                        alt={item.message || 'Announcement banner'}
+                        className="h-36 w-full rounded-lg object-cover sm:h-44 md:h-52 lg:h-60"
+                    />
+                ) : (
+                    <div className="flex h-36 w-full animate-pulse items-center justify-center rounded-lg bg-muted sm:h-44 md:h-52 lg:h-60">
+                        <span className="text-xs text-muted-foreground">Loading...</span>
+                    </div>
+                )}
+                {item.message && (
+                    <p
+                        className="px-6 pt-3 text-center text-sm font-medium leading-relaxed text-foreground"
+                        style={{ direction: /[؀-ۿ]/.test(item.message) ? 'rtl' : 'ltr' }}
+                    >
+                        {item.message}
+                    </p>
+                )}
+            </div>
+        )
+    }
+
     return (
-        <div className="space-y-2">
-            {bannerUrl && (
-                <img src={bannerUrl} alt="News banner" className="w-full h-auto rounded-md max-h-48 object-cover" />
-            )}
-            {item.message && (
+        <div className="flex min-h-[160px] w-full items-center gap-2 px-6">
+            <Zap className="h-5 w-5 flex-shrink-0 text-primary" />
+            <div
+                className="break-words text-base font-medium leading-relaxed text-foreground"
+                style={{ direction: item.message && /[؀-ۿ]/.test(item.message) ? 'rtl' : 'ltr' }}
+            >
+                {item.message}
+            </div>
+        </div>
+    )
+}
+
+function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
+    const [index, setIndex] = useState(0)
+
+    // Land on a valid slide if the list shrinks (an item was removed) or changes.
+    useEffect(() => {
+        setIndex((current) => (current >= items.length ? 0 : current))
+    }, [items.length])
+
+    useEffect(() => {
+        if (items.length < 2) return
+        const timer = setInterval(() => {
+            setIndex((current) => (current + 1) % items.length)
+        }, 6000)
+        return () => clearInterval(timer)
+    }, [items.length])
+
+    const goTo = (i: number) => setIndex(((i % items.length) + items.length) % items.length)
+
+    return (
+        <div>
+            <div className="overflow-hidden">
                 <div
-                    className="text-sm text-muted-foreground break-words"
-                    style={{ direction: /[\u0600-\u06FF]/.test(item.message) ? 'rtl' : 'ltr' }}
+                    className="flex transition-transform duration-500 ease-out"
+                    style={{ transform: `translateX(-${index * 100}%)` }}
                 >
-                    {item.message}
+                    {items.map((item) => (
+                        <div key={item.id} className="w-full flex-shrink-0">
+                            <NewsSlide item={item} />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {items.length > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-3">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(index - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center gap-1.5">
+                        {items.map((item, i) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => goTo(i)}
+                                aria-label={`Go to slide ${i + 1}`}
+                                className={cn(
+                                    'h-1.5 rounded-full transition-all',
+                                    i === index ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30'
+                                )}
+                            />
+                        ))}
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => goTo(index + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
                 </div>
             )}
         </div>
@@ -953,21 +1042,12 @@ export function DashboardPage() {
                 </Card>
             )}
 
-            {/* Admin News - Only for admin role */}
+            {/* Admin News - Only for admin role. No Card wrapper on purpose:
+                a banner image is meant to be the whole visual, not a picture
+                inside another frame - so there's nothing here but the
+                carousel itself. */}
             {userRole === 'admin' && dashboardData?.news && dashboardData.news.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-primary" />
-                            News & Updates
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {dashboardData.news.map((newsItem) => (
-                            <NewsSlide key={newsItem.id} item={newsItem} />
-                        ))}
-                    </CardContent>
-                </Card>
+                <NewsCarousel items={dashboardData.news} />
             )}
 
 
