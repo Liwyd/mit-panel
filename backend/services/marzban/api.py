@@ -412,33 +412,96 @@ class APIService:
             )
         return out
 
-    async def count_online_users(self, window_seconds: int = 180) -> int:
-        """Marzban exposes no online counter, so the user list is scanned for
-        an online_at inside the window. Callers should cache this."""
-        await self._login()
-        response = self.session.get(
-            f"{self.url}api/users", headers=self.headers, timeout=REQUEST_TIMEOUT
-        )
-        if response.status_code != 200:
-            return 0
+    async def count_online_users(
+        self, window_seconds: int = 180, page_size: int = 200, max_pages: int = 40
+    ) -> int:
+        """Count users seen within the window.
 
-        users = response.json().get("users", [])
+        Marzban exposes no online counter, so the user list is scanned for an
+        online_at inside the window. Callers should cache this.
+
+        The list is read a page at a time rather than in one shot: pulling
+        every user is expensive, because each record carries its proxies,
+        inbounds and subscription links — many megabytes on a large panel.
+        Asking for the most recently seen users first and stopping at the first
+        one outside the window normally reads a page or two.
+
+        The earlier unpaginated version sent no `limit`, so Marzban answered
+        with its default page size and every user past that page was silently
+        counted as offline.
+
+        Marzban rejects the `sort` field on some builds; that falls back to
+        paging in natural order and scanning everything, still bounded by
+        `max_pages` so a huge panel cannot stall the request forever.
+        """
+        await self._login()
+
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
         online = 0
-        for user in users:
-            seen = user.get("online_at")
-            if not seen:
-                continue
-            try:
-                stamp = datetime.fromisoformat(str(seen).replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            # Marzban reports naive UTC; attach the timezone before comparing.
-            if stamp.tzinfo is None:
-                stamp = stamp.replace(tzinfo=timezone.utc)
-            if stamp >= cutoff:
-                online += 1
+        sorted_by_seen = True
+        page = 0
+        pages_read = 0
+
+        while pages_read < max_pages:
+            params: dict = {"offset": page * page_size, "limit": page_size}
+            if sorted_by_seen:
+                params["sort"] = "-online_at"
+
+            response = self.session.get(
+                f"{self.url}api/users",
+                headers=self.headers,
+                params=params,
+                timeout=REQUEST_TIMEOUT,
+            )
+
+            if response.status_code != 200:
+                if sorted_by_seen and page == 0:
+                    # Most likely the sort field is unsupported here. Retry the
+                    # very same page unsorted; nothing is counted yet, so the
+                    # fallback cannot double count. A later failure just returns
+                    # what has been counted so far.
+                    sorted_by_seen = False
+                    continue
+                return online
+
+            pages_read += 1
+
+            payload = response.json()
+            users = payload.get("users", []) if isinstance(payload, dict) else None
+            if not isinstance(users, list) or not users:
+                break
+
+            for user in users:
+                if not isinstance(user, dict):
+                    continue
+                stamp = self._parse_online_at(user.get("online_at"))
+                if stamp is None:
+                    continue
+                if stamp >= cutoff:
+                    online += 1
+                elif sorted_by_seen:
+                    # Newest first, so everything after this is older too.
+                    return online
+
+            if len(users) < page_size:
+                break
+
+            page += 1
+
         return online
+
+    @staticmethod
+    def _parse_online_at(seen) -> datetime | None:
+        if not seen:
+            return None
+        try:
+            stamp = datetime.fromisoformat(str(seen).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        # Marzban reports naive UTC; attach the timezone before comparing.
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return stamp
 
     async def get_admins(self) -> list[dict]:
         """List every admin as Marzban itself has them recorded (username,

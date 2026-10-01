@@ -9,6 +9,7 @@ panels with more users than a single page return would look almost empty.
 """
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -269,3 +270,83 @@ def test_verify_credentials_accepts_a_real_token(monkeypatch):
 
     assert asyncio.run(svc.verify_credentials()) is True
     assert seen["timeout"] == marzban_api.REQUEST_TIMEOUT
+
+
+def _seen(seconds_ago: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)).isoformat()
+
+
+def _user_page(users):
+    return FakeResponse(payload={"total": 999, "users": users})
+
+
+def test_online_count_reads_past_the_first_page():
+    """The old unpaginated call sent no `limit`, so Marzban answered with its
+    default page size and everyone past page one was counted offline."""
+    svc, session = service(
+        [
+            _user_page([{"online_at": _seen(5)}, {"online_at": _seen(10)}]),
+            _user_page([{"online_at": _seen(15)}]),
+        ]
+    )
+
+    count = asyncio.run(svc.count_online_users(page_size=2))
+
+    assert count == 3
+    assert [c["params"]["offset"] for c in session.calls] == [0, 2]
+    assert all(c["params"]["limit"] == 2 for c in session.calls)
+    assert all(c["timeout"] == marzban_api.REQUEST_TIMEOUT for c in session.calls)
+
+
+def test_online_count_stops_at_the_first_seen_older_than_the_window():
+    """Sorted newest-first, so the first out-of-window user ends the scan."""
+    svc, session = service(
+        [
+            _user_page(
+                [
+                    {"online_at": _seen(5)},
+                    {"online_at": _seen(9999)},
+                    {"online_at": _seen(6)},
+                ]
+            )
+        ]
+    )
+
+    count = asyncio.run(svc.count_online_users(window_seconds=60, page_size=3))
+
+    assert count == 1
+    assert len(session.calls) == 1
+
+
+def test_online_count_falls_back_when_the_sort_field_is_rejected():
+    """Some Marzban builds answer 400 to `sort=-online_at`. The retry is the
+    same page, and nothing has been counted yet, so it cannot double count."""
+    svc, session = service(
+        [
+            FakeResponse(status_code=400, payload={"detail": "sort"}),
+            _user_page([{"online_at": _seen(5)}, {"online_at": _seen(6)}]),
+        ]
+    )
+
+    count = asyncio.run(svc.count_online_users(page_size=2))
+
+    assert count == 2
+    assert session.calls[0]["params"]["sort"] == "-online_at"
+    assert "sort" not in session.calls[1]["params"]
+
+
+def test_online_count_is_bounded_so_a_huge_panel_cannot_stall_the_request():
+    """Every page full of fresh users and never a short page: the cap is the
+    only thing that ends this scan."""
+    full = [{"online_at": _seen(5)}] * 2
+    svc, session = service([_user_page(full)] * 10)
+
+    asyncio.run(svc.count_online_users(page_size=2, max_pages=3))
+
+    assert len(session.calls) == 3
+
+
+def test_online_count_treats_a_bad_timestamp_as_offline():
+    svc, _ = service([_user_page([{"online_at": "not-a-date"}, {"online_at": None}])])
+
+    assert asyncio.run(svc.count_online_users(page_size=5)) == 0
