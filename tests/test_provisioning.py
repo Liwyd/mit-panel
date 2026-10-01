@@ -210,3 +210,49 @@ def build_bot_client(db_session):
     app.include_router(routers.router)
     app.dependency_overrides[get_db] = lambda: db_session
     return TestClient(app)
+
+
+def test_db_failure_after_marzban_succeeded_is_reported_as_recoverable(
+    monkeypatch, db_session, marzban_panel
+):
+    """Marzban has already created the admin when MIT Panel's own insert fails.
+
+    The operator must be told the admin exists on one side only and how to
+    undo it, and the poisoned session must be rolled back — after a failed
+    commit every later query on it raises PendingRollbackError instead of the
+    original cause.
+    """
+    client = build_bot_client(db_session)
+    install_fake_api(monkeypatch, live=dict(INBOUNDS))
+
+    rolled_back = []
+    original_rollback = db_session.rollback
+
+    def spy():
+        rolled_back.append(True)
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "rollback", spy)
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(routers.crud, "add_admin", explode)
+
+    response = client.post(
+        "/bot/admin/create",
+        headers={"X-Bot-Api-Key": "test-bot-key"},
+        json={
+            "username": "apiadmin",
+            "password": "pw",
+            "panel": "panel-one",
+            "traffic_gb": 15.0,
+        },
+    )
+
+    assert response.status_code == 500
+    message = response.json()["message"]
+    assert "created in Marzban" in message
+    assert "delete it from Marzban and try again" in message
+    assert rolled_back, "the session must be rolled back after a failed commit"
+    assert get_admin(db_session, "apiadmin") is None

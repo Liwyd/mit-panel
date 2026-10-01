@@ -353,9 +353,19 @@ async def create_admin(
             content={"success": False, "message": f"Could not read the panel's inbounds: {e}"},
         )
     if not inbounds:
+        # Unreachable in practice — get_inbounds() raises on an empty set — but
+        # it is the last guard before an admin is created, so it must refuse
+        # rather than provision an account whose users would carry no config.
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            content={"success": False, "message": "The panel reports no inbounds"},
+            content={
+                "success": False,
+                "message": (
+                    "The panel reports no inbounds, so the new admin's users "
+                    "would be created without any configuration. Fix the "
+                    "inbounds on the Marzban panel first."
+                ),
+            },
         )
 
     # Create in Marzban first. If MIT Panel's row were written first and Marzban
@@ -403,12 +413,25 @@ async def create_admin(
     try:
         crud.add_admin(db, admin_input)
     except Exception as e:
-        logger.error(f"Failed to create admin in MIT Panel for {payload.username}: {e}")
+        # Marzban has already created this admin at this point, so the panel
+        # now lists an account that cannot serve anyone. Roll back first: after
+        # a failed commit the session is poisoned and every later query on it
+        # raises PendingRollbackError, hiding the original cause.
+        db.rollback()
+        logger.exception(
+            "Marzban created %s on %s but MIT Panel could not save the row",
+            payload.username,
+            payload.panel,
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "success": False,
-                "message": f"Admin created in Marzban but failed to save in MIT Panel: {e}",
+                "message": (
+                    f"The admin was created in Marzban but could not be saved in "
+                    f"MIT Panel: {e}. Add it manually in the panel, or delete it "
+                    f"from Marzban and try again."
+                ),
             },
         )
 
