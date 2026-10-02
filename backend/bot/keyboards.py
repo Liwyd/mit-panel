@@ -220,10 +220,22 @@ def user_actions_kb(telegram_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def invoice_delete_kb(invoices) -> InlineKeyboardMarkup:
+def bills_delete_kb(items) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    for inv in invoices:
-        kb.button(text=f"🗑 #{inv.id} — {inv.amount:,}", callback_data=f"delinv:{inv.id}")
+    for bill in items:
+        if bill.kind == "invoice":
+            label = texts.BTN_DELETE_BILL_INVOICE.format(id=bill.invoice_id)
+        else:
+            label = texts.BTN_DELETE_BILL_WEEKLY.format(username=bill.username)
+        kb.button(text=f"{label} — {bill.amount:,}", callback_data=f"billdel:{bill.key}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_bill_delete_kb(bill) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_CONFIRM_DELETE, callback_data=f"billdelok:{bill.key}")
+    kb.button(text=texts.BTN_KEEP, callback_data="billdel_no")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -246,6 +258,7 @@ def bill_actions_kb(customer) -> InlineKeyboardMarkup | None:
         return None
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_WARN_CUSTOMER, callback_data=f"warnall:{customer.telegram_id}")
+    kb.button(text=texts.BTN_DELETE_CUSTOMER_BILL, callback_data=f"delpick:{customer.telegram_id}")
     kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{customer.telegram_id}")
     kb.adjust(2, 2)
     return kb.as_markup()

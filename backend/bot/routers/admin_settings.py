@@ -433,6 +433,30 @@ async def warn_customer(call: CallbackQuery, bot: Bot) -> None:
     await _refresh_customer_card(call, telegram_id)
 
 
+@router.callback_query(F.data.startswith("delpick:"))
+async def pick_bill_to_delete(call: CallbackQuery) -> None:
+    telegram_id = int(call.data.split(":", 1)[1])
+    items = sorted(bills.open_bills(telegram_id), key=bills.urgency, reverse=True)
+    if not items:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    await call.answer()
+    # One debt needs no choosing.
+    if len(items) == 1:
+        await _ask_delete_confirmation(call, items[0])
+        return
+    await call.message.answer(
+        texts.CHOOSE_INVOICE_TO_DELETE, reply_markup=keyboards.bills_delete_kb(items)
+    )
+
+
+async def _ask_delete_confirmation(call: CallbackQuery, bill) -> None:
+    # Writing off money is irreversible, so it takes a second tap.
+    await call.message.answer(
+        bills.confirm_delete_text(bill), reply_markup=keyboards.confirm_bill_delete_kb(bill)
+    )
+
+
 # Kept for the per-bill buttons on cards sent before this was simplified.
 @router.callback_query(F.data.startswith("warn:"))
 async def send_nonpayment_warning(call: CallbackQuery, bot: Bot) -> None:
@@ -451,6 +475,53 @@ async def send_nonpayment_warning(call: CallbackQuery, bot: Bot) -> None:
     bills.mark_warned(bill)
     await call.answer(texts.WARNING_SENT_TOAST)
     await _refresh_customer_card(call, bill.telegram_id)
+
+
+@router.callback_query(F.data.startswith("billdel:"))
+async def confirm_bill_delete(call: CallbackQuery) -> None:
+    bill = bills.find(call.data.split(":", 1)[1])
+    if bill is None:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    await call.answer()
+    await _ask_delete_confirmation(call, bill)
+
+
+@router.callback_query(F.data.startswith("billdelok:"))
+async def do_bill_delete(call: CallbackQuery, bot: Bot) -> None:
+    bill = bills.find(call.data.split(":", 1)[1])
+    if bill is None:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+
+    written_off = bills.write_off(bill)
+    if written_off is None:
+        await call.answer(texts.BILL_DELETE_FAILED, show_alert=True)
+        return
+    done, notice = written_off
+
+    await call.answer()
+    await call.message.answer(done, reply_markup=superadmin_kb(call.from_user.id))
+    await _notify_customer(call, bot, bill.telegram_id, notice)
+
+
+@router.callback_query(F.data == "billdel_no")
+async def cancel_bill_delete(call: CallbackQuery) -> None:
+    await call.answer()
+    await call.message.answer(
+        texts.DELETE_CANCELLED, reply_markup=superadmin_kb(call.from_user.id)
+    )
+
+
+async def _notify_customer(
+    call: CallbackQuery, bot: Bot, telegram_id: int | None, text: str
+) -> None:
+    if telegram_id is None:
+        return
+    try:
+        await bot.send_message(telegram_id, text)
+    except Exception:
+        await call.message.answer(texts.BILL_NOTICE_NOT_DELIVERED)
 
 
 @router.message(F.text == texts.BTN_TOGGLE_AUTO_APPROVE)

@@ -138,6 +138,41 @@ def mark_warned(bill: Bill) -> None:
         db.mark_debt_warned(bill.username)
 
 
+def confirm_delete_text(bill: Bill) -> str:
+    """The second tap for taking money off someone. Written once so the card's
+    customer-wide button and the older per-invoice one ask exactly the same
+    question."""
+    if bill.kind == "invoice":
+        return texts.CONFIRM_DELETE_BILL_INVOICE.format(
+            id=bill.invoice_id, amount=bill.amount
+        )
+    return texts.CONFIRM_DELETE_BILL_WEEKLY.format(
+        username=bill.username, amount=bill.amount
+    )
+
+
+def write_off(bill: Bill) -> tuple[str, str] | None:
+    """Cancel a debt and say so to both sides; None if it is already gone.
+
+    Returns (what the superadmin is told, what the customer is told). Not a
+    payment, so nothing goes in the ledger — but the customer is told anyway,
+    or the last thing they hear stays a reminder saying they still owe it."""
+    if bill.kind == "invoice":
+        if not db.cancel_invoice(bill.invoice_id):
+            return None
+        return (
+            texts.BILL_DELETED_INVOICE.format(id=bill.invoice_id),
+            texts.BILL_WRITTEN_OFF_INVOICE_CUSTOMER.format(id=bill.invoice_id),
+        )
+    # Zeroing the debt also clears its overdue stamp, so a panel that buys on
+    # credit again starts clean instead of being chased for this one.
+    db.clear_debt(bill.username)
+    return (
+        texts.BILL_DELETED_WEEKLY.format(username=bill.username),
+        texts.BILL_WRITTEN_OFF_WEEKLY_CUSTOMER.format(username=bill.username),
+    )
+
+
 # ---- rendering ---------------------------------------------------------------
 
 def describe_timing(bill: Bill, now: datetime | None = None) -> str:

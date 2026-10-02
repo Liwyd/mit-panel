@@ -422,9 +422,32 @@ BTN_INVOICE_FOR_USER = "🧾 صدور فاکتور"
 BTN_DELETE_INVOICE = "🗑 حذف فاکتور"
 ASK_DEDUCT_AMOUNT = "➖ چه مبلغی (تومان) از کیف پول این کاربر کسر شود؟"
 DEDUCT_SUCCESS = "✅ {amount:,} تومان کسر شد.\n💼 موجودی جدید: {balance:,} تومان"
-CHOOSE_INVOICE_TO_DELETE = "🗑 کدام فاکتور حذف شود؟"
-INVOICE_DELETED = "✅ فاکتور #{id} حذف شد."
-INVOICE_DELETE_FAILED = "⚠️ حذف فاکتور ممکن نبود (شاید قبلاً تسویه شده)."
+# The chooser now lists weekly credit alongside invoices, so both are "a debt".
+CHOOSE_INVOICE_TO_DELETE = "🗑 کدام بدهی حذف شود؟"
+
+# --- removing a bill by hand ---
+BTN_DELETE_CUSTOMER_BILL = "🗑 حذف بدهی"
+BTN_DELETE_BILL_INVOICE = "🗑 حذف · #{id}"
+BTN_DELETE_BILL_WEEKLY = "🗑 حذف · {username}"
+CONFIRM_DELETE_BILL_INVOICE = (
+    "🗑 حذف فاکتور #{id} به مبلغ {amount:,} تومان\n\n"
+    "این فاکتور از بدهی‌های مشتری حذف می‌شود و قابل بازگشت نیست. مطمئن هستید؟"
+)
+CONFIRM_DELETE_BILL_WEEKLY = (
+    "🗑 حذف بدهی هفتگی پنل «{username}» به مبلغ {amount:,} تومان\n\n"
+    "این بدهی صفر می‌شود و قابل بازگشت نیست. مطمئن هستید؟"
+)
+BILL_DELETED_INVOICE = "✅ فاکتور #{id} حذف شد."
+BILL_DELETED_WEEKLY = "✅ بدهی هفتگی پنل «{username}» صفر شد."
+BILL_DELETE_FAILED = "⚠️ حذف ممکن نبود (شاید همین حالا تسویه شده باشد)."
+# Told to the customer, so the last word they have isn't a reminder saying they owe.
+BILL_WRITTEN_OFF_INVOICE_CUSTOMER = (
+    "✅ فاکتور #{id} از سوی مدیریت لغو شد و پرداختی بابت آن لازم نیست."
+)
+BILL_WRITTEN_OFF_WEEKLY_CUSTOMER = (
+    "✅ بدهی هفتگی پنل «{username}» از سوی مدیریت صفر شد و بدهی‌ای بابت آن ندارید."
+)
+BILL_NOTICE_NOT_DELIVERED = "⚠️ پیام به مشتری تحویل نشد (احتمالاً ربات را مسدود کرده است)."
 
 KIND_LABELS = {
     "topup": "شارژ حجم",
