@@ -5,21 +5,6 @@ installation, so the fixture points it at a temp file. Without that a test
 would append rows to the panel's real data volume.
 """
 
-from types import SimpleNamespace
-
-import pytest
-
-import backend.bot.db as bot_db
-
-
-@pytest.fixture()
-def ledger(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        bot_db, "bot_config", SimpleNamespace(sqlite_path=str(tmp_path / "bot.db"))
-    )
-    bot_db.init_db()
-    return bot_db
-
 
 def _clear_backfill_flag(db) -> None:
     """`init_db` already ran the backfill once (finding nothing), so the guard

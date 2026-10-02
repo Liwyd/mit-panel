@@ -33,6 +33,8 @@ DEFAULTS = {
     "bot_min_gb": 200.0,
     "bot_max_gb": 10000.0,
     "bot_panel_link_url": "https://wunli.draking.ir:4000/panpan/",
+    # Tehran hour the nightly digest goes out (0-23).
+    "bot_digest_hour": 22,
 }
 
 

@@ -64,5 +64,9 @@ class _BotConfig:
     def warning_scan_interval_seconds(self) -> int:
         return _panel_config.BOT_WARNING_SCAN_INTERVAL
 
+    @property
+    def digest_hour(self) -> int:
+        return int(get_settings().get("bot_digest_hour", 22))
+
 
 bot_config = _BotConfig()

@@ -104,11 +104,12 @@ def finance_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_INVOICES,
         texts.BTN_NEW_INVOICE,
         texts.BTN_SALES_REPORT,
+        texts.BTN_DIGEST,
         texts.BTN_GRANT_WALLET,
         texts.BTN_TOGGLE_DELAYED,
         texts.BTN_TOGGLE_CONSUMPTION,
         texts.BTN_BACK,
-        layout=(2, 2, 2, 1),
+        layout=(2, 2, 2, 2),
     )
 
 

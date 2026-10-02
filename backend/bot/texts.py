@@ -690,6 +690,28 @@ HISTORY_LINE_FREE = "▫️ <b>{day}</b>\n     ‎+{gb:g} گیگ · {method}\n"
 HISTORY_FOOTER = "━━━━━━━━━━━━━━━\n📊 مجموع: {gb:g} گیگابایت در {count} نوبت"
 HISTORY_EMPTY = "📜 برای پنل «{username}» تا کنون شارژی ثبت نشده است."
 
+# --- the nightly summary ---
+BTN_DIGEST = "📋 خلاصه‌ی امروز"
+DIGEST_HEADER = "📋 <b>خلاصه‌ی امروز</b> · {day}\n━━━━━━━━━━━━━━━\n"
+DIGEST_SALES = "💰 فروش امروز: <b>{amount:,}</b> تومان · {gb:g} گیگ · {count} فروش\n"
+DIGEST_NO_SALES = "💰 فروش امروز: بدون فروش\n"
+DIGEST_SETTLED = "💵 تسویه‌ی هفتگی امروز: <b>{amount:,}</b> تومان · {count} پرداخت\n{payers}"
+DIGEST_SETTLED_LINE = "     ▫️ {username} — {amount:,} تومان\n"
+DIGEST_SETTLED_MORE = "     … و {count} پرداخت دیگر\n"
+DIGEST_WALLET_CHARGED = (
+    "💼 شارژ کیف پول امروز: <b>{amount:,}</b> تومان · {count} پرداخت\n{payers}"
+)
+DIGEST_WALLET_CHARGE_LINE = "     ▫️ {who} — {amount:,} تومان\n"
+DIGEST_PENDING = "🧾 رسیدهای در انتظار: {count} مورد ({amount:,} تومان)\n"
+DIGEST_NO_PENDING = "🧾 رسید در انتظاری نیست ✅\n"
+DIGEST_OVERDUE = "⏰ بدهی سررسیدگذشته: {count} مورد ({amount:,} تومان)\n"
+DIGEST_NO_OVERDUE = "⏰ بدهی سررسیدگذشته‌ای نیست ✅\n"
+DIGEST_LOW_PANELS = "\n📉 <b>پنل‌های رو به اتمام</b> (زیر {threshold:g} گیگ):\n{panels}"
+DIGEST_LOW_PANEL_LINE = "     ▫️ {username} — {remaining_gb:.1f} گیگ\n"
+DIGEST_MORE_PANELS = "     … و {count} پنل دیگر\n"
+DIGEST_NO_LOW_PANELS = "\n📉 پنلی در آستانه‌ی اتمام نیست ✅"
+DIGEST_PANELS_UNAVAILABLE = "\n📉 وضعیت پنل‌ها در دسترس نبود."
+
 # --- who may see the wallet, and so the card number ---
 WALLET_NOT_AVAILABLE = "ℹ️ کیف پول پس از فعال‌شدن حساب شما در دسترس خواهد بود."
 ACCOUNT_ACTIVATED = "💼 کیف پول و بخش فاکتورها برای حساب شما فعال شد."

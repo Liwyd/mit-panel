@@ -13,11 +13,14 @@ os.environ.setdefault("ADMIN_PASSWORD", "test-password")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
 os.environ.setdefault("BOT_API_KEY", "test-bot-key")
 
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import backend.bot.db as bot_db
 import backend.bot.panel_client as panel_client_module
 import backend.db.engin as engin_module
 from backend.db import crud
@@ -55,6 +58,20 @@ def _isolate_from_live_database(db_session, monkeypatch):
     monkeypatch.setattr(engin_module, "sessionLocal", factory)
     monkeypatch.setattr(panel_client_module, "sessionLocal", factory)
     yield
+
+
+@pytest.fixture()
+def ledger(tmp_path, monkeypatch):
+    """`backend.bot.db` with its SQLite file pointed at a temp directory.
+
+    That module opens its own connection at a path derived from the live
+    installation, so without this a bot test would write into the panel's real
+    data volume."""
+    monkeypatch.setattr(
+        bot_db, "bot_config", SimpleNamespace(sqlite_path=str(tmp_path / "bot.db"))
+    )
+    bot_db.init_db()
+    return bot_db
 
 
 @pytest.fixture()
