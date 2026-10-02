@@ -49,11 +49,13 @@ def prospect_menu_kb() -> ReplyKeyboardMarkup:
 
 
 def panel_request_kb() -> ReplyKeyboardMarkup:
-    """Shown when user has no panels — redirect to shop."""
+    """The activation screen: both ways of asking for something sit where
+    someone actually looks for them — the shop, and the cooperation form."""
     kb = ReplyKeyboardBuilder()
+    kb.button(text=texts.BTN_PARTNERSHIP)
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_BACK)
-    kb.adjust(1, 1)
+    kb.adjust(1, 1, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
