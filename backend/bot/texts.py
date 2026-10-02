@@ -449,6 +449,32 @@ BILL_WRITTEN_OFF_WEEKLY_CUSTOMER = (
 )
 BILL_NOTICE_NOT_DELIVERED = "⚠️ پیام به مشتری تحویل نشد (احتمالاً ربات را مسدود کرده است)."
 
+# --- recording a payment by hand ---
+# For money that reached the superadmin outside the bot (cash, a transfer
+# without a receipt, or paid by the superadmin themselves). Unlike a write-off
+# it counts as money in, and the customer is told their bill is settled.
+BTN_MARK_PAID = "✅ ثبت پرداخت"
+CHOOSE_BILL_TO_MARK_PAID = "✅ پرداخت کدام بدهی ثبت شود؟"
+BTN_MARK_PAID_INVOICE = "✅ پرداخت · #{id}"
+BTN_MARK_PAID_WEEKLY = "✅ پرداخت · {username}"
+BTN_CONFIRM_MARK_PAID = "✅ بله، پرداخت شده"
+CONFIRM_MARK_PAID_INVOICE = (
+    "✅ ثبت پرداخت فاکتور #{id} به مبلغ {amount:,} تومان\n\n"
+    "فاکتور پرداخت‌شده ثبت می‌شود و به مشتری اطلاع داده می‌شود. مطمئن هستید؟"
+)
+CONFIRM_MARK_PAID_WEEKLY = (
+    "✅ ثبت پرداخت بدهی هفتگی پنل «{username}» به مبلغ {amount:,} تومان\n\n"
+    "بدهی تسویه‌شده ثبت می‌شود و به مشتری اطلاع داده می‌شود. مطمئن هستید؟"
+)
+BILL_MARKED_PAID_INVOICE = "✅ پرداخت فاکتور #{id} ثبت شد."
+BILL_MARKED_PAID_WEEKLY = (
+    "✅ پرداخت بدهی هفتگی پنل «{username}» ({amount:,} تومان) ثبت شد."
+)
+BILL_MARKED_PAID_WEEKLY_CUSTOMER = (
+    "✅ بدهی هفتگی پنل «{username}» به مبلغ {amount:,} تومان تسویه شد. سپاس از پرداخت شما."
+)
+MARK_PAID_CANCELLED = "↩️ ثبت پرداخت لغو شد."
+
 KIND_LABELS = {
     "topup": "شارژ حجم",
     "wallet": "شارژ کیف پول",

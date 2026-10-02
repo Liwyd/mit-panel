@@ -214,9 +214,10 @@ def user_actions_kb(telegram_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_DEDUCT_WALLET, callback_data=f"usr_deduct:{telegram_id}")
     kb.button(text=texts.BTN_INVOICE_FOR_USER, callback_data=f"usr_invoice:{telegram_id}")
+    kb.button(text=texts.BTN_MARK_PAID, callback_data=f"paidpick:{telegram_id}")
     kb.button(text=texts.BTN_DELETE_INVOICE, callback_data=f"usr_delinv:{telegram_id}")
     kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{telegram_id}")
-    kb.adjust(2, 2)
+    kb.adjust(2, 2, 1)
     return kb.as_markup()
 
 
@@ -240,6 +241,26 @@ def confirm_bill_delete_kb(bill) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def bills_mark_paid_kb(items) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for bill in items:
+        if bill.kind == "invoice":
+            label = texts.BTN_MARK_PAID_INVOICE.format(id=bill.invoice_id)
+        else:
+            label = texts.BTN_MARK_PAID_WEEKLY.format(username=bill.username)
+        kb.button(text=f"{label} — {bill.amount:,}", callback_data=f"billpaid:{bill.key}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_bill_paid_kb(bill) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_CONFIRM_MARK_PAID, callback_data=f"billpaidok:{bill.key}")
+    kb.button(text=texts.BTN_KEEP, callback_data="billpaid_no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def pay_debt_kb(username: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_PAY_DEBT, callback_data=f"pay_debt:{username}")
@@ -258,6 +279,7 @@ def bill_actions_kb(customer) -> InlineKeyboardMarkup | None:
         return None
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_WARN_CUSTOMER, callback_data=f"warnall:{customer.telegram_id}")
+    kb.button(text=texts.BTN_MARK_PAID, callback_data=f"paidpick:{customer.telegram_id}")
     kb.button(text=texts.BTN_DELETE_CUSTOMER_BILL, callback_data=f"delpick:{customer.telegram_id}")
     kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{customer.telegram_id}")
     kb.adjust(2, 2)

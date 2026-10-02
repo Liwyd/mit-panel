@@ -524,6 +524,68 @@ async def _notify_customer(
         await call.message.answer(texts.BILL_NOTICE_NOT_DELIVERED)
 
 
+# ---- recording a payment made outside the bot --------------------------------
+
+@router.callback_query(F.data.startswith("paidpick:"))
+async def pick_bill_to_mark_paid(call: CallbackQuery) -> None:
+    telegram_id = int(call.data.split(":", 1)[1])
+    items = sorted(bills.open_bills(telegram_id), key=bills.urgency, reverse=True)
+    if not items:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    await call.answer()
+    # One debt needs no choosing.
+    if len(items) == 1:
+        await _ask_paid_confirmation(call, items[0])
+        return
+    await call.message.answer(
+        texts.CHOOSE_BILL_TO_MARK_PAID, reply_markup=keyboards.bills_mark_paid_kb(items)
+    )
+
+
+async def _ask_paid_confirmation(call: CallbackQuery, bill) -> None:
+    # Recording money in is irreversible too, so it takes a second tap.
+    if bill.kind == "invoice":
+        prompt = texts.CONFIRM_MARK_PAID_INVOICE.format(id=bill.invoice_id, amount=bill.amount)
+    else:
+        prompt = texts.CONFIRM_MARK_PAID_WEEKLY.format(
+            username=bill.username, amount=bill.amount
+        )
+    await call.message.answer(prompt, reply_markup=keyboards.confirm_bill_paid_kb(bill))
+
+
+@router.callback_query(F.data.startswith("billpaid:"))
+async def confirm_bill_paid(call: CallbackQuery) -> None:
+    bill = bills.find(call.data.split(":", 1)[1])
+    if bill is None:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    await call.answer()
+    await _ask_paid_confirmation(call, bill)
+
+
+@router.callback_query(F.data.startswith("billpaidok:"))
+async def do_bill_paid(call: CallbackQuery, bot: Bot) -> None:
+    bill = bills.find(call.data.split(":", 1)[1])
+    settled = bills.mark_paid(bill) if bill is not None else None
+    if settled is None:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    done, notice = settled
+
+    await call.answer()
+    await call.message.answer(done, reply_markup=superadmin_kb(call.from_user.id))
+    await _notify_customer(call, bot, bill.telegram_id, notice)
+
+
+@router.callback_query(F.data == "billpaid_no")
+async def cancel_bill_paid(call: CallbackQuery) -> None:
+    await call.answer()
+    await call.message.answer(
+        texts.MARK_PAID_CANCELLED, reply_markup=superadmin_kb(call.from_user.id)
+    )
+
+
 @router.message(F.text == texts.BTN_TOGGLE_AUTO_APPROVE)
 async def toggle_auto_approve(message: Message) -> None:
     turning_on = not auto_approve.is_enabled()

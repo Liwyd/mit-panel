@@ -45,11 +45,13 @@ def test_the_card_offers_one_action_per_debt_however_many(ledger):
 
     assert labels == [
         texts.BTN_WARN_CUSTOMER,
+        texts.BTN_MARK_PAID,
         texts.BTN_DELETE_CUSTOMER_BILL,
         texts.BTN_MESSAGE_USER,
     ]
     assert kb.inline_keyboard[0][0].callback_data.startswith("warnall:")
-    assert kb.inline_keyboard[0][1].callback_data.startswith("delpick:")
+    assert kb.inline_keyboard[0][1].callback_data.startswith("paidpick:")
+    assert kb.inline_keyboard[1][0].callback_data.startswith("delpick:")
 
 
 def test_writing_off_needs_a_second_tap_and_says_so_to_both_sides(ledger):
@@ -106,3 +108,45 @@ def test_pay_buttons_match_the_debts_in_the_notice(ledger):
         texts.BTN_PAY_BILL_WEEKLY.format(username="alice"),
         texts.BTN_PAY_BILL_INVOICE.format(id=db.list_pending_invoices(111)[0].id),
     ]
+
+
+def test_recording_a_weekly_payment_settles_the_real_balance_and_counts_as_income(ledger):
+    ledger.add_debt("alice", 111, 30_000)
+    bill = next(b for b in bills.open_bills(111) if b.kind == "weekly")
+
+    # The wallet chips in between the card being drawn and the button being
+    # pressed: what was paid must be what is owed now, not what the card said.
+    ledger.reduce_debt("alice", 10_000)
+    settled = bills.mark_paid(bill)
+
+    assert settled == (
+        texts.BILL_MARKED_PAID_WEEKLY.format(username="alice", amount=20_000),
+        texts.BILL_MARKED_PAID_WEEKLY_CUSTOMER.format(username="alice", amount=20_000),
+    )
+    assert ledger.get_debt("alice") == 0
+    sales = ledger.list_sales_since("1970-01-01T00:00:00+00:00")
+    assert [(s.username, s.amount, s.method) for s in sales] == [
+        ("alice", 20_000, ledger.SETTLEMENT_METHOD)
+    ]
+    assert bills.open_bills(111) == []
+
+
+def test_recording_an_invoice_payment_settles_it_and_counts_as_income(ledger):
+    invoice_id = ledger.create_invoice(
+        telegram_id=111, amount=20_000, description="setup", due_at=None
+    )
+    bill = next(b for b in bills.open_bills(111) if b.invoice_id == invoice_id)
+
+    settled = bills.mark_paid(bill)
+
+    assert settled == (
+        texts.BILL_MARKED_PAID_INVOICE.format(id=invoice_id),
+        texts.INVOICE_PAID_CUSTOMER.format(id=invoice_id),
+    )
+    sales = ledger.list_sales_since("1970-01-01T00:00:00+00:00")
+    assert [(s.amount, s.method) for s in sales] == [(20_000, "invoice")]
+    assert bills.find(f"i:{invoice_id}") is None
+
+    # Twice, or after it was cancelled: no second entry.
+    assert bills.mark_paid(bill) is None
+    assert len(ledger.list_sales_since("1970-01-01T00:00:00+00:00")) == 1

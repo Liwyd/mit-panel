@@ -173,6 +173,47 @@ def write_off(bill: Bill) -> tuple[str, str] | None:
     )
 
 
+def mark_paid(bill: Bill) -> tuple[str, str] | None:
+    """Settle a bill with money the superadmin received outside the bot.
+
+    Unlike a write-off this is money in, so it goes into the ledger the same way
+    an approved receipt would. Returns (what the superadmin is told, what the
+    customer is told), or None if the bill was already settled or cancelled in
+    the meantime."""
+    if bill.kind == "invoice":
+        if not db.mark_invoice_paid(bill.invoice_id):
+            return None
+        db.record_sale(
+            telegram_id=bill.telegram_id,
+            username=None,
+            gb=0,
+            amount=bill.amount,
+            method="invoice",
+        )
+        return (
+            texts.BILL_MARKED_PAID_INVOICE.format(id=bill.invoice_id),
+            texts.INVOICE_PAID_CUSTOMER.format(id=bill.invoice_id),
+        )
+
+    # What is owed now, not what the card showed: the wallet may have chipped in
+    # since, or another purchase on credit added to it.
+    owed = db.get_debt(bill.username)
+    if owed <= 0:
+        return None
+    db.reduce_debt(bill.username, owed)
+    db.record_sale(
+        telegram_id=bill.telegram_id,
+        username=bill.username,
+        gb=0,
+        amount=owed,
+        method=db.SETTLEMENT_METHOD,
+    )
+    return (
+        texts.BILL_MARKED_PAID_WEEKLY.format(username=bill.username, amount=owed),
+        texts.BILL_MARKED_PAID_WEEKLY_CUSTOMER.format(username=bill.username, amount=owed),
+    )
+
+
 # ---- rendering ---------------------------------------------------------------
 
 def describe_timing(bill: Bill, now: datetime | None = None) -> str:
