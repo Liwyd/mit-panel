@@ -119,3 +119,31 @@ def test_settlements_are_recorded_but_stay_out_of_a_panels_history(ledger):
     everything = ledger.list_sales_since("1970-01-01T00:00:00+00:00")
     assert {s.method for s in everything} == {"weekly", "settlement"}
     assert ledger.NOT_SALES == ("grant", "settlement", "wallet_charge")
+
+
+def test_to_jalali_turns_nowruz_into_the_first_of_the_year(ledger):
+    from datetime import date
+
+    from backend.bot import sales
+
+    assert sales.to_jalali(2026, 3, 21) == (1405, 1, 1)
+    # 21 March 2026 is a Saturday, the first day of 1405.
+    assert sales.format_day(date(2026, 3, 21)) == "1405/01/01 · شنبه"
+    assert sales.day_of("2026-03-21T20:30:00+00:00") == date(2026, 3, 22)
+
+
+def test_report_counts_takings_and_keeps_payments_beside_them(ledger):
+    from backend.bot import sales, texts
+
+    assert sales.report() == texts.SALES_EMPTY
+
+    ledger.record_sale(telegram_id=111, username="alice", gb=100, amount=50_000, method="card")
+    ledger.record_sale(telegram_id=111, username="alice", gb=0, amount=50_000, method="settlement")
+    # Handing traffic over costs nothing, so it is history and not takings.
+    ledger.record_sale(telegram_id=111, username="alice", gb=10, amount=0, method="grant")
+
+    text = sales.report()
+    assert texts.SALES_HEADER.strip() in text
+    # One sale, not two: the grant and the settlement stay out of the count.
+    assert "کارت 1" in text
+    assert texts.SALES_SETTLED_TOTAL.format(total=50_000, count=1) in text

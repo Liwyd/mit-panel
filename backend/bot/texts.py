@@ -648,6 +648,38 @@ WARNING_SENT_TOAST = "⚠️ هشدار ارسال شد."
 WARNING_NOT_DELIVERED = "⚠️ ارسال هشدار ناموفق بود (احتمالاً کاربر ربات را مسدود کرده است)."
 WARNING_BILL_GONE = "ℹ️ این بدهی دیگر باز نیست (احتمالاً تسویه شده است)."
 
+# --- the week's sales ---
+BTN_SALES_REPORT = "📈 فروش ۷ روز اخیر"
+SALES_HEADER = "📈 <b>فروش ۷ روز گذشته</b>\n━━━━━━━━━━━━━━━\n"
+SALES_DAY_LINE = (
+    "▫️ <b>{day}</b>\n"
+    "     💰 {amount:,} تومان · 📊 {gb:g} گیگ · {count} فروش\n"
+)
+SALES_DAY_EMPTY = "▫️ {day}\n     — بدون فروش\n"
+SALES_FOOTER = (
+    "━━━━━━━━━━━━━━━\n"
+    "💰 جمع هفته: <b>{total:,}</b> تومان\n"
+    "📊 مجموع حجم: {gb:g} گیگابایت · {count} فروش\n"
+    "🧮 میانگین روزانه: {average:,} تومان\n"
+    "🧾 {methods}"
+)
+SALES_METHOD_LABELS = {
+    "card": "کارت",
+    "wallet": "کیف پول",
+    "weekly": "هفتگی",
+    "invoice": "فاکتور",
+    "grant": "افزودن دستی",
+    "settlement": "تسویه‌ی هفتگی",
+    "wallet_charge": "شارژ کیف پول",
+}
+SALES_EMPTY = "📈 در ۷ روز گذشته فروشی ثبت نشده است."
+SALES_NONE_THIS_WEEK = "▫️ در این ۷ روز فروشی ثبت نشده است.\n"
+# Payments made against weekly credit: money in, but not new sales.
+SALES_SETTLED_HEADER = "\n💵 <b>تسویه‌های هفتگی دریافت‌شده</b>\n"
+SALES_SETTLED_LINE = "▫️ {day} · <b>{username}</b> · {amount:,} تومان\n"
+SALES_SETTLED_MORE = "     … و {count} پرداخت دیگر\n"
+SALES_SETTLED_TOTAL = "━━━━━━━━━━━━━━━\n💰 جمع تسویه‌ها: <b>{total:,}</b> تومان · {count} پرداخت\n"
+
 # --- who may see the wallet, and so the card number ---
 WALLET_NOT_AVAILABLE = "ℹ️ کیف پول پس از فعال‌شدن حساب شما در دسترس خواهد بود."
 ACCOUNT_ACTIVATED = "💼 کیف پول و بخش فاکتورها برای حساب شما فعال شد."

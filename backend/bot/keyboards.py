@@ -102,6 +102,7 @@ def finance_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
         texts.BTN_INVOICES,
         texts.BTN_NEW_INVOICE,
+        texts.BTN_SALES_REPORT,
         texts.BTN_GRANT_WALLET,
         texts.BTN_TOGGLE_DELAYED,
         texts.BTN_TOGGLE_CONSUMPTION,

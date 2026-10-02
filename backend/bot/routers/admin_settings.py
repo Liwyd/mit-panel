@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import auto_approve, bills, keyboards, texts
+from backend.bot import auto_approve, bills, keyboards, sales, texts
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
@@ -368,6 +368,11 @@ async def list_invoices(message: Message) -> None:
         await message.answer(
             bills.render_customer(customer), reply_markup=keyboards.bill_actions_kb(customer)
         )
+
+
+@router.message(F.text == texts.BTN_SALES_REPORT)
+async def show_sales(message: Message) -> None:
+    await message.answer(sales.report())
 
 
 @router.callback_query(F.data.startswith("warn:"))
