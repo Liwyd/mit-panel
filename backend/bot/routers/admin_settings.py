@@ -231,6 +231,14 @@ async def finish_grant(message: Message, state: FSMContext, bot: Bot) -> None:
 
     new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
     db.clear_warning_bucket(username)
+    # No money changed hands, but it still belongs in the panel's history.
+    db.record_sale(
+        telegram_id=result.get("telegram_id"),
+        username=username,
+        gb=amount,
+        amount=0,
+        method=db.GRANT_METHOD,
+    )
     await message.answer(
         texts.GRANT_SUCCESS.format(added_gb=amount, username=username, new_gb=new_gb),
         reply_markup=superadmin_kb(message.from_user.id),
@@ -654,6 +662,9 @@ async def finish_grant_wallet(message: Message, state: FSMContext, bot: Bot) -> 
     target_id, amount = data["target_telegram_id"], int(raw)
 
     db.add_wallet_balance(target_id, amount)
+    db.record_sale(
+        telegram_id=target_id, username=None, gb=0, amount=amount, method=db.WALLET_CHARGE_METHOD
+    )
     apply_wallet_to_debts(target_id)
     balance = db.get_wallet_balance(target_id)
 

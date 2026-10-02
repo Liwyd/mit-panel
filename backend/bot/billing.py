@@ -21,5 +21,12 @@ def apply_wallet_to_debts(telegram_id: int) -> list[dict]:
         if paid <= 0:
             continue
         remaining = db.reduce_debt(debt["username"], paid)
+        db.record_sale(
+            telegram_id=telegram_id,
+            username=debt["username"],
+            gb=0,
+            amount=paid,
+            method=db.SETTLEMENT_METHOD,
+        )
         results.append({"username": debt["username"], "paid": paid, "remaining": remaining})
     return results

@@ -150,6 +150,9 @@ async def pay_from_wallet(call: CallbackQuery, state: FSMContext, bot: Bot) -> N
 
     await state.clear()
     db.clear_warning_bucket(username)
+    db.record_sale(
+        telegram_id=telegram_id, username=username, gb=gb, amount=price, method="wallet"
+    )
     new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
     balance = db.get_wallet_balance(telegram_id)
 
@@ -211,6 +214,10 @@ async def pay_weekly_credit(call: CallbackQuery, state: FSMContext, bot: Bot) ->
         await state.clear()
         db.clear_warning_bucket(username)
         debt = db.add_debt(username, telegram_id, price)
+        # Sold now, billed at the end of the week — it belongs in today's sales.
+        db.record_sale(
+            telegram_id=telegram_id, username=username, gb=gb, amount=price, method="weekly"
+        )
         new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
 
         await call.answer()

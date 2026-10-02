@@ -127,6 +127,23 @@ def init_db() -> None:
             )
             """
         )
+        # Every sale as it happens. None of the payment paths leave a usable
+        # trail by themselves: a card sale is only an approved receipt, a wallet
+        # sale moves two balances, and weekly credit becomes a debt that vanishes
+        # once it is settled.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER,
+                username TEXT,
+                gb REAL NOT NULL DEFAULT 0,
+                amount INTEGER NOT NULL DEFAULT 0,
+                method TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS traffic_history (
@@ -251,6 +268,9 @@ def init_db() -> None:
             )
             """
         )
+
+    # Outside the transaction above: it opens its own connection.
+    backfill_sales_from_requests()
 
 
 @dataclass
@@ -1157,3 +1177,94 @@ def mark_referral_request_reviewed(
             (status, reason, reviewed_by, request_id),
         )
         return cur.rowcount == 1
+
+
+# A payment towards a panel's weekly credit. It shares the sales ledger so the
+# reports can find it, but it is not a sale: the credit was already counted as a
+# "weekly" sale the day the traffic was handed over, so adding this to the
+# takings would count the same money twice.
+SETTLEMENT_METHOD = "settlement"
+# Money put into someone's wallet — by an approved receipt or by the superadmin
+# by hand. Money in, but not a sale: spending it later is recorded as a "wallet"
+# sale, so counting it here too would count the same money twice.
+WALLET_CHARGE_METHOD = "wallet_charge"
+# Traffic the superadmin handed over without charging: part of a panel's
+# history, but not a sale.
+GRANT_METHOD = "grant"
+# Ledger entries that are payments rather than sales, kept out of the takings.
+PAYMENT_METHODS = (SETTLEMENT_METHOD, WALLET_CHARGE_METHOD)
+# Everything in the ledger that isn't takings.
+NOT_SALES = (GRANT_METHOD, *PAYMENT_METHODS)
+
+
+@dataclass
+class Sale:
+    id: int
+    telegram_id: int | None
+    username: str | None
+    gb: float
+    amount: int
+    method: str
+    created_at: str
+
+
+def record_sale(
+    *, telegram_id: int | None, username: str | None, gb: float, amount: int, method: str
+) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO sales (telegram_id, username, gb, amount, method, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (telegram_id, username, gb, amount, method, now),
+        )
+
+
+def list_sales_since(stamp: str) -> list[Sale]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM sales WHERE created_at >= ? ORDER BY created_at", (stamp,)
+        ).fetchall()
+        return [Sale(**dict(r)) for r in rows]
+
+
+def list_sales_for(username: str, limit: int = 20) -> list[Sale]:
+    """One panel's traffic history, newest first. Debt payments add no traffic,
+    so they stay out of it."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM sales WHERE username = ? AND method != ? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (username, SETTLEMENT_METHOD, limit),
+        ).fetchall()
+        return [Sale(**dict(r)) for r in rows]
+
+
+def backfill_sales_from_requests() -> int:
+    """Seed the ledger once from approved card receipts.
+
+    Those are the only past sales written down anywhere. Wallet and weekly-credit
+    purchases made before the ledger existed cannot be recovered — nothing
+    recorded them — so the report only counts those from here on.
+    """
+    with _connect() as conn:
+        if conn.execute(
+            "SELECT 1 FROM bot_settings WHERE key = 'sales_backfilled'"
+        ).fetchone():
+            return 0
+        rows = conn.execute(
+            "SELECT admin_telegram_id, admin_username, requested_gb, toman_amount, "
+            "COALESCE(reviewed_at, created_at) AS at FROM topup_requests "
+            "WHERE status = 'approved' AND kind = 'topup'"
+        ).fetchall()
+        conn.executemany(
+            "INSERT INTO sales (telegram_id, username, gb, amount, method, created_at) "
+            "VALUES (?, ?, ?, ?, 'card', ?)",
+            [
+                (r["admin_telegram_id"], r["admin_username"], r["requested_gb"],
+                 r["toman_amount"], r["at"])
+                for r in rows
+            ],
+        )
+        conn.execute("INSERT INTO bot_settings (key, value) VALUES ('sales_backfilled', '1')")
+        return len(rows)

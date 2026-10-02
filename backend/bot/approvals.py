@@ -58,6 +58,13 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
 
     if req.kind == "wallet":
         db.add_wallet_balance(customer, req.toman_amount)
+        db.record_sale(
+            telegram_id=customer,
+            username=None,
+            gb=0,
+            amount=req.toman_amount,
+            method=db.WALLET_CHARGE_METHOD,
+        )
         # Newly arrived money clears any outstanding weekly debt immediately.
         apply_wallet_to_debts(customer)
         await _tell(
@@ -72,6 +79,9 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
     if req.kind == "invoice":
         if not db.mark_invoice_paid(req.invoice_id):
             return Outcome(False, texts.INVOICE_ALREADY_PAID, alert=True, finished=True)
+        db.record_sale(
+            telegram_id=customer, username=None, gb=0, amount=req.toman_amount, method="invoice"
+        )
 
         invoice = db.get_invoice(req.invoice_id) if req.invoice_id else None
         # An invoice raised by the usage sync buys GB back for one panel. Paying
@@ -108,6 +118,16 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         excess = max(0, req.toman_amount - owed)
         if excess:
             db.add_wallet_balance(customer, excess)
+        # Only what actually went against the debt: the excess is wallet credit.
+        applied = min(owed, req.toman_amount)
+        if applied > 0:
+            db.record_sale(
+                telegram_id=customer,
+                username=req.admin_username,
+                gb=0,
+                amount=applied,
+                method=db.SETTLEMENT_METHOD,
+            )
 
         if remaining > 0:
             text = texts.SETTLEMENT_PARTIAL_ADMIN.format(
@@ -132,6 +152,13 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
 
     # A successful top-up rearms the low-traffic warnings for this panel.
     db.clear_warning_bucket(req.admin_username)
+    db.record_sale(
+        telegram_id=customer,
+        username=req.admin_username,
+        gb=req.requested_gb,
+        amount=req.toman_amount,
+        method="card",
+    )
     await _tell(
         bot,
         customer,
