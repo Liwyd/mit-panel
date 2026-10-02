@@ -135,3 +135,25 @@ def _settlements_block(settled: list) -> str:
     return text + texts.SALES_SETTLED_TOTAL.format(
         total=sum(s.amount for s in settled), count=len(settled)
     )
+
+
+def history(username: str, limit: int = 20) -> str:
+    """When traffic was added to one panel, and how it was paid for."""
+    entries = db.list_sales_for(username, limit)
+    if not entries:
+        return texts.HISTORY_EMPTY.format(username=username)
+
+    text = texts.HISTORY_HEADER.format(username=username)
+    total = 0.0
+    for entry in entries:
+        day = day_of(entry.created_at)
+        total += entry.gb
+        method = texts.SALES_METHOD_LABELS.get(entry.method, entry.method)
+        line = texts.HISTORY_LINE if entry.amount else texts.HISTORY_LINE_FREE
+        text += line.format(
+            day=format_day(day) if day else "—",
+            gb=round(entry.gb, 2),
+            method=method,
+            amount=entry.amount,
+        )
+    return text + texts.HISTORY_FOOTER.format(gb=round(total, 2), count=len(entries))

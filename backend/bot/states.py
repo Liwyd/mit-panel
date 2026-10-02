@@ -142,3 +142,7 @@ class ReferralDisable(StatesGroup):
 
 class DeleteAdmin(StatesGroup):
     username = State()
+
+
+class PanelHistory(StatesGroup):
+    username = State()

@@ -34,6 +34,7 @@ ALL_MENU_TEXTS = {
     texts.BTN_BACK,
     texts.BTN_TOGGLE_AUTO_APPROVE,
     texts.BTN_SALES_REPORT,
+    texts.BTN_PANEL_HISTORY,
     texts.BTN_MESSAGE_USER,
     texts.BTN_PENDING_REQUESTS,
     texts.BTN_TOGGLE_FORCE_JOIN,

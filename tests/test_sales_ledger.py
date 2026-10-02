@@ -147,3 +147,20 @@ def test_report_counts_takings_and_keeps_payments_beside_them(ledger):
     # One sale, not two: the grant and the settlement stay out of the count.
     assert "کارت 1" in text
     assert texts.SALES_SETTLED_TOTAL.format(total=50_000, count=1) in text
+
+
+def test_history_lists_one_panel_and_omits_debt_payments(ledger):
+    from backend.bot import sales, texts
+
+    ledger.record_sale(telegram_id=111, username="alice", gb=100, amount=50_000, method="card")
+    ledger.record_sale(telegram_id=111, username="alice", gb=0, amount=50_000, method="settlement")
+    ledger.record_sale(telegram_id=111, username="bob", gb=10, amount=5_000, method="wallet")
+
+    text = sales.history("alice")
+    assert texts.HISTORY_HEADER.format(username="alice").strip() in text
+    assert "+100 گیگ · کارت · 50,000 تومان" in text
+    # A settlement moves no traffic, so it is not one of the charges.
+    assert "تسویه‌ی هفتگی" not in text
+    assert texts.HISTORY_FOOTER.format(gb=100, count=1) in text
+
+    assert texts.HISTORY_EMPTY.format(username="nobody") == sales.history("nobody")

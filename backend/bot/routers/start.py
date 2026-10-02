@@ -13,12 +13,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.media_group import MediaGroupBuilder
 
-from backend.bot import keyboards, texts
+from backend.bot import keyboards, sales, texts
 from backend.bot import panel_client
+from backend.bot.panel_client import PanelClientError
 from backend.bot.filters import SuperadminFilter
 from backend.bot.forecast import render
 from backend.bot.nav import cancel_and_show_menu, forget_section, menu_kb_for
-from backend.bot.panels import format_panel_line, format_referral_panel_line, safe_get_admins
+from backend.bot.panels import (
+    format_panel_line,
+    format_referral_panel_line,
+    owned_panel,
+    safe_get_admins,
+)
 from backend.bot.states import CreatePanel
 from backend.bot import db
 from backend.bot.config import bot_config as settings
@@ -107,7 +113,27 @@ async def my_panels(message: Message) -> None:
         parts.append(texts.PANELS_LIST_HEADER + "".join(format_panel_line(a) for a in admins))
     if referral_panels:
         parts.append(texts.REFERRAL_PANELS_HEADER + "".join(format_referral_panel_line(p) for p in referral_panels))
-    await message.answer("".join(parts))
+    await message.answer(
+        "".join(parts),
+        reply_markup=keyboards.panel_history_kb(admins) if admins else None,
+    )
+
+
+@router.callback_query(F.data.startswith("hist:"))
+async def panel_history(call: CallbackQuery) -> None:
+    username = call.data.split(":", 1)[1]
+    # Callback data comes from the client, so a panel named in it has to be
+    # one they actually own. The superadmin may look at any of them.
+    if call.from_user.id not in settings.superadmin_id_list:
+        try:
+            if not await owned_panel(call.from_user.id, username):
+                await call.answer(texts.NOT_LINKED_RETRY, show_alert=True)
+                return
+        except PanelClientError:
+            await call.answer(texts.PANEL_UNREACHABLE, show_alert=True)
+            return
+    await call.answer()
+    await call.message.answer(sales.history(username))
 
 
 @router.message(F.text == texts.BTN_BACK)

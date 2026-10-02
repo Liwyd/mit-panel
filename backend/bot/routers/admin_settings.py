@@ -20,6 +20,7 @@ from backend.bot.states import (
     GrantTraffic,
     GrantWallet,
     NewInvoice,
+    PanelHistory,
     ReferralManage,
     SetAdminPrice,
     SetCardNumber,
@@ -373,6 +374,21 @@ async def list_invoices(message: Message) -> None:
 @router.message(F.text == texts.BTN_SALES_REPORT)
 async def show_sales(message: Message) -> None:
     await message.answer(sales.report())
+
+
+@router.message(F.text == texts.BTN_PANEL_HISTORY)
+async def start_panel_history(message: Message, state: FSMContext) -> None:
+    await state.set_state(PanelHistory.username)
+    await message.answer(texts.ASK_HISTORY_USERNAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(PanelHistory.username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_panel_history(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    username = (message.text or "").strip()
+    await message.answer(
+        sales.history(username), reply_markup=superadmin_kb(message.from_user.id)
+    )
 
 
 @router.callback_query(F.data.startswith("warn:"))

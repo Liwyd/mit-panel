@@ -680,6 +680,16 @@ SALES_SETTLED_LINE = "▫️ {day} · <b>{username}</b> · {amount:,} تومان
 SALES_SETTLED_MORE = "     … و {count} پرداخت دیگر\n"
 SALES_SETTLED_TOTAL = "━━━━━━━━━━━━━━━\n💰 جمع تسویه‌ها: <b>{total:,}</b> تومان · {count} پرداخت\n"
 
+# --- one panel's traffic history ---
+BTN_PANEL_HISTORY = "📜 تاریخچه‌ی شارژ"
+BTN_HISTORY = "📜 تاریخچه"
+ASK_HISTORY_USERNAME = "📜 نام کاربری پنل را وارد نمایید:"
+HISTORY_HEADER = "📜 <b>تاریخچه‌ی شارژ پنل «{username}»</b>\n━━━━━━━━━━━━━━━\n"
+HISTORY_LINE = "▫️ <b>{day}</b>\n     ‎+{gb:g} گیگ · {method} · {amount:,} تومان\n"
+HISTORY_LINE_FREE = "▫️ <b>{day}</b>\n     ‎+{gb:g} گیگ · {method}\n"
+HISTORY_FOOTER = "━━━━━━━━━━━━━━━\n📊 مجموع: {gb:g} گیگابایت در {count} نوبت"
+HISTORY_EMPTY = "📜 برای پنل «{username}» تا کنون شارژی ثبت نشده است."
+
 # --- who may see the wallet, and so the card number ---
 WALLET_NOT_AVAILABLE = "ℹ️ کیف پول پس از فعال‌شدن حساب شما در دسترس خواهد بود."
 ACCOUNT_ACTIVATED = "💼 کیف پول و بخش فاکتورها برای حساب شما فعال شد."

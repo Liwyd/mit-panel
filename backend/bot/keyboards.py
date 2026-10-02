@@ -90,6 +90,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_CREATE_ADMIN,
         texts.BTN_ADD_PANEL,
         texts.BTN_GRANT_TRAFFIC,
+        texts.BTN_PANEL_HISTORY,
         texts.BTN_SYNC_TELEGRAM_IDS,
         texts.BTN_DELETE_ADMIN,
         texts.BTN_DELETE_TUTORIAL,
@@ -307,6 +308,18 @@ def approval_kb(request_id: int, admin_telegram_id: int) -> InlineKeyboardMarkup
 def message_user_kb(telegram_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{telegram_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def panel_history_kb(admins) -> InlineKeyboardMarkup:
+    """A history button per panel, under the list of their panels."""
+    kb = InlineKeyboardBuilder()
+    for admin in admins:
+        kb.button(
+            text=f"{texts.BTN_HISTORY} · {admin['username']}",
+            callback_data=f"hist:{admin['username']}",
+        )
     kb.adjust(1)
     return kb.as_markup()
 
