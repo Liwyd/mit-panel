@@ -102,6 +102,16 @@ The backup is the panel database (`mitpanel.db`), sent as a document to your Tel
 
 ---
 
+## Tests
+
+```bash
+uv run --with pytest pytest -q
+```
+
+`--with pytest` is required: pytest is deliberately not a project dependency, so without it `uv run` uses the interpreter on `PATH`, which does not have `aiogram` and the rest of the project's own packages.
+
+---
+
 ## Contributing
 
 Issues and pull requests are welcome.
