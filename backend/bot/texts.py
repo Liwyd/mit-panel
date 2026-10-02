@@ -644,6 +644,22 @@ WARN_DAYS_SINCE_ISSUED = "⏰ {days} روز از ثبت بدهی شما گذشت
 WARN_UNPAID = "⏰ بدهی شما هنوز تسویه نشده است."
 WARN_SERVICE_PANEL = "پنل"
 WARN_SERVICE_GENERIC = "سرویس"
+
+# --- acting on a customer, not on each separate debt ---
+BTN_WARN_CUSTOMER = "⚠️ یادآوری پرداخت"
+BTN_PAY_BILL_INVOICE = "💳 پرداخت فاکتور #{id}"
+BTN_PAY_BILL_WEEKLY = "💳 پرداخت پنل {username}"
+WARN_ITEM_INVOICE = "▫️ فاکتور #{id} — {amount:,} تومان\n     {timing}\n"
+WARN_ITEM_WEEKLY = "▫️ پرداخت هفتگی · {username} — {amount:,} تومان\n     {timing}\n"
+NONPAYMENT_WARNING_MULTI = (
+    "🔔 <b>اطلاعیه‌ی سیستم — عدم پرداخت</b>\n"
+    "━━━━━━━━━━━━━━━\n"
+    "{items}"
+    "━━━━━━━━━━━━━━━\n"
+    "💰 جمع بدهی: <b>{total:,}</b> تومان\n\n"
+    "⛔️ در صورت عدم پرداخت، {service} شما به‌صورت خودکار معلق خواهد شد.\n"
+    "برای جلوگیری از تعلیق، از دکمه‌های زیر اقدام به پرداخت نمایید."
+)
 WARNING_SENT_TOAST = "⚠️ هشدار ارسال شد."
 WARNING_NOT_DELIVERED = "⚠️ ارسال هشدار ناموفق بود (احتمالاً کاربر ربات را مسدود کرده است)."
 WARNING_BILL_GONE = "ℹ️ این بدهی دیگر باز نیست (احتمالاً تسویه شده است)."

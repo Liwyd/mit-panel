@@ -243,3 +243,33 @@ def render_warning(bill: Bill, now: datetime | None = None) -> str:
         days_line=days_line,
         service=texts.WARN_SERVICE_PANEL if has_panel else texts.WARN_SERVICE_GENERIC,
     )
+
+
+def render_warning_for(items: list[Bill], now: datetime | None = None) -> str:
+    """One notice for everything a person owes. Three debts should mean one
+    message about three debts, not three messages."""
+    if len(items) == 1:
+        return render_warning(items[0], now)
+
+    now = now or datetime.now(TEHRAN)
+    lines = ""
+    for bill in items:
+        timing = describe_timing(bill, now)
+        if bill.kind == "invoice":
+            lines += texts.WARN_ITEM_INVOICE.format(
+                id=bill.invoice_id, amount=bill.amount, timing=timing
+            )
+        else:
+            lines += texts.WARN_ITEM_WEEKLY.format(
+                username=escape(bill.username or "—"), amount=bill.amount, timing=timing
+            )
+
+    owner = items[0].telegram_id
+    has_panel = any(b.kind == "weekly" for b in items) or (
+        owner is not None and db.is_user_linked(owner)
+    )
+    return texts.NONPAYMENT_WARNING_MULTI.format(
+        items=lines,
+        total=sum(b.amount for b in items),
+        service=texts.WARN_SERVICE_PANEL if has_panel else texts.WARN_SERVICE_GENERIC,
+    )

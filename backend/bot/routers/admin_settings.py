@@ -396,6 +396,44 @@ async def finish_panel_history(message: Message, state: FSMContext) -> None:
     )
 
 
+async def _refresh_customer_card(call: CallbackQuery, telegram_id: int) -> None:
+    """Redraw the card in place, so it reflects what just happened."""
+    refreshed = bills.by_customer(bills.open_bills(telegram_id))
+    if not refreshed:
+        return
+    try:
+        await call.message.edit_text(
+            bills.render_customer(refreshed[0]),
+            reply_markup=keyboards.bill_actions_kb(refreshed[0]),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("warnall:"))
+async def warn_customer(call: CallbackQuery, bot: Bot) -> None:
+    telegram_id = int(call.data.split(":", 1)[1])
+    items = sorted(bills.open_bills(telegram_id), key=bills.urgency, reverse=True)
+    if not items:
+        await call.answer(texts.WARNING_BILL_GONE, show_alert=True)
+        return
+    try:
+        await bot.send_message(
+            telegram_id,
+            bills.render_warning_for(items),
+            reply_markup=keyboards.bill_pay_all_kb(items),
+        )
+    except Exception:
+        await call.answer(texts.WARNING_NOT_DELIVERED, show_alert=True)
+        return
+
+    for bill in items:
+        bills.mark_warned(bill)
+    await call.answer(texts.WARNING_SENT_TOAST)
+    await _refresh_customer_card(call, telegram_id)
+
+
+# Kept for the per-bill buttons on cards sent before this was simplified.
 @router.callback_query(F.data.startswith("warn:"))
 async def send_nonpayment_warning(call: CallbackQuery, bot: Bot) -> None:
     bill = bills.find(call.data.split(":", 1)[1])
@@ -412,16 +450,7 @@ async def send_nonpayment_warning(call: CallbackQuery, bot: Bot) -> None:
 
     bills.mark_warned(bill)
     await call.answer(texts.WARNING_SENT_TOAST)
-    # Redraw this customer's card so its "last warned" line shows what was just sent.
-    refreshed = bills.by_customer(bills.open_bills(bill.telegram_id))
-    if refreshed:
-        try:
-            await call.message.edit_text(
-                bills.render_customer(refreshed[0]),
-                reply_markup=keyboards.bill_actions_kb(refreshed[0]),
-            )
-        except Exception:
-            pass
+    await _refresh_customer_card(call, bill.telegram_id)
 
 
 @router.message(F.text == texts.BTN_TOGGLE_AUTO_APPROVE)
