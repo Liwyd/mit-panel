@@ -62,7 +62,7 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user, existingUsern
         resolver: zodResolver(userSchema),
         defaultValues: {
             email: '',
-            totalGb: 0.1,
+            totalGb: 1,
             expiryDatetime: null,
         },
     })
