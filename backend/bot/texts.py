@@ -377,27 +377,11 @@ GRANT_NOTIFY_ADMIN = (
     "📊 موجودی جدید: {new_gb:.2f} گیگابایت"
 )
 
+# The cooperation form is gone, but the label stays: Telegram keeps an old
+# reply keyboard on the user's screen until a new one replaces it, and
+# `ALL_MENU_TEXTS` needs the retired label so a tap falls through the waiting
+# FSM handlers instead of being read as free text for that state.
 BTN_PARTNERSHIP = "🤝 ثبت درخواست همکاری"
-ASK_PARTNER_NAME = "🤝 لطفاً نام و نام خانوادگی خود را وارد نمایید:"
-ASK_PARTNER_VOLUME = "📊 حجم فروش ماهانه‌ی شما چقدر است؟"
-VOL_UNDER_1TB = "کمتر از ۱ ترابایت"
-VOL_1TB = "۱ ترابایت"
-VOL_2TB = "۲ ترابایت"
-VOL_3TB = "۳ ترابایت"
-VOL_OVER_3TB = "بالای ۳ ترابایت"
-ASK_PARTNER_METHOD = "🛒 نحوه‌ی فروش خود را توضیح دهید (از چه طریقی مشتری جذب می‌کنید؟):"
-PARTNER_SUBMITTED = (
-    "✅ درخواست شما ارسال شد.\n\n"
-    "به‌زودی پشتیبانی با شما ارتباط خواهد گرفت. سپاس از شکیبایی شما 🙏"
-)
-PARTNER_NOTIFY_SUPERADMIN = (
-    "🤝 درخواست همکاری جدید\n\n"
-    "👤 نام: {name}\n"
-    "📎 یوزرنیم: {mention}\n"
-    "🆔 آیدی عددی: <code>{telegram_id}</code>\n"
-    "📊 حجم فروش ماهانه: {volume}\n"
-    "🛒 نحوه‌ی فروش: {method}"
-)
 
 BTN_SEARCH_USER = "🔍 جستجوی کاربر"
 ASK_SEARCH_QUERY = "🔍 آیدی عددی تلگرام، یوزرنیم تلگرام یا نام کاربری پنل را وارد نمایید:"

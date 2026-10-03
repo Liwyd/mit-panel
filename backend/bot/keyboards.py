@@ -49,13 +49,11 @@ def prospect_menu_kb() -> ReplyKeyboardMarkup:
 
 
 def panel_request_kb() -> ReplyKeyboardMarkup:
-    """The activation screen: both ways of asking for something sit where
-    someone actually looks for them — the shop, and the cooperation form."""
+    """The activation screen: the way in is the shop, plus a way back."""
     kb = ReplyKeyboardBuilder()
-    kb.button(text=texts.BTN_PARTNERSHIP)
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_BACK)
-    kb.adjust(1, 1, 1)
+    kb.adjust(1, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -328,20 +326,6 @@ def topup_amount_kb() -> InlineKeyboardMarkup:
         kb.button(text=f"{gb:,} GB", callback_data=f"topup_gb:{gb}")
     kb.button(text=texts.BTN_TOPUP_CUSTOM, callback_data="topup_gb:custom")
     kb.adjust(2, 2, 1)
-    return kb.as_markup()
-
-
-def partner_volume_kb() -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    for key, label in [
-        ("u1", texts.VOL_UNDER_1TB),
-        ("1", texts.VOL_1TB),
-        ("2", texts.VOL_2TB),
-        ("3", texts.VOL_3TB),
-        ("o3", texts.VOL_OVER_3TB),
-    ]:
-        kb.button(text=label, callback_data=f"pvol:{key}")
-    kb.adjust(1)
     return kb.as_markup()
 
 
