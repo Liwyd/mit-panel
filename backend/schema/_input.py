@@ -54,9 +54,10 @@ class ClientInput(BaseModel):
     id: str  # UUID
     enable: bool = True
     expiry_time: int
-    total: float = Field(
-        default=0.0, ge=104857600, description="Minimum 0.1 GB (100 MB)"
-    )
+    # Required, not defaulted: pydantic does not validate defaults, so a
+    # request that omitted `total` used to land here as 0 — which Marzban reads
+    # as "no limit", handing out unlimited traffic below the declared floor.
+    total: float = Field(ge=104857600, description="Minimum 0.1 GB (100 MB)")
     sub_id: str
     flow: str = ""
 
