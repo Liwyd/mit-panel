@@ -102,7 +102,7 @@ class BotGrantInput(BaseModel):
 class BotCreateAdminInput(BaseModel):
     """Superadmin provisioning a new reseller panel from the bot."""
 
-    username: str = Field(min_length=1)
+    username: str = Field(min_length=1, pattern=r"^\S+$")
     password: str = Field(min_length=1)
     panel: str
     traffic_gb: float = Field(ge=0)

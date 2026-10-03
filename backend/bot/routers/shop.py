@@ -16,7 +16,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import db, keyboards, texts
+from backend.bot import db, keyboards, texts, validation
 from backend.bot import panel_client
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
@@ -197,6 +197,9 @@ async def shop_get_username(message: Message, state: FSMContext) -> None:
     username = (message.text or "").strip().lower()
     if not username:
         await message.answer(texts.SHOP_ASK_USERNAME)
+        return
+    if validation.has_space(username):
+        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
         return
 
     # Check if username is already taken (MIT Panel DB + all Marzban panels)

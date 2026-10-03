@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 
+from backend.bot import validation
 from backend.db.engin import sessionLocal
 from backend.db import crud
 from backend.db.model import Admins
@@ -238,6 +239,8 @@ async def create_admin(
     telegram_id: int | None,
 ) -> dict:
     """Create a new admin in Marzban and MIT Panel."""
+    if validation.has_space(username):
+        raise PanelClientError("A panel username cannot contain spaces")
     with _session() as db:
         if crud.get_admin_by_username(db, username):
             raise PanelClientError("An admin with that username already exists")
@@ -276,6 +279,8 @@ async def list_panels() -> list[str]:
 
 async def create_panel(name: str, url: str, username: str, password: str) -> dict:
     """Test connection and save a new Marzban panel."""
+    if validation.has_space(username):
+        raise PanelClientError("A panel username cannot contain spaces")
     with _session() as db:
         if crud.get_panel_by_name(db, name):
             raise PanelClientError(f"A panel named '{name}' already exists")
@@ -441,6 +446,8 @@ async def create_admin_for_shop(
     telegram_id: int,
 ) -> dict:
     """Create a new admin for a shop purchase — return traffic enabled, no expiry."""
+    if validation.has_space(username):
+        raise PanelClientError("A panel username cannot contain spaces")
     with _session() as db:
         if crud.get_admin_by_username(db, username):
             raise PanelClientError("An admin with that username already exists")

@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import auto_approve, bills, digest, keyboards, sales, texts
+from backend.bot import auto_approve, bills, digest, keyboards, sales, texts, validation
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
@@ -608,6 +608,9 @@ async def create_admin_username(message: Message, state: FSMContext) -> None:
     if not username:
         await message.answer(texts.ASK_NEW_ADMIN_USERNAME)
         return
+    if validation.has_space(username):
+        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
+        return
     # Check if username is already taken (MIT Panel DB + all Marzban panels)
     try:
         taken = await panel_client.check_username_taken(username)
@@ -953,6 +956,9 @@ async def create_panel_username(message: Message, state: FSMContext) -> None:
     username = (message.text or "").strip()
     if not username:
         await message.answer(texts.ASK_PANEL_ADMIN_USER)
+        return
+    if validation.has_space(username):
+        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
         return
     await state.update_data(panel_admin_user=username)
     await state.set_state(CreatePanel.password)
