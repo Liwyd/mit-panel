@@ -35,6 +35,11 @@ DEFAULTS = {
     "bot_panel_link_url": "https://wunli.draking.ir:4000/panpan/",
     # Tehran hour the nightly digest goes out (0-23).
     "bot_digest_hour": 22,
+    # Where monitoring agents send their heartbeats, used in the install
+    # command. Empty means "whichever domain the panel is open on", which is
+    # wrong when one of the panel's domains is routable from the monitored
+    # servers and another isn't.
+    "agent_base_url": "",
 }
 
 

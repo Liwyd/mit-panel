@@ -124,6 +124,7 @@ class SettingsInput(BaseModel):
     bot_min_gb: Optional[float] = None
     bot_max_gb: Optional[float] = None
     bot_panel_link_url: Optional[str] = None
+    agent_base_url: Optional[str] = None
 
 
 class ServerInput(BaseModel):

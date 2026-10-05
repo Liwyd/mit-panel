@@ -113,6 +113,7 @@ export function SettingsPage() {
                 telegram_chat_id: settings.telegram_chat_id,
                 backup_enabled: settings.backup_enabled,
                 backup_interval_hours: Number(settings.backup_interval_hours) || 6,
+                agent_base_url: settings.agent_base_url?.trim() ?? '',
             })
             setSettings(data)
             alert('Settings saved successfully')
@@ -449,6 +450,23 @@ export function SettingsPage() {
                                 }
                                 disabled={!settings}
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Monitoring agent URL</label>
+                            <Input
+                                placeholder={window.location.origin + '/dashboard'}
+                                value={settings?.agent_base_url ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                    settings && setSettings({ ...settings, agent_base_url: e.target.value })
+                                }
+                                disabled={!settings}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                The address monitored servers send their metrics to, used in the
+                                install command. Leave empty to use whichever domain you opened the
+                                panel on — set it when one of your domains is reachable from those
+                                servers and another isn't.
+                            </p>
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Login logo</label>

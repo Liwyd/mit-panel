@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit2, Trash2, Check, Copy, Loader2, AlertCircle, X, ChevronUp, ChevronDown } from 'lucide-react'
-import { serverAPI } from '@/lib/api'
+import { serverAPI, settingsAPI } from '@/lib/api'
 import { getApiClient } from '@/lib/api-client'
 import { ServerOutput, ServerCreatedOutput } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -28,9 +28,11 @@ interface ManageServersDialogProps {
     onChanged: () => void
 }
 
-function InstallSnippet({ server }: { server: ServerCreatedOutput }) {
+function InstallSnippet({ server, agentBaseUrl }: { server: ServerCreatedOutput; agentBaseUrl: string }) {
     const [copied, setCopied] = useState(false)
-    const panelUrl = getApiClient().defaults.baseURL || window.location.origin
+    // The configured address wins: the domain this panel happens to be open on
+    // isn't necessarily one the monitored servers can route to.
+    const panelUrl = agentBaseUrl || getApiClient().defaults.baseURL || window.location.origin
     const command = `curl -fsSL https://raw.githubusercontent.com/liwyd/mit-panel/main/agent/install.sh | sudo bash -s -- --url "${panelUrl}" --token "${server.token}"`
 
     return (
@@ -74,6 +76,7 @@ export function ManageServersDialog({ isOpen, onClose, onChanged }: ManageServer
     const [savingRename, setSavingRename] = useState(false)
 
     const [deletingId, setDeletingId] = useState<number | null>(null)
+    const [agentBaseUrl, setAgentBaseUrl] = useState('')
 
     const load = async () => {
         try {
@@ -92,6 +95,10 @@ export function ManageServersDialog({ isOpen, onClose, onChanged }: ManageServer
             load()
             setJustCreated(null)
             setNewName('')
+            settingsAPI
+                .getSettings()
+                .then((s) => setAgentBaseUrl((s.agent_base_url || '').replace(/\/+$/, '')))
+                .catch(() => setAgentBaseUrl(''))
         }
     }, [isOpen])
 
@@ -180,7 +187,7 @@ export function ManageServersDialog({ isOpen, onClose, onChanged }: ManageServer
                         </div>
                     )}
 
-                    {justCreated && <InstallSnippet server={justCreated} />}
+                    {justCreated && <InstallSnippet server={justCreated} agentBaseUrl={agentBaseUrl} />}
 
                     <div className="flex gap-2">
                         <Input
