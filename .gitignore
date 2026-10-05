@@ -11,3 +11,5 @@ node_modules/
 dist/
 frontend/node_modules/
 frontend/dist/
+# go build output in agent/ (module name is the binary name)
+agent/mit-agent
