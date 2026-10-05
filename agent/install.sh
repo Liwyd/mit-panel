@@ -89,6 +89,9 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now mit-agent
+systemctl enable mit-agent
+# restart, not "enable --now": re-running the installer with a new URL or token
+# rewrites the unit, but --now leaves an already-running agent on the old one.
+systemctl restart mit-agent
 
 echo "MIT Panel agent installed and running (systemctl status mit-agent)."
