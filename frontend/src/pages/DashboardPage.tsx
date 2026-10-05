@@ -317,12 +317,20 @@ export function DashboardPage() {
         let cancelled = false
         const controller = new AbortController()
 
+        // The online count comes from a scan the backend runs in the
+        // background, so the first response normally carries null for it.
+        let onlineLanded = false
+        let inFlight = false
+
         const load = async () => {
+            if (inFlight) return
+            inFlight = true
             try {
                 const includeAdmins = !marzbanAdminsLoaded
                 const overview = await dashboardAPI.getMarzbanOverview(marzbanPeriod, false, includeAdmins)
                 if (!cancelled && !controller.signal.aborted) {
                     setMarzban(overview)
+                    if (typeof overview?.users.online === 'number') onlineLanded = true
                     if (includeAdmins && overview?.admins !== undefined) {
                         setMarzbanAdminsLoaded(true)
                     }
@@ -331,16 +339,32 @@ export function DashboardPage() {
                 if (!cancelled && !controller.signal.aborted) {
                     console.warn('Failed to fetch Marzban overview:', err)
                 }
+            } finally {
+                inFlight = false
             }
         }
 
         load()
         const interval = setInterval(load, 30000)
 
+        // Re-ask until that first count lands, instead of leaving the tile
+        // empty for the rest of the poll cycle. Bounded so a scan that keeps
+        // failing cannot settle into a request every few seconds forever.
+        let attempts = 0
+        const settle = setInterval(() => {
+            if (onlineLanded || attempts >= 12) {
+                clearInterval(settle)
+                return
+            }
+            attempts += 1
+            void load()
+        }, 5000)
+
         return () => {
             cancelled = true
             controller.abort()
             clearInterval(interval)
+            clearInterval(settle)
         }
     }, [userRole, marzbanPeriod, marzbanAdminsLoaded])
 
@@ -678,9 +702,15 @@ export function DashboardPage() {
                                 <div className="min-w-0">
                                     <p className="text-xs font-extrabold text-muted-foreground">Online Users</p>
                                     <p className="text-2xl font-black tabular leading-tight">
-                                        {marzban.users.online === null ? '-' : marzban.users.online.toLocaleString()}
+                                        {marzban.users.online === null ? (
+                                            <span className="text-muted-foreground">…</span>
+                                        ) : (
+                                            marzban.users.online.toLocaleString()
+                                        )}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">Across all nodes</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {marzban.users.online === null ? 'Counting…' : 'Across all nodes'}
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
