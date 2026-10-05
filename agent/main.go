@@ -196,6 +196,11 @@ func sendHeartbeat(client *http.Client, endpoint, token string, m metrics) (bool
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Agent-Token", token)
+	// Go's default "Go-http-client/1.1" UA gets silently dropped by some
+	// CDN/WAF bot-mitigation (ArvanCloud included) before a response ever
+	// comes back, which reads as a hung connection rather than a clean
+	// error - this alone has fixed that class of timeout before.
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
 	if err != nil {
