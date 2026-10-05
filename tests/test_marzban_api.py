@@ -350,3 +350,66 @@ def test_online_count_treats_a_bad_timestamp_as_offline():
     svc, _ = service([_user_page([{"online_at": "not-a-date"}, {"online_at": None}])])
 
     assert asyncio.run(svc.count_online_users(page_size=5)) == 0
+
+
+def test_get_admin_returns_the_filtered_record():
+    """One admin should cost one request, not the whole admin list."""
+    svc, session = service(
+        [FakeResponse(payload=[{"username": "reseller", "is_sudo": False}])]
+    )
+
+    found = asyncio.run(svc.get_admin("reseller"))
+
+    assert found == {"username": "reseller", "is_sudo": False}
+    assert len(session.calls) == 1
+    assert session.calls[0]["params"] == {"username": "reseller"}
+    assert session.calls[0]["timeout"] == marzban_api.REQUEST_TIMEOUT
+
+
+def test_get_admin_rechecks_the_username_against_the_full_list():
+    """Builds whose filter is loose, or absent, still resolve the exact name."""
+    svc, session = service(
+        [
+            FakeResponse(payload=[{"username": "reseller-2"}]),
+            FakeResponse(
+                payload=[
+                    {"username": "reseller"},
+                    {"username": "reseller-2"},
+                ]
+            ),
+        ]
+    )
+
+    found = asyncio.run(svc.get_admin("reseller"))
+
+    assert found["username"] == "reseller"
+    assert len(session.calls) == 2
+    assert session.calls[1]["params"] is None
+
+
+def test_get_admin_reports_an_unreachable_panel_as_unreachable():
+    """Returning None here would make the caller answer "no such admin" for a
+    panel that is simply down."""
+    svc, _ = service([requests.ConnectionError("refused")])
+
+    with pytest.raises(requests.ConnectionError):
+        asyncio.run(svc.get_admin("reseller"))
+
+
+def test_a_password_change_drops_that_admins_cached_token():
+    """verify_credentials() logs the target admin in first, so a token for the
+    password that is about to stop working is sitting in the cache."""
+    svc, session = service(
+        [
+            FakeResponse(payload=[{"username": "reseller", "is_sudo": False}]),
+            FakeResponse(status_code=200),
+        ]
+    )
+    stale_key = f"{svc.url}|reseller"
+    APIService._token_cache[stale_key] = ("old-token", 0.0)
+
+    status = asyncio.run(svc.update_admin_password("reseller", "new-password"))
+
+    assert status == 200
+    assert stale_key not in APIService._token_cache
+    assert session.calls[1]["method"] == "PUT"

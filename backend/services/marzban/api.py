@@ -316,6 +316,33 @@ class APIService:
         )
         return response.status_code
 
+    async def get_admin(self, username: str) -> dict | None:
+        """One admin's record as Marzban has it.
+
+        Asks Marzban to filter first, then falls back to the whole list: the
+        filter matches loosely on some builds and is missing on older ones, so
+        the exact username is re-checked either way. A request that cannot be
+        made raises rather than returning None — an unreachable panel must not
+        read back as "no such admin".
+        """
+        await self._login()
+        for params in ({"username": username}, None):
+            response = self.session.get(
+                f"{self.url}api/admins",
+                headers=self.headers,
+                params=params,
+                timeout=REQUEST_TIMEOUT,
+            )
+            if response.status_code != 200:
+                continue
+            payload = response.json()
+            if not isinstance(payload, list):
+                continue
+            match = next((a for a in payload if a.get("username") == username), None)
+            if match:
+                return match
+        return None
+
     async def update_admin_password(self, admin_username: str, new_password: str) -> int:
         """Change another Marzban admin's password. Requires this APIService to be
         logged in as a sudo admin (self.username/self.password) — Marzban rejects
@@ -328,9 +355,7 @@ class APIService:
         """
         await self._login()
 
-        current = next(
-            (a for a in await self.get_admins() if a.get("username") == admin_username), None
-        )
+        current = await self.get_admin(admin_username)
         if current is None:
             return 404
 
@@ -345,6 +370,11 @@ class APIService:
             json=payload,
             timeout=REQUEST_TIMEOUT,
         )
+        # The old password's token is now worthless; keeping it cached would
+        # have this admin's next call authenticate as someone who can no longer
+        # log in.
+        if response.status_code == 200:
+            APIService._token_cache.pop(f"{self.url}|{admin_username}", None)
         return response.status_code
 
     async def get_system_stats(self) -> dict:
