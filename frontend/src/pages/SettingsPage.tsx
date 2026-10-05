@@ -804,13 +804,32 @@ export function SettingsPage() {
                                     accept="image/*"
                                     onChange={handleNewsBannerChange}
                                     disabled={addingNews}
+                                    // Remounts when the attachment is dropped, so
+                                    // picking the same file again still fires a change.
+                                    key={newNewsBannerPreview ? 'banner-set' : 'banner-empty'}
                                 />
                                 {newNewsBannerPreview && (
-                                    <img
-                                        src={newNewsBannerPreview}
-                                        alt="Banner preview"
-                                        className="h-24 w-auto rounded border"
-                                    />
+                                    <div className="flex items-center gap-3">
+                                        <img
+                                            src={newNewsBannerPreview}
+                                            alt="Banner preview"
+                                            className="h-24 w-auto rounded border"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                URL.revokeObjectURL(newNewsBannerPreview)
+                                                setNewNewsBanner(null)
+                                                setNewNewsBannerPreview(null)
+                                            }}
+                                            disabled={addingNews}
+                                        >
+                                            <Trash2 className="mr-1 h-4 w-4" />
+                                            Remove
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         </div>
