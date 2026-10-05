@@ -54,6 +54,7 @@ export function AdminFormDialog({
         reset,
         setValue,
         watch,
+        getValues,
     } = useForm<AdminFormData>({
         resolver: zodResolver(adminSchema),
         defaultValues: {
@@ -143,6 +144,18 @@ export function AdminFormDialog({
         loadMarzbanInbounds(admin.panel, admin.marzban_all_inbounds ?? false)
     }, [isOpen, admin, panels])
 
+    // Creating: start on a panel instead of an empty select, so the common
+    // case (one panel, everything enabled) needs no picking at all. Re-runs
+    // when the panel list lands. handlePanelChange/getValues are render-local,
+    // so listing them would re-run this on every render — the emptiness guard
+    // is what keeps an explicit choice from being overwritten.
+    useEffect(() => {
+        if (!isOpen || admin || panels.length === 0) return
+        if (getValues('panel')) return
+        handlePanelChange(panels[0].name)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, admin, panels])
+
     const loadPanels = async () => {
         try {
             setLoadingPanels(true)
@@ -191,8 +204,11 @@ export function AdminFormDialog({
             // Set flow to null (empty)
             setValue('flow', null)
         } else if (panelType === 'marzban') {
-            // Load inbounds for marzban
-            loadMarzbanInbounds(panelName, allInbounds)
+            // Load inbounds for marzban. A brand-new admin gets every inbound
+            // ticked — a row saved with no inbound set serves configs that
+            // connect to nothing — while an existing one keeps whatever it
+            // already had unless "select all" is on.
+            loadMarzbanInbounds(panelName, !admin || allInbounds)
             // Reset inbound_id and flow for marzban
             setValue('inbound_id', '')
             setValue('flow', null)
