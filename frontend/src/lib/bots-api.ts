@@ -65,7 +65,7 @@ export const botsAPI = {
         const url = URL.createObjectURL(res.data as Blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = 'nexra-autopay.apk'
+        a.download = 'mit-autopay.apk'
         document.body.appendChild(a)
         a.click()
         a.remove()

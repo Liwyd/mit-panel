@@ -139,7 +139,7 @@ export function AutopayTab({ api, superadmin }: { api: BotAPI; superadmin: boole
                         نصب و اتصال اپ <Badge variant="gold">نسخه آزمایشی</Badge>
                     </CardTitle>
                     <CardDescription className="leading-6">
-                        اپ اندروید «تأیید خودکار Nexra» هنوز آزمایشی است. چند روز اول، شارژهای خودکار را با پیامک‌های بانک هم مقایسه کنید و اگر
+                        اپ اندروید «تأیید خودکار MIT» هنوز آزمایشی است. چند روز اول، شارژهای خودکار را با پیامک‌های بانک هم مقایسه کنید و اگر
                         پیامکی تشخیص داده نشد، از بخش «آخرین پیامک‌ها» همین صفحه ببینید چه رسیده است.
                     </CardDescription>
                 </CardHeader>
@@ -164,7 +164,7 @@ export function AutopayTab({ api, superadmin }: { api: BotAPI; superadmin: boole
                     </GuideStep>
                     <GuideStep n={2} title="نصب">
                         <p>
-                            فایل <code dir="ltr">nexra-autopay.apk</code> را باز کنید. اگر اندروید پرسید، «اجازه‌ی نصب از این منبع» را بدهید (چون اپ از
+                            فایل <code dir="ltr">mit-autopay.apk</code> را باز کنید. اگر اندروید پرسید، «اجازه‌ی نصب از این منبع» را بدهید (چون اپ از
                             گوگل‌پلی نصب نمی‌شود). اگر نسخه‌ی قبلی را دارید و نصب خطا داد، اول آن را حذف کنید.
                         </p>
                     </GuideStep>

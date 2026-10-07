@@ -123,7 +123,7 @@ class Servers(Base):
 
 
 class TelegramBots(Base):
-    """A Nexra sales bot (nexrabot, the Go MirzaBot) this panel manages.
+    """An MIT sales bot (mitseller) this panel manages.
 
     The panel talks to the bot's management API (/api/v1) with one of two keys:
     owner_key is only ever used for the superadmin, manager_key for the admin

@@ -8,8 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, ErrorBox, Field, Loading, Notice, Spinner, Switch, selectClass, useAction, useLoad } from './common'
 
+// mit-seller's IsMitType: new bots store "mit", rows written before the
+// rebrand still say "nexra". Both mean this panel's own type, so the panel
+// fields (URL, reseller credentials) are asked for either way.
+const isMitPanelType = (type: string) => type === 'mit' || type === 'nexra'
+
 const TYPES: Record<string, string> = {
     marzban: 'Marzban',
+    mit: 'MIT Panel',
     nexra: 'Nexra Panel',
     marzneshin: 'Marzneshin',
     'x-ui_single': 'X-UI (سنایی)',
@@ -206,11 +212,11 @@ function AddPanelDialog({ open, api, onClose, onSaved }: { open: boolean; api: B
                             ))}
                         </select>
                     </Field>
-                    <Field label={f.type === 'nexra' ? 'آدرس Nexra Panel' : 'آدرس پنل'} hint={f.type === 'nexra' ? 'مثل https://panel.example.com/dashboard' : undefined}>
+                    <Field label={isMitPanelType(f.type) ? 'آدرس MIT Panel' : 'آدرس پنل'} hint={isMitPanelType(f.type) ? 'مثل https://panel.example.com/dashboard' : undefined}>
                         <Input dir="ltr" value={f.url} onChange={(e) => set('url', e.target.value)} placeholder="https://panel.example.com:8000" />
                     </Field>
                     {!noUser && (
-                        <Field label={f.type === 'nexra' ? 'نام کاربری ادمین (ریسلر) در Nexra' : 'نام کاربری'}>
+                        <Field label={isMitPanelType(f.type) ? 'نام کاربری ادمین (ریسلر) در MIT' : 'نام کاربری'}>
                             <Input dir="ltr" value={f.username} onChange={(e) => set('username', e.target.value)} />
                         </Field>
                     )}
@@ -227,18 +233,18 @@ function AddPanelDialog({ open, api, onClose, onSaved }: { open: boolean; api: B
                             <Input dir="ltr" value={f.linksubx} onChange={(e) => set('linksubx', e.target.value)} />
                         </Field>
                     )}
-                    {f.type === 'nexra' && (
+                    {isMitPanelType(f.type) && (
                         <div className="rounded-lg border border-border p-3 space-y-3">
                             <p className="text-xs text-muted-foreground">
-                                ربات کاربر را از طریق Nexra می‌سازد (تا از حجم ریسلر کم شود) و لینک‌ها را مستقیم از مرزبانِ پشت آن می‌خواند.
+                                ربات کاربر را از طریق MIT می‌سازد (تا از حجم ریسلر کم شود) و لینک‌ها را مستقیم از مرزبانِ پشت آن می‌خواند.
                             </p>
                             <Field label="آدرس مرزبان">
                                 <Input dir="ltr" value={f.marzban_url_direct} onChange={(e) => set('marzban_url_direct', e.target.value)} placeholder="https://marzban.example.com:8000" />
                             </Field>
-                            <Field label="نام کاربری مرزبان" hint="خالی = همان نام کاربری Nexra">
+                            <Field label="نام کاربری مرزبان" hint="خالی = همان نام کاربری MIT">
                                 <Input dir="ltr" value={f.marzban_username_direct} onChange={(e) => set('marzban_username_direct', e.target.value)} />
                             </Field>
-                            <Field label="رمز مرزبان" hint="خالی = همان رمز Nexra">
+                            <Field label="رمز مرزبان" hint="خالی = همان رمز MIT">
                                 <Input dir="ltr" type="password" autoComplete="off" value={f.marzban_password_direct} onChange={(e) => set('marzban_password_direct', e.target.value)} />
                             </Field>
                         </div>
@@ -353,7 +359,7 @@ function EditPanelDialog({
                         <Field label="روش ساخت نام کاربری سرویس" hint="همان گزینه‌های منوی «روش ساخت نام کاربری» در ربات.">
                             <Input value={f.MethodUsername || ''} onChange={(e) => set('MethodUsername', e.target.value)} />
                         </Field>
-                        {panel.type === 'nexra' && (
+                        {isMitPanelType(panel.type) && (
                             <>
                                 <Field label="آدرس مرزبان">
                                     <Input dir="ltr" value={f.marzban_url_direct || ''} onChange={(e) => set('marzban_url_direct', e.target.value)} />

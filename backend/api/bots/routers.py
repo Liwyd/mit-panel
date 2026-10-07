@@ -1,4 +1,4 @@
-"""The "Bot" section: run Nexra sales bots (nexrabot) from the panel.
+"""The "Bot" section: run MIT sales bots (mitseller) from the panel.
 
 The superadmin connects a bot (its address plus the two keys from the bot's
 config) and assigns it to an admin. From then on the panel forwards the
@@ -35,9 +35,10 @@ from backend.utils.settings_store import DATA_DIR
 
 router = APIRouter(prefix="/sales-bots", tags=["Sales bots"])
 
-APK_PATH = os.path.join(DATA_DIR, "nexra-autopay.apk")
-APK_META_PATH = os.path.join(DATA_DIR, "nexra-autopay.json")
-APK_RELEASE_REPO = os.environ.get("AUTOPAY_APK_REPO", "MHBehzadian/nexra-mirzabot")
+APK_PATH = os.path.join(DATA_DIR, "mit-autopay.apk")
+APK_META_PATH = os.path.join(DATA_DIR, "mit-autopay.json")
+# mit-seller's release workflow publishes mit-autopay.apk alongside the binary.
+APK_RELEASE_REPO = os.environ.get("AUTOPAY_APK_REPO", "Liwyd/mit-seller")
 APK_MAX_BYTES = 100 * 1024 * 1024
 
 # First path segment of every bot API resource the panel may reach.
@@ -98,7 +99,7 @@ async def _probe(url: str, key: str) -> tuple[str | None, dict | str]:
     try:
         body = res.json()
     except ValueError:
-        return None, f"Not a Nexra bot API (HTTP {res.status_code})"
+        return None, f"Not a sales bot API (HTTP {res.status_code})"
     if not body.get("ok"):
         return None, body.get("error") or f"HTTP {res.status_code}"
     data = body.get("data") or {}
@@ -257,7 +258,7 @@ def _save_shared_ids(ids: set[str]) -> None:
 async def _guess_owner(db: Session, probe, ignore: set[str] | None = None) -> tuple[Admins | None, str]:
     """Which panel admin runs this bot.
 
-    1. The bot sells from a Nexra Panel with some reseller's credentials: the
+    1. The bot sells from an MIT Panel with some reseller's credentials: the
        panel admin with that username is the owner.
     2. Otherwise the panel admin whose Telegram id is one of the bot's admins
        (its main admin or the admin list), leaving out the ids in `ignore`
@@ -269,10 +270,16 @@ async def _guess_owner(db: Session, probe, ignore: set[str] | None = None) -> tu
     by_name = {a.username.lower(): a for a in admins}
     code, panels = await _bot_call(probe, "GET", "panels")
     if code == 200:
-        names = {str(p.get("username_panel") or "").lower() for p in panels.get("data") or [] if p.get("type") == "nexra"}
+        # mit-seller stores "mit" for its own panel type and still reads "nexra"
+        # for rows written before the rebrand (its panels.IsMitType).
+        names = {
+            str(p.get("username_panel") or "").lower()
+            for p in panels.get("data") or []
+            if p.get("type") in ("mit", "nexra")
+        }
         found = [by_name[n] for n in names if n in by_name]
         if len(found) == 1:
-            return found[0], f"its Nexra panel uses the reseller {found[0].username}"
+            return found[0], f"its MIT panel uses the reseller {found[0].username}"
         if len(found) > 1:
             return None, "it sells from several resellers: " + ", ".join(a.username for a in found)
     code, info = await _bot_call(probe, "GET", "info")
@@ -291,7 +298,7 @@ async def _guess_owner(db: Session, probe, ignore: set[str] | None = None) -> tu
     if len(matched) > 1:
         return None, "its admins' Telegram ids belong to several panel admins: " + ", ".join(
             f"{a.username} ({tid})" for a, tid in matched.values())
-    return None, "no panel admin matches its Nexra reseller or its admins' Telegram ids"
+    return None, "no panel admin matches its MIT reseller or its admins' Telegram ids"
 
 
 @router.post("/register", description="Connect or refresh a bot and give it to its owner automatically (superadmin; used by install.sh)")
@@ -530,7 +537,7 @@ async def apk_download(user: dict = Depends(get_current_admin)):
     return FileResponse(
         APK_PATH,
         media_type="application/vnd.android.package-archive",
-        filename="nexra-autopay.apk",
+        filename="mit-autopay.apk",
     )
 
 

@@ -61,7 +61,7 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
                 {bots.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                         هنوز رباتی وصل نشده. آدرس ربات و دو کلید API_OWNER_KEY و API_MANAGER_KEY را از فایل تنظیمات ربات
-                        (/etc/nexrabot/botN.env) بردارید.
+                        (/etc/mitseller/botN.env) بردارید.
                     </p>
                 )}
                 {bots.map((b) => (

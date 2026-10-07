@@ -14,6 +14,6 @@ frontend/dist/
 # go build output in agent/ (module name is the binary name)
 agent/mit-agent
 *.apk
-data/nexra-autopay.json
+data/mit-autopay.json
 data/emoji-packs.json
 data/shared-admin-ids.json

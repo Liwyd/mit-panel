@@ -2,7 +2,7 @@ import { Lock, LifeBuoy } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const SUPPORT_URL = 'https://t.me/aria1060'
+const SUPPORT_URL = 'https://t.me/MITsupports'
 
 // What an admin without a bot sees: the section, blurred, behind a notice.
 export function LockedBots() {
