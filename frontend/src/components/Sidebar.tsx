@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { botsAPI } from '@/lib/bots-api'
 import {
     BarChart3,
     Users,
@@ -11,6 +12,8 @@ import {
     Sun,
     Moon,
     Server,
+    Bot,
+    Lock,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { logout, getUserRole } from '@/lib/auth'
@@ -45,6 +48,12 @@ const navigationItems = [
         roles: ['superadmin'],
     },
     {
+        label: 'Bot',
+        href: '/bots',
+        icon: Bot,
+        roles: ['admin', 'superadmin'],
+    },
+    {
         label: 'Settings',
         href: '/settings',
         icon: Settings,
@@ -77,10 +86,27 @@ function ThemeToggleButton() {
     )
 }
 
+// For an admin, the Bot entry shows a lock until a bot is assigned to them.
+let botAccess: Promise<boolean> | null = null
+function useBotLocked(role: string | null): boolean {
+    const [locked, setLocked] = useState(false)
+    useEffect(() => {
+        if (role !== 'admin') return
+        if (!botAccess) botAccess = botsAPI.list().then((l) => l.length > 0).catch(() => true)
+        let live = true
+        botAccess.then((has) => live && setLocked(!has))
+        return () => {
+            live = false
+        }
+    }, [role])
+    return locked
+}
+
 export function Sidebar({ onItemClick }: SidebarProps) {
     const location = useLocation()
     const navigate = useNavigate()
     const userRole = getUserRole()
+    const botLocked = useBotLocked(userRole)
     const [version, setVersion] = useState('')
 
     useEffect(() => {
@@ -117,6 +143,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
                         >
                             <Icon className="h-4 w-4" />
                             <span>{item.label}</span>
+                            {item.href === '/bots' && botLocked && <Lock className="mr-auto h-3.5 w-3.5 opacity-60" />}
                         </Button>
                     )
                 })}

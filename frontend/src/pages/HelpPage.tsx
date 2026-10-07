@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { UserPlus, UserCog, UserMinus, HelpCircle } from 'lucide-react'
+import { UserPlus, UserCog, UserMinus, HelpCircle, Bot } from 'lucide-react'
 import { PageLayout } from '@/components/PageLayout'
 
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -61,6 +61,20 @@ export function HelpPage() {
                 <CardContent className="space-y-2 text-sm leading-7 text-muted-foreground">
                     <p>۱. در لیست کاربران، روی آیکون حذف (سطل زباله) بزنید.</p>
                     <p>۲. تأیید کنید. در صورت فعال‌بودن «بازگشت حجم هنگام حذف»، حجمِ مصرف‌نشده‌ی کاربر به سهمیه‌ی شما برمی‌گردد.</p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Bot className="h-5 w-5 text-primary" /> ربات فروش
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm leading-7 text-muted-foreground">
+                    <p>اگر ربات فروش تلگرام به حساب شما وصل شده باشد، از منوی «Bot» همه‌ی کارهای ربات را انجام می‌دهید: محصولات و قیمت‌ها، تأیید رسیدها، کاربران و موجودی‌شان، کد تخفیف، متن‌ها و دکمه‌ها.</p>
+                    <p>در «دکمه‌ها» می‌توانید جای دکمه‌های منو، رنگشان و ایموجی پریمیومشان را عوض کنید. کاربران با /start بعدی منوی جدید را می‌بینند.</p>
+                    <p>در «تأیید خودکار» اپ اندروید را دانلود کنید؛ این اپ پیامک واریز بانک را به ربات می‌فرستد تا کارت به کارت بدون بررسی دستی شارژ شود.</p>
+                    <p>اضافه‌کردن یا تغییر سرورهای ربات فقط با مدیر پنل است.</p>
                 </CardContent>
             </Card>
 
