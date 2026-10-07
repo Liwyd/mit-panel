@@ -144,3 +144,24 @@ class ServerHeartbeatInput(BaseModel):
     swap_total: int = Field(ge=0)
     disk_used: int = Field(ge=0)
     disk_total: int = Field(ge=0)
+
+
+class TelegramBotInput(BaseModel):
+    name: str
+    url: str
+    owner_key: str
+    manager_key: str
+    admin_id: Optional[int] = None
+    is_active: bool = True
+
+
+class TelegramBotUpdateInput(BaseModel):
+    """Every field optional; a key left empty keeps the stored one."""
+
+    name: Optional[str] = None
+    url: Optional[str] = None
+    owner_key: Optional[str] = None
+    manager_key: Optional[str] = None
+    admin_id: Optional[int] = None
+    unassign: bool = False
+    is_active: Optional[bool] = None

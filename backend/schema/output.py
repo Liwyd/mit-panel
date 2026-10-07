@@ -90,3 +90,16 @@ class ClientsOutput(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TelegramBotOutput(BaseModel):
+    """Never carries the API keys, only whether they are set."""
+
+    id: int
+    name: str
+    url: Optional[str] = None
+    admin_id: Optional[int] = None
+    admin_username: Optional[str] = None
+    bot_username: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None

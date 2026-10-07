@@ -9,6 +9,7 @@ from backend.db.model import (
     SanaeiUsers,
     Servers,
     MarzbanUsers,
+    TelegramBots,
 )
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
@@ -99,6 +100,9 @@ def update_admin_values(
 def remove_admin(db: Session, admin_id: int) -> bool:
     admin = db.query(Admins).filter(Admins.id == admin_id).first()
     if admin:
+        # SQLite doesn't enforce the FK's ON DELETE here; unassign by hand so
+        # the bot stays (superadmin-only) instead of pointing at a dead id.
+        db.query(TelegramBots).filter(TelegramBots.admin_id == admin_id).update({TelegramBots.admin_id: None})
         db.delete(admin)
         db.commit()
         return True
@@ -412,3 +416,51 @@ def record_server_heartbeat(db: Session, server: Servers, metrics: dict) -> bool
 
     db.commit()
     return reboot_pending
+
+# ---------------------------------------------------------------- telegram bots
+
+
+def get_all_bots(db: Session) -> list[TelegramBots]:
+    return db.query(TelegramBots).order_by(TelegramBots.id).all()
+
+
+def get_bots_for_admin(db: Session, admin_id: int) -> list[TelegramBots]:
+    return (
+        db.query(TelegramBots)
+        .filter(TelegramBots.admin_id == admin_id, TelegramBots.is_active.is_(True))
+        .order_by(TelegramBots.id)
+        .all()
+    )
+
+
+def get_bot_by_id(db: Session, bot_id: int) -> TelegramBots | None:
+    return db.query(TelegramBots).filter(TelegramBots.id == bot_id).first()
+
+
+def get_bot_by_name(db: Session, name: str) -> TelegramBots | None:
+    return db.query(TelegramBots).filter(TelegramBots.name == name).first()
+
+
+def add_bot(db: Session, **values) -> TelegramBots:
+    bot = TelegramBots(**values)
+    db.add(bot)
+    db.commit()
+    db.refresh(bot)
+    return bot
+
+
+def update_bot(db: Session, bot: TelegramBots, **values) -> TelegramBots:
+    for key, value in values.items():
+        setattr(bot, key, value)
+    db.commit()
+    db.refresh(bot)
+    return bot
+
+
+def remove_bot(db: Session, bot_id: int) -> bool:
+    bot = get_bot_by_id(db, bot_id)
+    if not bot:
+        return False
+    db.delete(bot)
+    db.commit()
+    return True
