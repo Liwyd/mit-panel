@@ -5,8 +5,12 @@ Two fixed points in the Persian week, both at 08:00 Asia/Tehran:
   • Friday — the end of the week: take what the wallet covers, tell each debtor
     what (if anything) is still outstanding, and send the superadmin the roster.
 
-For consumption-mode panels, Friday settlement also generates invoices based on
-actual weekly usage (configs created during the week).
+For consumption-mode panels, Friday settlement also invoices the growth of the
+panel's own created-volume figure since the previous settlement: for each
+reseller that is the sum of data_limit over their live users, read live from
+the Marzban panel — exactly the figure the panel holds, never an approximation
+of it. The previous figure lives in `created_volume_baselines`, which doubles
+as the per-owner settled-this-week marker so a crashed run resumes safely.
 
 Each run is stamped with its ISO year-week so a restart, or the loop ticking
 more than once inside the same hour, can't double-send.
@@ -16,7 +20,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -26,6 +31,8 @@ from backend.bot.invoices import describe_due, is_due
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
 from backend.bot.config import bot_config as settings
+from backend.bot.units import bytes_to_gb
+from backend.bot.usage_sync import _read_panel_users, group_by_owner
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +42,11 @@ TEHRAN = ZoneInfo("Asia/Tehran")
 REMINDER_WEEKDAY = 2
 SETTLEMENT_WEEKDAY = 4
 RUN_HOUR = 8
+
+# A flaky panel must not cost the week's invoices: read attempts (with
+# growing backoff) before the panel's owners are deferred to next week.
+PANEL_READ_ATTEMPTS = 3
+PANEL_READ_BACKOFF = 5.0
 
 
 def _week_stamp(now: datetime) -> str:
@@ -46,50 +58,222 @@ def _already_ran(key: str, stamp: str) -> bool:
     return db.get_setting(key) == stamp
 
 
-def _calculate_weekly_consumption(username: str) -> int:
-    """Calculate bytes consumed during the current week (Saturday→Friday).
-
-    Uses traffic_history snapshots taken hourly by the warning scanner.
-    Consumption = decrease in remaining traffic, adjusted for any grants.
-    """
-    now = datetime.now(TEHRAN)
-    # Find Saturday of this week (Saturday=5 in Python weekday)
+def _week_start(now: datetime) -> datetime:
+    """Saturday 00:00 Tehran of the week containing `now` (Saturday=5)."""
     days_since_sat = (now.weekday() - 5) % 7
-    week_start = (now - timedelta(days=days_since_sat)).replace(
+    return (now - timedelta(days=days_since_sat)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    since_date = week_start.strftime("%Y-%m-%d")
-
-    history = db.get_traffic_history(username, since_date)
-    if len(history) < 1:
-        return 0
-
-    first, last = history[0], history[-1]
-    # Same formula as forecast.py: (remaining_then - remaining_now) + (granted_now - granted_then)
-    consumed = (first["traffic_bytes"] - last["traffic_bytes"]) + (
-        last["initial_bytes"] - first["initial_bytes"]
-    )
-    return max(0, consumed)
 
 
-def _get_admin_telegram_id(username: str) -> int | None:
-    """Look up the Telegram ID for a panel username from the main DB."""
+def _get_admin_row(username: str):
+    """The admins row for a panel username, or None for a stale config."""
     from backend.db.engin import sessionLocal
     from backend.db import crud
 
     with sessionLocal() as db_session:
-        admin = crud.get_admin_by_username(db_session, username)
-        if admin:
-            return admin.telegram_id
+        return crud.get_admin_by_username(db_session, username)
+
+
+def _transition_created_bytes(owner: str, week_start: datetime, now: datetime) -> int:
+    """Ledger-recorded creations inside this Persian week.
+
+    Only used for an owner with no baseline — their panel's previous figure
+    was never recorded, so the live delta is unknown and past weeks must not
+    be billed retroactively. Everything the mirror saw created this week is
+    exactly recoverable; from the next settlement the live baseline takes over.
+    """
+    from backend.db.engin import sessionLocal
+    from backend.db.model import MarzbanUsers
+
+    start_utc = week_start.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
+    with sessionLocal() as db_session:
+        rows = (
+            db_session.query(MarzbanUsers)
+            .filter(
+                MarzbanUsers.owner == owner,
+                MarzbanUsers.created_at >= start_utc,
+                MarzbanUsers.created_at < end_utc,
+            )
+            .all()
+        )
+    return sum(int(row.data_limit or 0) for row in rows)
+
+
+async def _read_panel_with_retry(panel) -> list[dict] | None:
+    """One panel's users, or None when it could not be read reliably.
+
+    An empty result is treated as a failed read rather than an emptied panel:
+    acting on it would zero every owner's figure and silently swallow their
+    week. Retries are paced so a panel that is down costs seconds, not a
+    settlement.
+    """
+    for attempt in range(PANEL_READ_ATTEMPTS):
+        try:
+            users = await asyncio.to_thread(_read_panel_users, panel)
+        except Exception as exc:
+            logger.warning(
+                "settlement panel read failed for %s (attempt %d/%d): %s",
+                panel.name,
+                attempt + 1,
+                PANEL_READ_ATTEMPTS,
+                exc,
+            )
+            users = None
+        if users:
+            return users
+        if attempt + 1 < PANEL_READ_ATTEMPTS:
+            await asyncio.sleep(PANEL_READ_BACKOFF * (attempt + 1))
     return None
 
 
-def _consumption_invoice_exists(telegram_id: int, username: str, week_stamp: str) -> bool:
-    """Check if a consumption invoice already exists for this admin this week."""
-    for inv in db.list_pending_invoices(telegram_id):
-        if inv.description and week_stamp in inv.description and username in inv.description:
-            return True
-    return False
+async def _settle_owner(
+    bot: Bot,
+    *,
+    owner: str,
+    admin,
+    live_total: int,
+    week_start: datetime,
+    now: datetime,
+    stamp: str,
+) -> list[str]:
+    """Invoice one reseller for the growth of their live created-volume figure.
+
+    The baseline row is the single source of truth for both "what did they
+    have last time" and "did this week already settle them": it is written
+    only after the invoice exists (or when nothing is owed), so a crash in
+    between re-runs into the same delta and the unique invoice index absorbs
+    the duplicate. When the amount cannot be priced or delivered the baseline
+    is deliberately held back, letting the figure accumulate instead of
+    quietly disappearing.
+    """
+    lines: list[str] = []
+    baseline = db.get_created_volume_baseline(owner)
+    if baseline and baseline["week_stamp"] == stamp:
+        return lines
+
+    if baseline is None:
+        delta = _transition_created_bytes(owner, week_start, now)
+    else:
+        delta = max(0, live_total - int(baseline["total_bytes"]))
+
+    if delta <= 0:
+        db.set_created_volume_baseline(owner, stamp, live_total)
+        return lines
+
+    consumed_gb = bytes_to_gb(delta)
+    price_per_gb = db.get_effective_price(owner)
+    telegram_id = admin.telegram_id
+    amount = round(consumed_gb * price_per_gb) if price_per_gb else 0
+    if not telegram_id or amount <= 0:
+        lines.append(
+            texts.SETTLEMENT_OWNER_UNBILLED.format(username=owner, gb=consumed_gb)
+        )
+        return lines
+
+    if not db.consumption_invoice_exists(owner, stamp):
+        due_at = (now + timedelta(days=7)).isoformat()
+        description = f"مصرف هفتگی پنل {owner} — {stamp} ({consumed_gb:.1f} GB)"
+        try:
+            db.create_invoice(
+                telegram_id=telegram_id,
+                amount=amount,
+                description=description,
+                due_at=due_at,
+                admin_username=owner,
+                week_stamp=stamp,
+            )
+        except sqlite3.IntegrityError:
+            # Unique (admin_username, week_stamp): a concurrent run won the
+            # race; its invoice is this owner's, so fall through to the baseline.
+            pass
+        else:
+            try:
+                await bot.send_message(
+                    telegram_id,
+                    texts.CONSUMPTION_INVOICE_HEADER.format(
+                        username=owner,
+                        consumed_gb=consumed_gb,
+                        amount=amount,
+                        due=describe_due(due_at),
+                    ),
+                )
+            except Exception:
+                pass
+            lines.append(
+                texts.CONSUMPTION_INVOICE_SUPERADMIN.format(
+                    username=owner,
+                    telegram_id=telegram_id,
+                    consumed_gb=consumed_gb,
+                    amount=amount,
+                )
+            )
+
+    db.set_created_volume_baseline(owner, stamp, live_total)
+    return lines
+
+
+async def _settle_consumption(
+    bot: Bot, now: datetime, stamp: str
+) -> tuple[list[str], list[str]]:
+    """Phase 1: consumption mode — invoice every owner's grown panel figure.
+
+    Each Marzban panel is read live once (never per owner), owners are bucketed
+    exactly the way the usage sync buckets them, and each consumption-mode owner
+    is settled against their stored baseline. An owner whose panel could not be
+    read is held untouched so the untouched figure catches up automatically on
+    the next successful week.
+    """
+    from backend.db.engin import sessionLocal
+    from backend.db import crud
+
+    invoice_lines: list[str] = []
+    warning_lines: list[str] = []
+    consumption_owners = db.list_consumption_enabled()
+    if not consumption_owners:
+        return invoice_lines, warning_lines
+
+    with sessionLocal() as db_session:
+        panels = [p for p in crud.get_all_panels(db_session) if p.panel_type == "marzban"]
+
+    # Sessions are deliberately not held across the panel reads below: a read
+    # can take minutes with its retries, and a borrowed connection must not sit
+    # idle in the pool for that long.
+    totals: dict[str, int] = {}
+    unreadable_panels: set[str] = set()
+    for panel in panels:
+        users = await _read_panel_with_retry(panel)
+        if not users:
+            unreadable_panels.add(panel.name)
+            warning_lines.append(
+                texts.SETTLEMENT_PANEL_UNREADABLE.format(panel=panel.name)
+            )
+            continue
+        for owner, owner_users in group_by_owner(users).items():
+            if owner == panel.username:
+                continue
+            totals[owner] = totals.get(owner, 0) + sum(
+                int(u.get("data_limit") or 0) for u in owner_users
+            )
+
+    week_start = _week_start(now)
+    for owner in consumption_owners:
+        admin = _get_admin_row(owner)
+        if admin is None:
+            continue  # stale weekly_payment row: no panel, nobody to bill
+        if admin.panel in unreadable_panels:
+            continue  # deferred as a whole; the panel warning explains it
+        invoice_lines += await _settle_owner(
+            bot,
+            owner=owner,
+            admin=admin,
+            live_total=totals.get(owner, 0),
+            week_start=week_start,
+            now=now,
+            stamp=stamp,
+        )
+    return invoice_lines, warning_lines
 
 
 async def send_reminders(bot: Bot) -> int:
@@ -171,74 +355,15 @@ async def send_invoice_reminders(bot: Bot) -> int:
 
 
 async def run_settlement(bot: Bot) -> None:
-    """Friday: generate consumption invoices, draw down wallets for delayed debts,
+    """Friday: invoice consumption growth, draw down wallets for delayed debts,
     tell each debtor where they stand, then report."""
     now = datetime.now(TEHRAN)
     stamp = _week_stamp(now)
 
-    # --- Phase 1: Consumption mode — generate invoices for actual usage ---
-    consumption_report_lines: list[str] = []
-    for username in db.list_consumption_enabled():
-        telegram_id = _get_admin_telegram_id(username)
-        if not telegram_id:
-            continue
-
-        consumed_bytes = _calculate_weekly_consumption(username)
-        if consumed_bytes <= 0:
-            continue
-
-        price_per_gb = db.get_effective_price(username)
-        if not price_per_gb:
-            continue
-
-        from backend.bot.units import bytes_to_gb
-        consumed_gb = bytes_to_gb(consumed_bytes)
-        amount = round(consumed_gb * price_per_gb)
-        if amount <= 0:
-            continue
-
-        # Idempotency: skip if invoice already exists this week
-        if _consumption_invoice_exists(telegram_id, username, stamp):
-            continue
-
-        # Merge any existing delayed debt into the consumption invoice
-        existing_debt = db.get_debt(username)
-        if existing_debt > 0:
-            amount += existing_debt
-            db.clear_debt(username)
-
-        # Invoice deadline: next Friday (7 days)
-        due_at = (now + timedelta(days=7)).isoformat()
-        description = f"مصرف هفتگی پنل {username} — {stamp} ({consumed_gb:.1f} GB)"
-        db.create_invoice(
-            telegram_id=telegram_id,
-            amount=amount,
-            description=description,
-            due_at=due_at,
-        )
-
-        # Notify admin
-        try:
-            await bot.send_message(
-                telegram_id,
-                texts.CONSUMPTION_INVOICE_HEADER.format(
-                    username=username,
-                    consumed_gb=consumed_gb,
-                    amount=amount,
-                    due=describe_due(due_at),
-                ),
-            )
-        except Exception:
-            pass
-
-        consumption_report_lines.append(
-            texts.CONSUMPTION_INVOICE_SUPERADMIN.format(
-                username=username,
-                telegram_id=telegram_id,
-                consumed_gb=consumed_gb,
-                amount=amount,
-            )
-        )
+    # --- Phase 1: Consumption mode — invoice growth of the live panel figure ---
+    consumption_report_lines, settlement_warning_lines = await _settle_consumption(
+        bot, now, stamp
+    )
 
     # --- Phase 2: Delayed mode — existing debt settlement (unchanged) ---
     debts = db.list_outstanding_debts()
@@ -298,6 +423,10 @@ async def run_settlement(bot: Bot) -> None:
     if delayed_report_lines:
         report_parts.append(
             texts.WEEKLY_SETTLEMENT_LIST_HEADER + "".join(delayed_report_lines)
+        )
+    if settlement_warning_lines:
+        report_parts.append(
+            texts.SETTLEMENT_WARNINGS_HEADER + "".join(settlement_warning_lines)
         )
     if not report_parts:
         report_parts.append(texts.WEEKLY_SETTLEMENT_NONE)

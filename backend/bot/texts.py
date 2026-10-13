@@ -225,6 +225,15 @@ WEEKLY_SETTLEMENT_LIST_HEADER = "🗓 تسویه‌ی هفتگی — وضعیت 
 WEEKLY_SETTLEMENT_LINE = "▫️ <b>{username}</b> — {amount:,} تومان{note}\n"
 WEEKLY_SETTLEMENT_PAID_NOTE = " (از کیف پول تسویه شد ✅)"
 WEEKLY_SETTLEMENT_NONE = "🗓 تسویه‌ی هفتگی: هیچ بدهی‌ای برای این هفته ثبت نشده است."
+SETTLEMENT_WARNINGS_HEADER = "⚠️ تسویه هفتگی — موارد نیاز به توجه:\n\n"
+SETTLEMENT_PANEL_UNREADABLE = (
+    "▫️ پنل «{panel}» خوانده نشد؛ حجم ساخته‌شده مالکان آن در هفته بعد "
+    "به‌صورت خودکار جمع و صورتحساب می‌شود.\n"
+)
+SETTLEMENT_OWNER_UNBILLED = (
+    "▫️ پنل «{username}»: {gb:.1f} گیگ ساخته‌شده به دلیل نبود قیمت یا آیدی تلگرام "
+    "صورتحساب نشد و به هفته بعد منتقل شد.\n"
+)
 WEEKLY_WALLET_SETTLED = (
     "✅ بدهی هفتگی پنل «{username}» به مبلغ {paid:,} تومان از کیف پول شما تسویه شد.\n"
     "💼 موجودی کیف پول: {balance:,} تومان"
