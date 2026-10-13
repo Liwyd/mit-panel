@@ -9,12 +9,31 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from functools import partial
 
 from backend.bot.config import bot_config
 
 logger = logging.getLogger(__name__)
 
 _bot_task: asyncio.Task | None = None
+
+# A background loop that ever exits on its own would otherwise stay dead for
+# good — one unexpected exception outside a loop's own try/except has already
+# silently stopped a billing scheduler in production. Restart it, loudly.
+SUPERVISOR_RESTART_DELAY = 5.0
+
+
+async def _supervised(name: str, runner) -> None:
+    """Run a background loop, restarting it if it ever exits unexpectedly."""
+    while True:
+        try:
+            await runner()
+            logger.warning("background task %s exited; restarting", name)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("background task %s crashed: %s", name, exc)
+        await asyncio.sleep(SUPERVISOR_RESTART_DELAY)
 
 
 async def _run_bot() -> None:
@@ -56,12 +75,12 @@ async def _run_bot() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
 
     background = [
-        asyncio.create_task(run_warning_scanner(bot)),
-        asyncio.create_task(run_weekly_scheduler(bot)),
-        asyncio.create_task(run_forecast_scheduler(bot)),
-        asyncio.create_task(run_auto_approver(bot)),
-        asyncio.create_task(run_usage_sync(bot)),
-        asyncio.create_task(run_digest_scheduler(bot)),
+        asyncio.create_task(_supervised("warning_scanner", partial(run_warning_scanner, bot))),
+        asyncio.create_task(_supervised("weekly_scheduler", partial(run_weekly_scheduler, bot))),
+        asyncio.create_task(_supervised("forecast_scheduler", partial(run_forecast_scheduler, bot))),
+        asyncio.create_task(_supervised("auto_approver", partial(run_auto_approver, bot))),
+        asyncio.create_task(_supervised("usage_sync", partial(run_usage_sync, bot))),
+        asyncio.create_task(_supervised("digest_scheduler", partial(run_digest_scheduler, bot))),
     ]
     try:
         await dp.start_polling(bot)
