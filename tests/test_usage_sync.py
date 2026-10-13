@@ -99,3 +99,24 @@ def test_sweep_only_runs_on_its_slots():
     # A failure sets a future retry time; until it passes the slot stays held.
     backoff = datetime(2026, 9, 27, 3, 30, tzinfo=TEHRAN).isoformat()
     assert should_run(at_three, stamp=None, retry_after=backoff) is False
+
+
+def test_issue_invoice_prices_from_the_bot_ledger(ledger):
+    """Regression: `_issue_invoice` used to receive the main-DB session under
+    the same `db` name, shadowing the bot-ledger module — every charge then
+    aborted its panel's whole sweep with an AttributeError (production,
+    2026-10-13). It must bill through `backend.bot.db`, sessionless."""
+    from backend.bot import usage_sync
+
+    ledger.set_setting("price_per_gb", "2900.0")
+
+    class Admin:
+        username = "alice"
+        telegram_id = 111
+
+    invoice_id = usage_sync._issue_invoice(Admin(), 10 * GB, 5 * GB)
+
+    invoice = ledger.get_invoice(invoice_id)
+    assert invoice.amount == round(5 * 2900)
+    assert invoice.admin_username == "alice"
+    assert invoice.traffic_gb == 5.0  # paying it credits exactly the debt

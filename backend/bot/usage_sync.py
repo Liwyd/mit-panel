@@ -294,7 +294,7 @@ def _sync_panel(db, panel, ledger_all) -> list[str]:
             f"({bytes_to_gb(charged_bytes):.1f} گیگ)"
         )
         if admin.telegram_id and debt_bytes > 0:
-            invoice_id = _issue_invoice(db, admin, charged_bytes, debt_bytes)
+            invoice_id = _issue_invoice(admin, charged_bytes, debt_bytes)
             if invoice_id:
                 lines.append(f"🧾 فاکتور #{invoice_id} صادر شد")
         if after < 0:
@@ -305,12 +305,17 @@ def _sync_panel(db, panel, ledger_all) -> list[str]:
     return lines
 
 
-def _issue_invoice(db, admin, charged_bytes: int, debt_bytes: int) -> int | None:
+def _issue_invoice(admin, charged_bytes: int, debt_bytes: int) -> int | None:
     """Bill a reseller for the debt the sweep just created.
 
     The invoice is what the existing receipt flow pays: whoever uploads a
     receipt for it is approving a request tied to this invoice, and that
     approval is what credits the GB back.
+
+    Takes no session: pricing and invoices live in the bot's own ledger
+    (`backend.bot.db`), and an earlier version that received the main-DB
+    session here had shadowed that module name, so every charge aborted
+    the rest of its panel's sweep with an AttributeError.
     """
     price = db.get_effective_price(admin.username)
     amount = invoice_amount(debt_bytes, price)
