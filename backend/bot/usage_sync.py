@@ -53,6 +53,12 @@ PAGE_DELAY = 0.25  # seconds between pages of one panel's user list
 
 GB = 1024**3
 
+# Hard ceiling on one sweep. The panel reads pace themselves, but a wedged
+# thread must not leave this loop parked forever — that is exactly how the
+# sweep went silent for days: no exception was raised, the await simply never
+# returned and nothing on the outside ever restarted it.
+SWEEP_TIMEOUT = 30 * 60  # seconds
+
 
 @dataclass
 class LiveUser:
@@ -344,33 +350,42 @@ def should_run(now: datetime, stamp: str | None, retry_after: str | None) -> boo
 
 
 async def run_usage_sync(bot: Bot) -> None:
-    """Background task: wakes once a minute, sweeps on the hour slots."""
+    """Background task: wakes once a minute, sweeps on the hour slots.
+
+    Every tick is guarded: `get_setting` alone used to be able to take this
+    whole loop down permanently, and billing silently stopped until someone
+    noticed the stale stamp. A failed tick now costs a tick, never the task.
+    """
     logger.info("Usage sync scheduler started (%s Tehran)", SYNC_HOURS)
     while True:
         await asyncio.sleep(60)
-        if db.get_setting(ENABLED_KEY) == "0":
-            continue
-        now = datetime.now(TEHRAN)
-        if not should_run(now, db.get_setting(STAMP_KEY), db.get_setting(RETRY_KEY)):
-            continue
-
-        db.set_setting(STAMP_KEY, _slot_stamp(now))
         try:
-            # Worker thread: the panel reads, JSON parsing and every database
-            # write happen off the main loop, which keeps answering Telegram
-            # and the dashboard throughout the sweep.
-            report = await asyncio.to_thread(_sweep)
-        except Exception as exc:
-            logger.error(f"Usage sync aborted: {exc}")
-            # Let this slot try again shortly instead of waiting a full day.
-            db.set_setting(STAMP_KEY, "")
-            db.set_setting(
-                RETRY_KEY, (now + RETRY_DELAY).isoformat()
-            )
-            continue
-        db.set_setting(RETRY_KEY, "")
+            if db.get_setting(ENABLED_KEY) == "0":
+                continue
+            now = datetime.now(TEHRAN)
+            if not should_run(now, db.get_setting(STAMP_KEY), db.get_setting(RETRY_KEY)):
+                continue
 
-        await _report(bot, report)
+            db.set_setting(STAMP_KEY, _slot_stamp(now))
+            try:
+                # Worker thread: the panel reads, JSON parsing and every database
+                # write happen off the main loop, which keeps answering Telegram
+                # and the dashboard throughout the sweep. The timeout unblocks the
+                # loop even if the thread wedges; the slot is then retried later.
+                report = await asyncio.wait_for(asyncio.to_thread(_sweep), SWEEP_TIMEOUT)
+            except Exception as exc:
+                logger.error(f"Usage sync aborted: {exc}")
+                # Let this slot try again shortly instead of waiting a full day.
+                db.set_setting(STAMP_KEY, "")
+                db.set_setting(RETRY_KEY, (now + RETRY_DELAY).isoformat())
+                continue
+            db.set_setting(RETRY_KEY, "")
+
+            await _report(bot, report)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(f"usage sync tick failed: {exc}")
 
 
 async def _report(bot: Bot, lines: list[str]) -> None:
