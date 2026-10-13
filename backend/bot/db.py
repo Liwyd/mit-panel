@@ -185,6 +185,23 @@ def init_db() -> None:
             """
         )
 
+        # Last settlement's live created-volume figure per reseller. The weekly
+        # consumption invoice is the growth of the panel's own figure (sum of
+        # the owner's live users' data_limit) since the previous settlement,
+        # so this baseline is both the starting point and the per-owner
+        # "already settled this week" marker: re-running a settlement skips
+        # any owner whose baseline already carries the current week stamp.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS created_volume_baselines (
+                owner TEXT PRIMARY KEY,
+                week_stamp TEXT NOT NULL,
+                total_bytes INTEGER NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS panel_requests (
@@ -252,6 +269,17 @@ def init_db() -> None:
         # Populated by the usage sync; older invoices carry neither.
         _ensure_column(conn, "invoices", "admin_username", "TEXT")
         _ensure_column(conn, "invoices", "traffic_gb", "REAL NOT NULL DEFAULT 0")
+        # The settlement week a consumption invoice bills ("2026-42"). Together
+        # with admin_username it is the exact idempotency key — older invoices
+        # carry neither and are matched only by the legacy description scan.
+        _ensure_column(conn, "invoices", "week_stamp", "TEXT")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_admin_week
+            ON invoices(admin_username, week_stamp)
+            WHERE week_stamp IS NOT NULL
+            """
+        )
 
         # Referral code requests (users request, superadmin approves)
         conn.execute(
@@ -719,6 +747,10 @@ class Invoice:
     # for invoices raised by hand, which credit nothing.
     admin_username: str | None = None
     traffic_gb: float = 0.0
+    # Persian-week stamp (settlement only): unique per (admin_username,
+    # week_stamp), so a re-run can find last Friday's invoice instead of
+    # raising a duplicate.
+    week_stamp: str | None = None
 
 
 def create_invoice(
@@ -729,6 +761,7 @@ def create_invoice(
     due_at: str | None,
     admin_username: str | None = None,
     traffic_gb: float = 0.0,
+    week_stamp: str | None = None,
 ) -> int:
     now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
@@ -736,10 +769,10 @@ def create_invoice(
             """
             INSERT INTO invoices
                 (telegram_id, amount, description, due_at, status, created_at,
-                 admin_username, traffic_gb)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+                 admin_username, traffic_gb, week_stamp)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
             """,
-            (telegram_id, amount, description, due_at, now, admin_username, traffic_gb),
+            (telegram_id, amount, description, due_at, now, admin_username, traffic_gb, week_stamp),
         )
         return cur.lastrowid
 
@@ -759,6 +792,54 @@ def list_pending_invoices(telegram_id: int | None = None) -> list[Invoice]:
     query += " ORDER BY created_at"
     with _connect() as conn:
         return [Invoice(**dict(r)) for r in conn.execute(query, params).fetchall()]
+
+
+def consumption_invoice_exists(admin_username: str, week_stamp: str) -> bool:
+    """Whether this week's settlement already billed this panel.
+
+    Matched on the structured columns, not the description text: a substring
+    scan on free text both missed paid invoices and matched usernames that
+    merely appeared inside another panel's name.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM invoices WHERE admin_username = ? AND week_stamp = ? LIMIT 1",
+            (admin_username, week_stamp),
+        ).fetchone()
+    return row is not None
+
+
+def get_created_volume_baseline(owner: str) -> dict | None:
+    """The panel figure recorded when `owner` was last settled, if ever."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT owner, week_stamp, total_bytes, updated_at "
+            "FROM created_volume_baselines WHERE owner = ?",
+            (owner,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def set_created_volume_baseline(owner: str, week_stamp: str, total_bytes: int) -> None:
+    """Store this week's live figure as the next week's starting point.
+
+    Written after the invoice for `week_stamp` (if any) so a crash between the
+    two leaves the owner unsettled and the re-run re-computes the same delta;
+    the unique invoice index rejects the duplicate.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO created_volume_baselines (owner, week_stamp, total_bytes, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(owner) DO UPDATE SET
+                week_stamp = excluded.week_stamp,
+                total_bytes = excluded.total_bytes,
+                updated_at = excluded.updated_at
+            """,
+            (owner, week_stamp, total_bytes, now),
+        )
 
 
 def revert_invoice_to_pending(invoice_id: int) -> bool:
