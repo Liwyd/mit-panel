@@ -17,6 +17,7 @@ import {
 import { botAPI, botsAPI, BotInfo, TelegramBot } from '@/lib/bots-api'
 import { getUserRole } from '@/lib/auth'
 import { cn } from '@/lib/utils'
+import { PageLayout } from '@/components/PageLayout'
 import { BotName, ErrorBox, Loading, errorText, sameAsUsername } from './bots/common'
 import { ManageBots } from './bots/ManageBots'
 import { OverviewTab } from './bots/OverviewTab'
@@ -121,14 +122,19 @@ export function BotsPage() {
     const current = visibleBots.find((b) => b.id === botId) || null
 
     return (
-        <div dir="rtl" className="space-y-5 p-4 md:p-6 max-w-6xl">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <BotIcon className="h-7 w-7 text-primary" /> ربات
-                </h1>
-                <p className="text-muted-foreground">مدیریت ربات فروش تلگرام: محصولات، پرداخت‌ها، کاربران، دکمه‌ها و تأیید خودکار.</p>
-            </div>
-
+        <PageLayout
+            header={
+                <div dir="rtl" className="p-4 md:p-6 pb-0">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+                            <BotIcon className="h-7 w-7 text-primary" /> ربات
+                        </h1>
+                        <p className="text-muted-foreground">مدیریت ربات فروش تلگرام: محصولات، پرداخت‌ها، کاربران، دکمه‌ها و تأیید خودکار.</p>
+                    </div>
+                </div>
+            }
+        >
+            <div dir="rtl" className="space-y-5 p-4 md:p-6 max-w-6xl">
             <ErrorBox error={error} />
 
             {superadmin && <ManageBots bots={bots} onChange={load} />}
@@ -212,6 +218,7 @@ export function BotsPage() {
                     )}
                 </>
             )}
-        </div>
+            </div>
+        </PageLayout>
     )
 }
