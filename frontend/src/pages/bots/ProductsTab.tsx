@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Empty, ErrorBox, Field, Loading, Spinner, money, selectClass, useAction, useLoad } from './common'
+import { Empty, ErrorBox, Field, Loading, Spinner, money, num, selectClass, useAction, useLoad } from './common'
 
 interface ProductForm {
     name: string
@@ -24,9 +24,11 @@ export function ProductsTab({ api }: { api: BotAPI }) {
     const [editing, setEditing] = useState<BotProduct | null>(null)
     const [open, setOpen] = useState(false)
     const [newCat, setNewCat] = useState('')
+    const [catFilter, setCatFilter] = useState('')
     const act = useAction()
 
     const catName = (id: string | null) => categories.data?.find((c) => c.id === id)?.remark || '—'
+    const shown = (products.data || []).filter((p) => !catFilter || p.Category === catFilter)
 
     if (products.loading && !products.data) return <Loading />
 
@@ -49,9 +51,22 @@ export function ProductsTab({ api }: { api: BotAPI }) {
                         <Plus className="h-4 w-4 ml-1" /> محصول جدید
                     </Button>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select className={selectClass + ' w-48'} value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
+                            <option value="">همه دسته‌ها</option>
+                            {categories.data?.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.remark}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-muted-foreground">{num(shown.length)} محصول</span>
+                    </div>
                     {!products.data?.length ? (
                         <Empty text="محصولی تعریف نشده" />
+                    ) : !shown.length ? (
+                        <Empty text="محصولی در این دسته نیست" />
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
@@ -67,7 +82,7 @@ export function ProductsTab({ api }: { api: BotAPI }) {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {products.data.map((p) => (
+                                    {shown.map((p) => (
                                         <TableRow key={p.id}>
                                             <TableCell className="font-medium">{p.name_product}</TableCell>
                                             <TableCell>{p.Location === '/all' ? 'همه سرورها' : p.Location}</TableCell>
@@ -169,6 +184,7 @@ export function ProductsTab({ api }: { api: BotAPI }) {
                     setOpen(false)
                     products.reload()
                 }}
+                onCategoryAdded={() => categories.reload()}
             />
         </div>
     )
@@ -182,6 +198,7 @@ function ProductDialog({
     api,
     onClose,
     onSaved,
+    onCategoryAdded,
 }: {
     open: boolean
     product: BotProduct | null
@@ -190,6 +207,7 @@ function ProductDialog({
     api: BotAPI
     onClose: () => void
     onSaved: () => void
+    onCategoryAdded: () => void
 }) {
     const initial = (): ProductForm =>
         product
@@ -204,12 +222,15 @@ function ProductDialog({
             : { name: '', location: panels[0]?.name_panel || '/all', volume: '', days: '30', price: '', category_id: '' }
     const [form, setForm] = useState<ProductForm>(initial)
     const [key, setKey] = useState<string>('')
+    const [newCat, setNewCat] = useState('')
     const act = useAction()
+    const catAct = useAction()
     const k = `${open}-${product?.id ?? 'new'}`
     if (k !== key) {
         setKey(k)
         setForm(initial())
         act.setError(null)
+        setNewCat('')
     }
     const set = (f: keyof ProductForm, v: string) => setForm((x) => ({ ...x, [f]: v }))
     const digits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d]/g, '')
@@ -228,6 +249,42 @@ function ProductDialog({
                     <DialogTitle>{product ? 'ویرایش محصول' : 'محصول جدید'}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
+                    {/* The category comes first and is mandatory: a product only
+                        exists inside one, and the shop can show the list by
+                        category. */}
+                    <Field label="دسته‌بندی" hint="اول دسته را انتخاب کنید؛ بدون دسته ذخیره ممکن نیست.">
+                        {categories.length === 0 ? (
+                            <div className="space-y-2">
+                                <p className="text-sm text-destructive">هنوز دسته‌ای ساخته نشده؛ ابتدا یک دسته بسازید.</p>
+                                <div className="flex gap-2">
+                                    <Input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="نام دسته" />
+                                    <Button
+                                        disabled={!newCat.trim() || catAct.busy}
+                                        onClick={async () => {
+                                            if (await catAct.run(() => api.post('categories', { name: newCat.trim() }))) {
+                                                setNewCat('')
+                                                onCategoryAdded()
+                                            }
+                                        }}
+                                    >
+                                        <FolderPlus className="h-4 w-4 ml-1" /> ساخت دسته
+                                    </Button>
+                                </div>
+                                <ErrorBox error={catAct.error} />
+                            </div>
+                        ) : (
+                            <select className={selectClass} value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
+                                <option value="" disabled>
+                                    ابتدا دسته را انتخاب کنید
+                                </option>
+                                {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.remark}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                    </Field>
                     <Field label="نام محصول">
                         <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="۳۰ گیگ یک ماهه" />
                     </Field>
@@ -252,22 +309,15 @@ function ProductDialog({
                             <Input inputMode="numeric" dir="ltr" value={form.price} onChange={(e) => set('price', digits(e.target.value))} />
                         </Field>
                     </div>
-                    <Field label="دسته">
-                        <select className={selectClass} value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
-                            <option value="">بدون دسته</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.remark}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
                     <ErrorBox error={act.error} />
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={onClose}>
                             انصراف
                         </Button>
-                        <Button onClick={save} disabled={act.busy || !form.name || !form.volume || !form.days || !form.price}>
+                        <Button
+                            onClick={save}
+                            disabled={act.busy || !form.name || !form.volume || !form.days || !form.price || !form.category_id}
+                        >
                             {act.busy && <Spinner className="ml-2" />} ذخیره
                         </Button>
                     </div>
