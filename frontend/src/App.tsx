@@ -114,20 +114,21 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-card border-r transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
-                <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center justify-between border-b px-4 pb-4 pt-[calc(env(safe-area-inset-top)_+_1rem)]">
                     <span className="font-black text-lg tracking-tight">MIT Panel</span>
                     <Button
                         variant="ghost"
                         size="icon"
+                        className="h-11 w-11"
                         onClick={() => setSidebarOpen(false)}
                     >
                         <X className="h-5 w-5" />
                     </Button>
                 </div>
-                <div className="flex-1 overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
                     <Sidebar onItemClick={() => setSidebarOpen(false)} />
                 </div>
             </aside>
@@ -141,11 +142,14 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 h-dvh overflow-hidden">
-                {/* Mobile Header with Menu Button */}
-                <header className="nx-header md:hidden flex items-center gap-3 p-4 border-b shrink-0">
+                {/* Mobile Header with Menu Button. The band above (status bar /
+                    notch) only exists in the installed app, and env() is 0 in a
+                    plain browser tab, so this costs nothing there. */}
+                <header className="nx-header md:hidden relative z-30 flex items-center gap-2 border-b px-4 pb-2 pt-[calc(env(safe-area-inset-top)_+_0.5rem)] shrink-0">
                     <Button
                         variant="ghost"
                         size="icon"
+                        className="h-11 w-11"
                         onClick={() => setSidebarOpen(true)}
                     >
                         <Menu className="h-5 w-5" />

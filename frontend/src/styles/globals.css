@@ -179,6 +179,18 @@
     }
 }
 
+/* iOS Safari zooms into any focused form field set below 16px, which throws
+   the fixed header - and the menu button on it - somewhere it can no longer be
+   tapped. Keep form fields at 16px on phones; desktop sizes are untouched. */
+@media (max-width: 767px) {
+
+    input[class],
+    select[class],
+    textarea[class] {
+        font-size: 16px;
+    }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;

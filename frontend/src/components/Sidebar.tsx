@@ -122,7 +122,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col min-h-full">
             <nav className="flex-1 space-y-2 p-4">
                 {filteredItems.map((item) => {
                     const Icon = item.icon
