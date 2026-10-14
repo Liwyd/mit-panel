@@ -1,7 +1,8 @@
 import { BotAPI, BotInfo, BotStats } from '@/lib/bots-api'
 import { ErrorBox, Loading, Stat, money, num, useLoad } from './common'
+import { ShopTransfer } from './ShopTransfer'
 
-export function OverviewTab({ api, info }: { api: BotAPI; info: BotInfo | null }) {
+export function OverviewTab({ api, info, botName }: { api: BotAPI; info: BotInfo | null; botName: string }) {
     const { data: s, loading, error } = useLoad(() => api.get<BotStats>('stats'), [api])
     if (loading && !s) return <Loading />
     return (
@@ -24,6 +25,7 @@ export function OverviewTab({ api, info }: { api: BotAPI; info: BotInfo | null }
                     @{info.bot_username} · {info.domain} · v{info.version}
                 </p>
             )}
+            <ShopTransfer api={api} botName={botName} />
         </div>
     )
 }

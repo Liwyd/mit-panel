@@ -202,7 +202,7 @@ export function BotsPage() {
 
                     {api && (
                         <div key={`${botId}-${activeTab}`}>
-                            {activeTab === 'overview' && <OverviewTab api={api} info={info} />}
+                            {activeTab === 'overview' && <OverviewTab api={api} info={info} botName={current?.name || ''} />}
                             {activeTab === 'products' && <ProductsTab api={api} />}
                             {activeTab === 'payments' && <PaymentsTab api={api} />}
                             {activeTab === 'users' && <UsersTab api={api} />}
