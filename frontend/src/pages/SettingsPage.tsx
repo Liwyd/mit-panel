@@ -692,7 +692,7 @@ export function SettingsPage() {
 
             {/* Logs Modal */}
             <Dialog open={showLogsModal} onOpenChange={setShowLogsModal}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Application Logs</DialogTitle>
                         <DialogDescription>
@@ -724,7 +724,7 @@ export function SettingsPage() {
 
             {/* News Display Modal */}
             <Dialog open={showNewsDialog} onOpenChange={setShowNewsDialog}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Current News</DialogTitle>
                         <DialogDescription>

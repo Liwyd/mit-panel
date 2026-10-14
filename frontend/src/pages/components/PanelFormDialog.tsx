@@ -122,7 +122,7 @@ export function PanelFormDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{panel ? 'Edit Panel' : 'Create New Panel'}</DialogTitle>
                     <DialogDescription>

@@ -333,7 +333,7 @@ export function AdminFormDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{admin ? 'Edit Admin' : 'Create New Admin'}</DialogTitle>
                     <DialogDescription>

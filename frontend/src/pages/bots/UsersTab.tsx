@@ -140,7 +140,7 @@ function UserDialog({ api, id, onClose, onChanged }: { api: BotAPI; id: string |
                 }
             }}
         >
-            <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent dir="rtl" className="max-w-2xl">
                 <DialogHeader className="pr-8 text-right">
                     <DialogTitle className="flex items-center gap-2">
                         کاربر <span dir="ltr">{id}</span>

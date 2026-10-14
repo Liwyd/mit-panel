@@ -195,7 +195,7 @@ function AddPanelDialog({ open, api, onClose, onSaved }: { open: boolean; api: B
                 }
             }}
         >
-            <DialogContent dir="rtl" className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent dir="rtl" className="max-w-lg">
                 <DialogHeader className="pr-8 text-right">
                     <DialogTitle>افزودن سرور</DialogTitle>
                 </DialogHeader>
@@ -332,7 +332,7 @@ function EditPanelDialog({
 
     return (
         <Dialog open={!!panel} onOpenChange={(o) => !o && onClose()}>
-            <DialogContent dir="rtl" className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent dir="rtl" className="max-w-lg">
                 <DialogHeader className="pr-8 text-right">
                     <DialogTitle>ویرایش {panel?.name_panel}</DialogTitle>
                 </DialogHeader>

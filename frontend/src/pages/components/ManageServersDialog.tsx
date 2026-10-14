@@ -172,7 +172,7 @@ export function ManageServersDialog({ isOpen, onClose, onChanged }: ManageServer
     return (
         <>
             <Dialog open={isOpen} onOpenChange={onClose}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Manage Servers</DialogTitle>
                         <DialogDescription>
