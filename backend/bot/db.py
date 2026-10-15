@@ -296,6 +296,24 @@ def init_db() -> None:
             )
             """
         )
+        # A buyer asking for a bot of their own. The panel only records it and
+        # tells the superadmin: the token and the domain are theirs to supply,
+        # because the bot runs on infrastructure they control.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bot_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                username TEXT,
+                admin_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                reviewed_at TEXT,
+                reviewed_by INTEGER
+            )
+            """
+        )
 
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()
@@ -1256,6 +1274,57 @@ def mark_referral_request_reviewed(
         cur = conn.execute(
             "UPDATE referral_requests SET status = ?, reject_reason = ?, reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status = 'pending'",
             (status, reason, reviewed_by, request_id),
+        )
+        return cur.rowcount == 1
+
+
+# ------------------------------------------- bot requests
+#
+# A buyer tapping «درخواست ربات تلگрамی» lands here. Nothing is provisioned by
+# itself — the panel records the ask and tells the superadmin, who then runs
+# the create-bot flow with a token and a domain of their own.
+
+
+def create_bot_request(telegram_id: int, username: str | None = None) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO bot_requests (telegram_id, username) VALUES (?, ?)",
+            (telegram_id, username),
+        )
+        return cur.lastrowid
+
+
+def get_pending_bot_request(telegram_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM bot_requests WHERE telegram_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+            (telegram_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_bot_request(request_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM bot_requests WHERE id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_pending_bot_requests() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM bot_requests WHERE status = 'pending' ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_bot_request_reviewed(
+    request_id: int, status: str, reviewed_by: int, reason: str | None = None, admin_id: int | None = None
+) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE bot_requests SET status = ?, reject_reason = ?, admin_id = ?, "
+            "reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status = 'pending'",
+            (status, reason, admin_id, reviewed_by, request_id),
         )
         return cur.rowcount == 1
 

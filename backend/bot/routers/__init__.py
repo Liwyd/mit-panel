@@ -7,6 +7,7 @@ from .user_search import router as user_search_router
 from .tutorials import router as tutorials_router
 from .shop import router as shop_router
 from .approval import router as approval_router
+from .bot_provision import router as bot_provision_router
 
 all_routers = [
     start_router,
@@ -18,4 +19,5 @@ all_routers = [
     tutorials_router,
     shop_router,
     approval_router,
+    bot_provision_router,
 ]

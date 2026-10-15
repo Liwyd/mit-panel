@@ -36,6 +36,7 @@ from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
 from backend.db.engin import sessionLocal
 from backend.db import crud
+from backend.utils import mitseller
 
 router = Router(name="admin_settings")
 router.message.filter(SuperadminFilter())
@@ -772,6 +773,19 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
             await bot.send_message(target_id, success_text)
         except Exception:
             pass
+
+    # Offer the bot while they are still here. It is a separate step on
+    # purpose: the panel is useful on its own, and the bot needs a token and a
+    # domain that only the superadmin can supply.
+    if mitseller.provision_configured():
+        created = None
+        with sessionLocal() as session:
+            created = crud.get_admin_by_username(session, data["new_username"])
+        if created is not None:
+            await message.answer(
+                texts.ASK_WANT_BOT.format(username=created.username),
+                reply_markup=keyboards.bot_ask_kb("bot_make", created.id),
+            )
 
 
 @router.message(F.text == texts.BTN_TOGGLE_DELAYED)

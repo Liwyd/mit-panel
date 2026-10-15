@@ -14,10 +14,11 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     kb.button(text=texts.BTN_FORECAST)
     kb.button(text=texts.BTN_MY_INVOICES)
     kb.button(text=texts.BTN_CREATE_PANEL)
+    kb.button(text=texts.BTN_REQUEST_BOT)
     kb.button(text=texts.BTN_REQUEST_REFERRAL)
     kb.button(text=texts.BTN_PANEL_PREVIEW)
     kb.button(text=texts.BTN_SUPPORT)
-    kb.adjust(2, 2, 2, 2, 1, 1)
+    kb.adjust(2, 2, 2, 2, 2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -88,6 +89,8 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
         texts.BTN_ALL_PANELS,
         texts.BTN_CREATE_ADMIN,
+        texts.BTN_CREATE_BOT_FOR_ADMIN,
+        texts.BTN_BOT_REQUESTS,
         texts.BTN_ADD_PANEL,
         texts.BTN_GRANT_TRAFFIC,
         texts.BTN_PANEL_HISTORY,
@@ -95,7 +98,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_DELETE_ADMIN,
         texts.BTN_DELETE_TUTORIAL,
         texts.BTN_BACK,
-        layout=(1, 2, 1, 2, 1, 1),
+        layout=(2, 2, 2, 2, 1, 1),
     )
 
 
@@ -444,6 +447,41 @@ def panel_request_approval_kb(request_id: int) -> InlineKeyboardMarkup:
     kb.button(text=texts.BTN_APPROVE_REQUEST, callback_data=f"panel_req_approve:{request_id}")
     kb.button(text=texts.BTN_REJECT_REQUEST, callback_data=f"panel_req_reject:{request_id}")
     kb.adjust(2)
+    return kb.as_markup()
+
+
+def bot_requests_kb(requests: list[dict]) -> InlineKeyboardMarkup:
+    """The open «درخواست ربات» entries.
+
+    Tapping one starts the create-bot flow for whoever asked. The token and the
+    domain stay with the superadmin: the bot runs on infrastructure they
+    control, and a buyer handing over a BotFather token over Telegram would
+    give away a credential they may not know they are giving away.
+    """
+    kb = InlineKeyboardBuilder()
+    for r in requests:
+        label = r.get("username") or str(r.get("telegram_id"))
+        kb.button(text=str(label), callback_data=f"bot_req:{r['id']}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bot_ask_kb(action: str, ref: int | str) -> InlineKeyboardMarkup:
+    """The yes/no that opens the create-bot flow, for a new admin (`ref` is the
+    admin id) or an existing one."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_MAKE_BOT, callback_data=f"{action}:{ref}")
+    kb.button(text=texts.BTN_SKIP_BOT, callback_data="bot_skip")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def admin_picker_kb(admins, action: str) -> InlineKeyboardMarkup:
+    """Pick a panel admin, for whatever `action` then does."""
+    kb = InlineKeyboardBuilder()
+    for a in admins:
+        kb.button(text=a.username, callback_data=f"{action}:{a.id}")
+    kb.adjust(1)
     return kb.as_markup()
 
 

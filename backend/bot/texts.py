@@ -553,6 +553,100 @@ CREATE_ADMIN_SUCCESS = (
 PANEL_CHOICE_EXPIRED = "⚠️ این فهرست منقضی شده است؛ لطفاً مجدداً از ابتدا اقدام نمایید."
 CREATE_ADMIN_FAILED = "⚠️ ساخت پنل ناموفق بود: {error}"
 
+# ------------------------------------------- building a mit-seller bot
+#
+# A bot is installed on the mit-seller server (a different machine from the
+# panel's), so all the panel can do is ask it over HTTP and wait. The reseller
+# gets the panel here and the bot separately — that is deliberate: the panel
+# link is for them, the bot's management code is for the superadmin to hand
+# over however they normally do.
+BTN_CREATE_BOT_FOR_ADMIN = "🤖 ساخت ربات برای ساب‌ادمین"
+BTN_REQUEST_BOT = "📨 درخواست ربات تلگرامی"
+BTN_BOT_REQUESTS = "🤖 درخواست‌های ربات"
+BTN_MAKE_BOT = "🤖 بله، ربات بساز"
+BTN_SKIP_BOT = "❌ نه، فعلاً نه"
+
+ASK_WANT_BOT = (
+    "✅ پنل <b>{username}</b> ساخته شد.\n\n"
+    "آیا برای همین ساب‌ادمین یک ربات تلگرامی هم بسازم؟"
+)
+ASK_WANT_BOT_EXISTING = (
+    "🤖 برای ساب‌ادمین <b>{username}</b> ربات تلگرامی بسازم؟\n\n"
+    "لینک ربات و توکن آن را باید خودتان از @BotFather بسازید."
+)
+BOT_NOT_CONFIGURED = (
+    "⚠️ سرور mit-seller در تنظیمات پنل ثبت نشده است؛ ساخت ربات از اینجا ممکن نیست."
+)
+NO_ADMINS_FOR_BOT = "⚠️ هیچ ساب‌ادمین فعالی وجود ندارد."
+ASK_PICK_ADMIN_FOR_BOT = "👤 ساب‌ادمین را انتخاب کنید:"
+ASK_PICK_BOT_REQUEST = "📨 درخواست‌های باز ربات را انتخاب کنید:"
+BOT_REGISTERED_AS = "🔗 ربات به‌صورت خودکار به‌ {assigned_to} داده شد."
+ASK_BOT_TOKEN = (
+    "🤖 توکن ربات را از <b>@BotFather</b> بگیرید و همین‌جا بفرستید:"
+)
+ASK_BOT_TOKEN_BAD = (
+    "⚠️ این توکن BotFather نیست.\n"
+    "شکل آن <code>123456789:AAH...یک‌سری حروف...</code> است."
+)
+ASK_BOT_DOMAIN = (
+    "🔗 دامنه‌ی ربات را بفرستید.\n"
+    "رکورد A آن باید از قبل به سرور ربات‌ها اشاره کرده باشد:"
+)
+ASK_BOT_DOMAIN_BAD = "⚠️ این یک دامنه‌ی معتبر نیست."
+BOT_NO_DNS = "⚠️ دامنه <b>{domain}</b> به سرور ربات‌ها اشاره نمی‌کند؛ اول رکورد A را درست کنید."
+BOT_INSTALLING = "⏳ در حال ساخت ربات… چند دقیقه طول می‌کشد."
+BOT_INSTALL_FAILED = "⚠️ ساخت ربات ناموفق بود:\n{error}"
+BOT_NO_PANEL_PASSWORD = (
+    "⚠️ ساب‌ادمین <b>{username}</b> رمز مرزبان ندارد، پس پنل ربات ساخته نشد. "
+    "ابتدا رمز مرزبان او را ثبت کنید."
+)
+BOT_DONE_SUPERADMIN = (
+    "✅ ربات <b>@{bot_username}</b> ساخته شد.\n\n"
+    "🔗 لینک ربات: {bot_link}\n"
+    "🏠 نشانی: <code>{url}</code>\n"
+    "🔢 شماره روی سرور: {n}\n"
+    "👤 ادمین ربات: <code>{admin_id}</code>\n\n"
+    "🔑 <b>کد مدیریت پنل ربات:</b>\n<code>{mit_secret}</code>\n\n"
+    "کلیدها (فقط برای اتصال به این پنل):\n"
+    "• owner: <code>{owner_key}</code>\n"
+    "• manager: <code>{manager_key}</code>\n\n"
+    "📦 پنل و ربات جداگانه تحویل داده شد."
+)
+BOT_DONE_ADMIN = (
+    "🤖 ربات تلگرامی شما آماده شد.\n\n"
+    "🔗 لینک ربات: {bot_link}\n"
+    "👤 نام کاربری: <code>{bot_username}</code>\n"
+    "🔑 کد مدیریت پنل ربات: <code>{mit_secret}</code>\n\n"
+    "برای ورود به بخش مدیریت ربات، این کد را در ربات وارد کنید."
+)
+BOT_REGISTER_FAILED = (
+    "⚠️ ربات ساخته شد اما به این پنل وصل نشد. "
+    "بعداً از «اتصال ربات‌ها» دوباره تلاش کنید."
+)
+BOT_SKIPPED = "✅ باشه. بعداً از «ساخت ربات برای ساب‌ادمین» می‌توانید ربات بسازید."
+BOT_PANEL_FAILED = "⚠️ پنل داخل ربات ساخته نشد: {error}"
+
+# A buyer asking for a bot of their own. The panel only records the request and
+# tells the superadmin — the token and the domain are the superadmin's to
+# supply, because the bot runs on infrastructure they control.
+BOT_REQUEST_RECEIVED = (
+    "📨 درخواست ربات تلگرامی شما ثبت شد.\n"
+    "به‌محض بررسی، ربات برای شما ساخته می‌شود."
+)
+BOT_REQUEST_PENDING = "⚠️ شما هم‌اکنون یک درخواست ربات باز دارید."
+BOT_REQUEST_AS_SUPERADMIN = (
+    "از «ساخت ربات برای ساب‌ادمین» استفاده کنید؛ اینجا برای خودتان ربات ساخته نمی‌شود."
+)
+BOT_REQUEST_REVIEW = (
+    "📨 <b>درخواست ربات تلگرامی</b>\n\n"
+    "از: {name}\n"
+    "آیدی: <code>{telegram_id}</code>\n\n"
+    "برای ساخت ربات، از «ساخت ربات برای ساب‌ادمین» استفاده کنید "
+    "و در پایان آیدی عددی بالا را به‌عنوان ادمین ربات وارد کنید."
+)
+NO_BOT_REQUESTS = "✅ درخواست ربات بازی وجود ندارد."
+NO_BOT_REQUEST = "⚠️ این درخواست دیگر باز نیست."
+
 BTN_ADD_PANEL = "➕ افزودن پنل مرزبان"
 ASK_PANEL_NAME = "📝 نام پنل را وارد نمایید:"
 ASK_PANEL_URL = "🔗 آدرس پنل مرزبان را وارد نمایید (مثال: https://panel.example.com):"

@@ -77,6 +77,20 @@ class CreateAdmin(StatesGroup):
     telegram_id = State()
 
 
+class CreateBot(StatesGroup):
+    """Collect a BotFather token and a domain, then ask the mit-seller server
+    to install the bot for whichever admin is in the state's data."""
+
+    token = State()
+    domain = State()
+
+
+class CreateBotPickAdmin(StatesGroup):
+    """R2: the same flow, started from an admin that already exists."""
+
+    admin = State()
+
+
 class CreatePanel(StatesGroup):
     name = State()
     url = State()
