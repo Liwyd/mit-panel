@@ -40,6 +40,15 @@ DEFAULTS = {
     # wrong when one of the panel's domains is routable from the monitored
     # servers and another isn't.
     "agent_base_url": "",
+    # The mit-seller server the panel installs new bots on. It is localhost
+    # when mit-seller runs on this same server; otherwise its address.
+    "mitseller_server": "localhost",
+    # The bearer token of that server's provisioning API
+    # (install.sh provisioner-setup prints both of these).
+    "mitseller_provision_token": "",
+    # The self-signed certificate that server presents. The panel trusts this
+    # one certificate and nothing else — it is what makes a bare address safe.
+    "mitseller_server_cert": "",
 }
 
 

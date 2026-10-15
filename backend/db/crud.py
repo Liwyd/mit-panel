@@ -51,6 +51,10 @@ def get_admin_by_username(db: Session, username: str):
     return db.query(Admins).filter(Admins.username == username).first()
 
 
+def get_admin_by_id(db: Session, admin_id: int):
+    return db.query(Admins).filter(Admins.id == admin_id).first()
+
+
 def change_admin_status(db: Session, admin_id: int) -> bool:
     admin = db.query(Admins).filter(Admins.id == admin_id).first()
     if admin:
