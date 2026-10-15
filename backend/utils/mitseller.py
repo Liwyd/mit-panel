@@ -11,6 +11,7 @@ to.
 from __future__ import annotations
 
 import os
+import ssl
 
 import httpx
 
@@ -57,6 +58,28 @@ def _provision_cert() -> str | None:
     return _CERT_PATH
 
 
+def _pinned_context(pem_path: str) -> ssl.SSLContext:
+    """Trust this one certificate, whatever it is called.
+
+    This is pinning, not host verification: the peer is accepted because it
+    presents the certificate we were handed, not because its name matches the
+    address. That is the whole point of the pairing — the panel writes to the
+    address as it was configured, and the server was given a self-signed
+    certificate with no name that address would have.
+    """
+    ctx = ssl.create_default_context()
+    try:
+        ctx.load_verify_locations(pem_path)
+    except (OSError, ssl.SSLError) as exc:
+        raise MitSellerError(
+            "گواهی سرور mit-seller در تنظیمات پنل معتبر نیست "
+            "(install.sh provisioner-print را دوباره روی سرور اجرا و گواهی را تازه کن)"
+        ) from exc
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    return ctx
+
+
 async def provision_bot(
     *,
     token: str,
@@ -85,7 +108,6 @@ async def provision_bot(
         raise MitSellerError("آیدی عددی ادمین خالی است")
 
     cert = _provision_cert()
-    verify: bool | str = cert if cert else False
     if cert is None:
         # No certificate pinned yet: refuse rather than send a BotFather token
         # over a connection nobody has vouched for.
@@ -93,6 +115,7 @@ async def provision_bot(
             "گواهی سرور mit-seller در تنظیمات پنل ثبت نشده است "
             "(install.sh provisioner-print را روی سرور اجرا کنید)"
         )
+    verify: ssl.SSLContext | bool = _pinned_context(cert)
 
     body = {
         "token": token,

@@ -13,13 +13,42 @@ a repeat has to update rather than fail.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 
 import httpx
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 from backend.bot.routers import bot_provision
 from backend.utils import mitseller
+
+
+def _self_signed_pem(common_name: str = "mit-seller-provisioner") -> str:
+    """A real certificate, because the panel now loads the pinned one into an
+    SSL context — a placeholder PEM would fail to parse and say nothing about
+    whether pinning actually works."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=1))
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(common_name)]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
 
 
 @pytest.fixture()
@@ -28,7 +57,7 @@ def settings_stub(monkeypatch, tmp_path):
     data = {
         "mitseller_server": "176.124.199.78",
         "mitseller_provision_token": "a" * 64,
-        "mitseller_server_cert": "-----BEGIN CERTIFICATE-----\nSANDBOX\n-----END CERTIFICATE-----",
+        "mitseller_server_cert": _self_signed_pem(),
     }
     monkeypatch.setattr(mitseller, "get_settings", lambda: dict(data))
     monkeypatch.setattr(mitseller, "DATA_DIR", str(tmp_path))
@@ -69,6 +98,20 @@ def test_the_panel_refuses_to_send_a_token_without_a_pinned_certificate(settings
     makes sending a BotFather token to it safe. Without it, refuse."""
     settings_stub["mitseller_server_cert"] = ""
     with pytest.raises(mitseller.MitSellerError, match="گواهی"):
+        _run(
+            mitseller.provision_bot(
+                token="123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+                domain="new.example.com",
+                admin_id=1,
+            )
+        )
+
+
+def test_a_certificate_that_is_not_a_certificate_is_refused(settings_stub):
+    """Someone pasted the wrong block into settings. Say so in Persian rather
+    than failing later with an SSL error from inside httpx."""
+    settings_stub["mitseller_server_cert"] = "-----BEGIN CERTIFICATE-----\nSANDBOX\n-----END CERTIFICATE-----"
+    with pytest.raises(mitseller.MitSellerError, match="معتبر نیست"):
         _run(
             mitseller.provision_bot(
                 token="123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
