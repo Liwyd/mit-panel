@@ -14,6 +14,7 @@ import {
     Save,
     Loader2,
     Bot,
+    Server,
 } from 'lucide-react'
 import { superadminAPI, settingsAPI, getLogoUrl, type PanelSettings } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -114,6 +115,9 @@ export function SettingsPage() {
                 backup_enabled: settings.backup_enabled,
                 backup_interval_hours: Number(settings.backup_interval_hours) || 6,
                 agent_base_url: settings.agent_base_url?.trim() ?? '',
+                mitseller_server: settings.mitseller_server?.trim() ?? '',
+                mitseller_provision_token: settings.mitseller_provision_token?.trim() ?? '',
+                mitseller_server_cert: settings.mitseller_server_cert?.trim() ?? '',
             })
             setSettings(data)
             alert('Settings saved successfully')
@@ -564,6 +568,69 @@ export function SettingsPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* mit-seller: where new bots are installed from */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Server className="h-5 w-5 text-primary" />
+                        mit-seller server
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        The mit-seller server installs the sales bots this panel manages. Run{' '}
+                        <code>bash install.sh provisioner-setup</code> there, then paste the three
+                        values it prints. Nothing is provisioned until all three are set.
+                    </p>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Server address</label>
+                        <Input
+                            dir="ltr"
+                            placeholder="localhost"
+                            value={settings?.mitseller_server ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                settings && setSettings({ ...settings, mitseller_server: e.target.value })
+                            }
+                            disabled={!settings}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Its address, or localhost when mit-seller runs on this same server.
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Provisioning token</label>
+                        <Input
+                            dir="ltr"
+                            type="password"
+                            autoComplete="off"
+                            placeholder="64 hex characters"
+                            value={settings?.mitseller_provision_token ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                settings && setSettings({ ...settings, mitseller_provision_token: e.target.value })
+                            }
+                            disabled={!settings}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Server certificate (PEM)</label>
+                        <Textarea
+                            dir="ltr"
+                            rows={5}
+                            placeholder="-----BEGIN CERTIFICATE-----"
+                            value={settings?.mitseller_server_cert ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                                settings && setSettings({ ...settings, mitseller_server_cert: e.target.value })
+                            }
+                            disabled={!settings}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            The panel trusts this certificate and nothing else. It is what makes
+                            sending a bot token to a bare address safe.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Top-up Bot Settings */}
             <Card>

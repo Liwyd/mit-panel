@@ -429,6 +429,9 @@ export interface PanelSettings {
     bot_media_dir: string
     bot_min_gb: number
     bot_max_gb: number
+    mitseller_server: string
+    mitseller_provision_token: string
+    mitseller_server_cert: string
 }
 
 export interface BrandingInfo {
