@@ -9,6 +9,7 @@ button from double-crediting an admin's traffic balance.
 from __future__ import annotations
 
 import os
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -196,6 +197,20 @@ def init_db() -> None:
                 admin_username TEXT PRIMARY KEY,
                 marked_at TEXT NOT NULL,
                 marked_by INTEGER
+            )
+            """
+        )
+
+        # A reseller frozen out of MIT Panel and Marzban while they owe money.
+        # Holds the exact pre-lock Marzban password, which is the only copy
+        # that can ever put the admin back the way they were.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_locks (
+                admin_username TEXT PRIMARY KEY,
+                original_marzban_password TEXT NOT NULL,
+                locked_at TEXT NOT NULL,
+                reason TEXT NOT NULL
             )
             """
         )
@@ -586,6 +601,77 @@ def list_observer_admins() -> list[str]:
             "SELECT admin_username FROM observer_admins ORDER BY admin_username"
         ).fetchall()
         return [r["admin_username"] for r in rows]
+
+
+def upsert_admin_lock(
+    admin_username: str, original_marzban_password: str, reason: str
+) -> None:
+    """Record a lock, keeping whichever original password was stored first.
+
+    Upsert (rather than insert-or-fail) because a crash between Marzban
+    accepting the lock password and this row landing leaves the admin locked
+    with no row: the next tick re-reads the still-unwritten original from the
+    main database and this call records it. An overwrite can never lose a
+    good original, because the original is only ever read while MIT Panel's
+    copy still holds the real password — once this row exists, MIT Panel holds
+    the lock password and the caller no longer reaches this function.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO admin_locks
+                (admin_username, original_marzban_password, locked_at, reason)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(admin_username) DO UPDATE SET
+                locked_at = excluded.locked_at,
+                reason = excluded.reason
+            """,
+            (admin_username, original_marzban_password, now, reason),
+        )
+
+
+def get_admin_lock(admin_username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT admin_username, original_marzban_password, locked_at, reason "
+            "FROM admin_locks WHERE admin_username = ?",
+            (admin_username,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def delete_admin_lock(admin_username: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "DELETE FROM admin_locks WHERE admin_username = ?", (admin_username,)
+        )
+        return cur.rowcount == 1
+
+
+def list_admin_locks() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT admin_username, original_marzban_password, locked_at, reason "
+            "FROM admin_locks ORDER BY admin_username"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def is_locked_admin(admin_username: str) -> bool:
+    """Whether this admin is currently access-locked.
+
+    Consulted from the API's auth path, where an unreadable or not-yet
+    initialised bot database must never lock every request out of the panel:
+    any failure reads as not locked, loudly.
+    """
+    try:
+        return get_admin_lock(admin_username) is not None
+    except sqlite3.Error as exc:
+        logging.getLogger(__name__).error(
+            "admin lock check failed for %s: %s", admin_username, exc
+        )
+        return False
 
 
 def get_effective_price(admin_username: str) -> float:
