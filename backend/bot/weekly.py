@@ -258,10 +258,19 @@ async def _settle_consumption(
             )
 
     week_start = _week_start(now)
+    # Read once for the whole sweep: observers are skipped everywhere below,
+    # and the baseline is deliberately left alone for them, so un-marking one
+    # later bills the entire frozen gap in a single catch-up invoice.
+    observers = set(db.list_observer_admins())
     for owner in consumption_owners:
         admin = _get_admin_row(owner)
         if admin is None:
             continue  # stale weekly_payment row: no panel, nobody to bill
+        if owner in observers:
+            invoice_lines.append(
+                texts.SETTLEMENT_OBSERVER_SKIPPED.format(username=owner)
+            )
+            continue  # no invoice, no baseline update — frozen by definition
         if admin.panel in unreadable_panels:
             continue  # deferred as a whole; the panel warning explains it
         invoice_lines += await _settle_owner(
@@ -279,8 +288,9 @@ async def _settle_consumption(
 async def send_reminders(bot: Bot) -> int:
     """Wednesday: nudge every debtor with a pay button."""
     sent = 0
+    observers = set(db.list_observer_admins())
     for debt in db.list_outstanding_debts():
-        if not debt["telegram_id"]:
+        if not debt["telegram_id"] or debt["username"] in observers:
             continue
         try:
             await bot.send_message(
@@ -302,9 +312,12 @@ async def send_overdue_reminders(bot: Bot) -> int:
     """
     sent = 0
     now = datetime.now(TEHRAN)
+    observers = set(db.list_observer_admins())
     for debt in db.list_outstanding_debts():
         if not debt["telegram_id"] or not debt.get("overdue_since"):
             continue
+        if debt["username"] in observers:
+            continue  # observers are never chased
         try:
             since = datetime.fromisoformat(debt["overdue_since"])
             days = max(1, (now - since.astimezone(TEHRAN)).days)
@@ -332,7 +345,10 @@ async def send_invoice_reminders(bot: Bot) -> int:
     """
     sent = 0
     day_stamp = datetime.now(TEHRAN).strftime("%Y-%m-%d")
+    observers = set(db.list_observer_admins())
     for invoice in db.list_pending_invoices():
+        if invoice.admin_username and invoice.admin_username in observers:
+            continue  # no stamp either, so un-marking them resumes the chase
         if not is_due(invoice.due_at) or invoice.last_reminded_date == day_stamp:
             continue
         try:
@@ -366,12 +382,15 @@ async def run_settlement(bot: Bot) -> None:
     )
 
     # --- Phase 2: Delayed mode — existing debt settlement (unchanged) ---
-    debts = db.list_outstanding_debts()
+    # Observers are frozen as a whole: no wallet drawdown, no overdue stamp,
+    # no debtor DM and no roster line until the superadmin un-marks them.
+    observers = set(db.list_observer_admins())
+    debts = [d for d in db.list_outstanding_debts() if d["username"] not in observers]
     if debts:
         # Wallet is per person, so settle once per owner rather than once per panel.
         paid_by_panel: dict[str, int] = {}
         for telegram_id in {d["telegram_id"] for d in debts if d["telegram_id"]}:
-            for entry in apply_wallet_to_debts(telegram_id):
+            for entry in apply_wallet_to_debts(telegram_id, skip_usernames=observers):
                 paid_by_panel[entry["username"]] = entry["paid"]
 
         delayed_report_lines: list[str] = []

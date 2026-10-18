@@ -219,13 +219,16 @@ def _sweep() -> list[str]:
     than a single panel being read at once.
     """
     report: list[str] = []
+    # Read while the name still resolves to the module — the session below
+    # shadows it, exactly like the trap documented in `_issue_invoice`.
+    observers = set(db.list_observer_admins())
     with sessionLocal() as db:
         panels = [p for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
         ledger_all = crud.get_marzban_users_grouped(db)
 
         for index, panel in enumerate(panels):
             try:
-                report.extend(_sync_panel(db, panel, ledger_all))
+                report.extend(_sync_panel(db, panel, ledger_all, observers))
             except Exception as exc:
                 logger.error(f"Usage sync failed for panel {panel.name}: {exc}")
                 report.append(f"❌ {panel.name}: خطا در همگام‌سازی ({exc})")
@@ -234,7 +237,7 @@ def _sweep() -> list[str]:
     return report
 
 
-def _sync_panel(db, panel, ledger_all) -> list[str]:
+def _sync_panel(db, panel, ledger_all, observers: set[str]) -> list[str]:
     raw_users = _read_panel_users(panel)
     grouped = group_by_owner(raw_users)
 
@@ -245,6 +248,14 @@ def _sync_panel(db, panel, ledger_all) -> list[str]:
             continue
         admin = crud.get_admin_by_username(db, owner)
         if admin is None:
+            continue
+        if owner in observers:
+            # Frozen: no ledger churn, no traffic drawdown, no invoice. The
+            # stale ledger is deliberate — un-marking them bills the whole
+            # frozen gap in one catch-up sweep, like the weekly meter does.
+            lines.append(
+                f"👁 {panel.name}/{owner}: ناظر است — بدون فاکتور و بدون شارژ بدهی"
+            )
             continue
 
         live = to_live_map(owner_users)
