@@ -185,6 +185,21 @@ def init_db() -> None:
             """
         )
 
+        # Sub-admins marked as observers (ناظر): billed by nobody. Marking one
+        # freezes the weekly meter, keeps the usage sync from charging them and
+        # stops every reminder, so the row exists purely as the skip list those
+        # sweeps consult. Keyed by panel username because that is what the
+        # invoice, debt and settlement rows are keyed by.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS observer_admins (
+                admin_username TEXT PRIMARY KEY,
+                marked_at TEXT NOT NULL,
+                marked_by INTEGER
+            )
+            """
+        )
+
         # Last settlement's live created-volume figure per reseller. The weekly
         # consumption invoice is the growth of the panel's own figure (sum of
         # the owner's live users' data_limit) since the previous settlement,
@@ -491,6 +506,86 @@ def set_admin_price(admin_username: str, price_per_gb: float) -> None:
 def remove_admin_price(admin_username: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM admin_prices WHERE admin_username = ?", (admin_username,))
+
+
+def mark_observer_admin(
+    admin_username: str,
+    marked_by: int | None = None,
+    telegram_id: int | None = None,
+) -> dict:
+    """Freeze billing for a sub-admin and clear what they already owe.
+
+    One connection, so the skip row, the voided invoices and the wiped debt
+    commit together: a crash half-way can never leave a panel that is exempt
+    but still holds a live invoice. Idempotent — re-marking an already marked
+    observer changes nothing, which is what keeps a double-tapped button from
+    silently voiding invoices the superadmin has since raised by hand.
+
+    `telegram_id` also voids invoices addressed to that person by hand, which
+    carry no `admin_username` and would otherwise survive the mark.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO observer_admins (admin_username, marked_at, marked_by) "
+            "VALUES (?, ?, ?)",
+            (admin_username, now, marked_by),
+        )
+        if cur.rowcount != 1:
+            return {"added": False, "invoices_cancelled": 0, "debt_cleared": 0}
+        if telegram_id is not None:
+            cur = conn.execute(
+                "UPDATE invoices SET status = 'cancelled' "
+                "WHERE status = 'pending' AND "
+                "(admin_username = ? OR (admin_username IS NULL AND telegram_id = ?))",
+                (admin_username, telegram_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE invoices SET status = 'cancelled' "
+                "WHERE status = 'pending' AND admin_username = ?",
+                (admin_username,),
+            )
+        invoices_cancelled = cur.rowcount
+        row = conn.execute(
+            "SELECT amount FROM debts WHERE username = ?", (admin_username,)
+        ).fetchone()
+        debt_cleared = int(row["amount"]) if row and row["amount"] > 0 else 0
+        if debt_cleared:
+            conn.execute(
+                "UPDATE debts SET amount = 0, overdue_since = NULL, last_warned_at = NULL, "
+                "updated_at = ? WHERE username = ?",
+                (now, admin_username),
+            )
+        return {
+            "added": True,
+            "invoices_cancelled": invoices_cancelled,
+            "debt_cleared": debt_cleared,
+        }
+
+
+def unmark_observer_admin(admin_username: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "DELETE FROM observer_admins WHERE admin_username = ?", (admin_username,)
+        )
+        return cur.rowcount == 1
+
+
+def is_observer_admin(admin_username: str) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM observer_admins WHERE admin_username = ?", (admin_username,)
+        ).fetchone()
+        return row is not None
+
+
+def list_observer_admins() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT admin_username FROM observer_admins ORDER BY admin_username"
+        ).fetchall()
+        return [r["admin_username"] for r in rows]
 
 
 def get_effective_price(admin_username: str) -> float:
