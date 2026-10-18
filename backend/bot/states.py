@@ -111,6 +111,14 @@ class ClearAdminPrice(StatesGroup):
     admin_username = State()
 
 
+class MarkObserver(StatesGroup):
+    admin_username = State()
+
+
+class UnmarkObserver(StatesGroup):
+    admin_username = State()
+
+
 class SetCardNumber(StatesGroup):
     value = State()
 

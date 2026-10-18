@@ -143,12 +143,15 @@ def settings_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_SET_ADMIN_PRICE,
         texts.BTN_LIST_ADMIN_PRICE,
         texts.BTN_CLEAR_ADMIN_PRICE,
+        texts.BTN_MARK_OBSERVER,
+        texts.BTN_UNMARK_OBSERVER,
+        texts.BTN_LIST_OBSERVERS,
         texts.BTN_TOGGLE_FORCE_JOIN,
         texts.BTN_SET_FORCE_JOIN_CHANNEL,
         texts.BTN_ADD_REFERRAL_CODE,
         texts.BTN_MANAGE_REFERRALS,
         texts.BTN_BACK,
-        layout=(1, 2, 2, 2, 2, 1),
+        layout=(1, 2, 2, 2, 2, 2, 2, 1),
     )
 
 

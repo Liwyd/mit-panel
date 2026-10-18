@@ -234,6 +234,9 @@ SETTLEMENT_OWNER_UNBILLED = (
     "▫️ پنل «{username}»: {gb:.1f} گیگ ساخته‌شده به دلیل نبود قیمت یا آیدی تلگرام "
     "صورتحساب نشد و به هفته بعد منتقل شد.\n"
 )
+SETTLEMENT_OBSERVER_SKIPPED = (
+    "▫️ پنل «{username}»: ناظر است؛ بدون فاکتور رها شد.\n"
+)
 WEEKLY_WALLET_SETTLED = (
     "✅ بدهی هفتگی پنل «{username}» به مبلغ {paid:,} تومان از کیف پول شما تسویه شد.\n"
     "💼 موجودی کیف پول: {balance:,} تومان"
@@ -667,6 +670,26 @@ ADMIN_PRICES_NONE = "ℹ️ هیچ قیمت ویژه‌ای تعریف نشده 
 ADMIN_PRICE_LINE = "• {admin}: {price:,} تومان/گیگ"
 BTN_LIST_ADMIN_PRICE = "📋 لیست قیمت‌های ویژه"
 BTN_CLEAR_ADMIN_PRICE = "🗑 حذف قیمت ویژه"
+
+BTN_MARK_OBSERVER = "👁 ثبت ناظر (بدون فاکتور)"
+BTN_UNMARK_OBSERVER = "👁 حذف ناظر"
+BTN_LIST_OBSERVERS = "📋 لیست ناظران"
+ASK_OBSERVER_USERNAME = "👁 نام کاربری ساب‌ادمین موردنظر را وارد نمایید:"
+OBSERVER_MARKED = (
+    "✅ <b>{admin}</b> به عنوان ناظر ثبت شد.\n"
+    "برای او فاکتور خودکار صادر نمی‌شود، بدهی‌اش شارژ نمی‌شود و یادآوری دریافت نمی‌کند."
+)
+OBSERVER_CLEAN_INVOICES = "🗑 {count} فاکتور در انتظار لغو شد."
+OBSERVER_CLEAN_DEBT = "🗑 بدهی {amount:,} تومان صفر شد."
+OBSERVER_ALREADY_MARKED = "ℹ️ <b>{admin}</b> هم‌اکنون ناظر است."
+OBSERVER_UNMARKED = (
+    "✅ <b>{admin}</b> دیگر ناظر نیست؛ صدور فاکتور خودکار از سر گرفته می‌شود "
+    "و مصرف انباشته‌شده در اولین تسویه صورتحساب خواهد شد."
+)
+OBSERVER_NOT_MARKED = "ℹ️ <b>{admin}</b> در فهرست ناظران نیست."
+OBSERVERS_LIST = "👁 فهرست ناظران (بدون فاکتور):\n\n{lines}"
+OBSERVERS_NONE = "ℹ️ هیچ ناظری ثبت نشده است."
+OBSERVER_LINE = "• {admin}"
 
 BTN_BROADCAST = "📣 پیام همگانی"
 ASK_BROADCAST_TEXT = "📣 متن پیامی که برای همه‌ی کاربران ارسال شود را بنویسید:"

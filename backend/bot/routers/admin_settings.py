@@ -19,6 +19,7 @@ from backend.bot.states import (
     DeleteAdmin,
     GrantTraffic,
     GrantWallet,
+    MarkObserver,
     NewInvoice,
     PanelHistory,
     ReferralManage,
@@ -27,6 +28,7 @@ from backend.bot.states import (
     SetForceJoinChannel,
     SetPricePerGb,
     TogglePaymentMode,
+    UnmarkObserver,
 )
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
@@ -1110,6 +1112,94 @@ async def finish_clear_admin_price(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         texts.ADMIN_PRICE_CLEARED.format(admin=username),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Observer sub-admins: exempt from every automatic billing path
+# ---------------------------------------------------------------------------
+
+@router.message(F.text == texts.BTN_MARK_OBSERVER)
+async def start_mark_observer(message: Message, state: FSMContext) -> None:
+    await state.set_state(MarkObserver.admin_username)
+    await message.answer(texts.ASK_OBSERVER_USERNAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(MarkObserver.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_mark_observer(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_OBSERVER_USERNAME)
+        return
+    with sessionLocal() as session:
+        admin_obj = crud.get_admin_by_username(session, username)
+    if not admin_obj:
+        await state.clear()
+        await message.answer(
+            texts.ADMIN_NOT_FOUND.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    result = db.mark_observer_admin(
+        username,
+        marked_by=message.from_user.id,
+        telegram_id=admin_obj.telegram_id,
+    )
+    await state.clear()
+    if not result["added"]:
+        await message.answer(
+            texts.OBSERVER_ALREADY_MARKED.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    lines = [texts.OBSERVER_MARKED.format(admin=username)]
+    if result["invoices_cancelled"]:
+        lines.append(texts.OBSERVER_CLEAN_INVOICES.format(count=result["invoices_cancelled"]))
+    if result["debt_cleared"]:
+        lines.append(texts.OBSERVER_CLEAN_DEBT.format(amount=result["debt_cleared"]))
+    await message.answer(
+        "\n".join(lines),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+@router.message(F.text == texts.BTN_UNMARK_OBSERVER)
+async def start_unmark_observer(message: Message, state: FSMContext) -> None:
+    await state.set_state(UnmarkObserver.admin_username)
+    await message.answer(texts.ASK_OBSERVER_USERNAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(UnmarkObserver.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_unmark_observer(message: Message, state: FSMContext) -> None:
+    # No existence check: the panel row may already be deleted while the
+    # observer entry still needs cleaning up.
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_OBSERVER_USERNAME)
+        return
+    removed = db.unmark_observer_admin(username)
+    await state.clear()
+    await message.answer(
+        texts.OBSERVER_UNMARKED.format(admin=username)
+        if removed
+        else texts.OBSERVER_NOT_MARKED.format(admin=username),
+        reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+@router.message(F.text == texts.BTN_LIST_OBSERVERS)
+async def list_observers(message: Message) -> None:
+    observers = db.list_observer_admins()
+    if not observers:
+        await message.answer(
+            texts.OBSERVERS_NONE,
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    lines = [texts.OBSERVER_LINE.format(admin=name) for name in observers]
+    await message.answer(
+        texts.OBSERVERS_LIST.format(lines="\n".join(lines)),
         reply_markup=superadmin_kb(message.from_user.id),
     )
 
