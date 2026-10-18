@@ -81,7 +81,8 @@ async def update_admin(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_current_superadmin),
 ):
-    if not crud.get_admin_by_username(db, admin_input.username):
+    target = crud.get_admin_by_username(db, admin_input.username)
+    if not target:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
@@ -89,8 +90,65 @@ async def update_admin(
                 "message": "Admin not found",
             },
         )
+
+    # While locked, MIT Panel and Marzban both hold the known lock password.
+    # A password change from here is the supported way out: push it into
+    # Marzban first, and only then write it locally and drop the lock, so the
+    # two sides can never end up holding different passwords.
+    from backend.bot import db as bot_db
+
+    lock_row = bot_db.get_admin_lock(target.username)
+    new_marzban_password = admin_input.marzban_password or admin_input.password
+    if lock_row and new_marzban_password:
+        panel = crud.get_panel_by_name(db, target.panel)
+        if not panel or panel.panel_type != "marzban" or target.username == panel.username:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "success": False,
+                    "message": "Cannot set a password for this admin while it is locked",
+                },
+            )
+        api = MarzbanAPI(url=panel.url, username=panel.username, password=panel.password)
+        try:
+            marzban_status = await api.update_admin_password(
+                target.username, new_marzban_password
+            )
+        except Exception as e:
+            logger.error(
+                f"Marzban password push failed for locked admin {target.username}: {e}"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={
+                    "success": False,
+                    "message": f"Could not reach Marzban: {e}",
+                },
+            )
+        if marzban_status != 200:
+            logger.warning(
+                f"Marzban rejected password change for locked admin {target.username}: "
+                f"status {marzban_status}"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "success": False,
+                    "message": "Marzban rejected the new password; nothing was changed",
+                },
+            )
+
     update_admin = crud.update_admin_values(db, admin_id, admin_input)
     if update_admin:
+        if lock_row and new_marzban_password:
+            # update_admin_values writes the fields it was given; this makes
+            # MIT Panel's login hash and Marzban copy both equal the password
+            # Marzban just accepted, then drops the lock.
+            target = crud.get_admin_by_username(db, admin_input.username)
+            if target is not None:
+                crud.update_marzban_password(db, target, new_marzban_password)
+            bot_db.delete_admin_lock(target.username if target else admin_input.username)
+            logger.info(f"Locked admin {admin_input.username} unlocked via password change")
         return ResponseModel(
             success=True,
             message="Admin updated successfully",
