@@ -6,7 +6,6 @@ move exactly the same money in exactly the same way.
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 
@@ -14,15 +13,10 @@ from aiogram import Bot
 
 from backend.bot import texts
 from backend.bot import db
-from backend.bot import access_lock
 from backend.bot.billing import apply_wallet_to_debts
 from backend.bot.panel_client import PanelClientError
 from backend.bot import panel_client
 from backend.bot.units import bytes_to_gb
-from backend.db import crud
-from backend.db.engin import sessionLocal
-
-logger = logging.getLogger(__name__)
 
 # reviewed_by for an approval nobody pressed a button for.
 AUTOMATIC = 0
@@ -42,31 +36,6 @@ async def _tell(bot: Bot, chat_id: int, text: str) -> None:
         await bot.send_message(chat_id, text)
     except Exception:
         pass
-
-
-def _usernames_for(telegram_id: int) -> list[str]:
-    with sessionLocal() as session:
-        return [a.username for a in crud.get_admins_by_telegram_id(session, telegram_id)]
-
-
-async def _maybe_unlock(
-    bot: Bot, admin_username: str | None, telegram_id: int | None = None
-) -> None:
-    """Hand access back the moment payment clears everything owed.
-
-    The 5-minute monitor would get there eventually; doing it here means the
-    admin's dashboard is usable again by the time they see the paid toast.
-    Failures only delay — never block — the approval itself.
-    """
-    try:
-        if admin_username:
-            await access_lock.release_if_clear(bot, admin_username)
-            return
-        if telegram_id is not None:
-            for username in _usernames_for(telegram_id):
-                await access_lock.release_if_clear(bot, username)
-    except Exception:
-        logger.exception("post-payment unlock check failed")
 
 
 async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcome:
@@ -98,7 +67,6 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         )
         # Newly arrived money clears any outstanding weekly debt immediately.
         apply_wallet_to_debts(customer)
-        await _maybe_unlock(bot, None, customer)
         await _tell(
             bot,
             customer,
@@ -139,7 +107,6 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
             if grants_gb
             else texts.INVOICE_PAID_CUSTOMER.format(id=req.invoice_id),
         )
-        await _maybe_unlock(bot, invoice.admin_username if invoice else None, customer)
         return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
     if req.kind == "settlement":
@@ -175,7 +142,6 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         else:
             text = texts.SETTLEMENT_APPROVED_ADMIN.format(username=req.admin_username)
         await _tell(bot, customer, text)
-        await _maybe_unlock(bot, req.admin_username)
         return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
     try:

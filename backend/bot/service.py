@@ -44,7 +44,6 @@ async def _run_bot() -> None:
     from aiogram.fsm.storage.memory import MemoryStorage
 
     from backend.bot import db
-    from backend.bot import access_lock
     from backend.bot.middlewares import ForceJoinMiddleware
     from backend.bot.routers import all_routers
     from backend.bot.digest import run_digest_scheduler
@@ -82,7 +81,6 @@ async def _run_bot() -> None:
         asyncio.create_task(_supervised("auto_approver", partial(run_auto_approver, bot))),
         asyncio.create_task(_supervised("usage_sync", partial(run_usage_sync, bot))),
         asyncio.create_task(_supervised("digest_scheduler", partial(run_digest_scheduler, bot))),
-        asyncio.create_task(_supervised("access_lock", partial(access_lock.run_access_lock_monitor, bot))),
     ]
     try:
         await dp.start_polling(bot)
