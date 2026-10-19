@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import auto_approve, bills, digest, keyboards, sales, texts, validation
+from backend.bot import access_lock
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
@@ -311,11 +312,17 @@ async def invoice_due(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     target_id = data["invoice_target"]
     # Checked before the invoice exists — afterwards everyone is a customer.
     was_customer = db.has_billing_account(target_id)
+    # Stamp the panel this invoice bills, so paying it (or leaving it unpaid)
+    # can lock/unlock that reseller. Only when the Telegram id maps to exactly
+    # one admin — guessing would bill the wrong panel later.
+    with sessionLocal() as session:
+        target_admins = crud.get_admins_by_telegram_id(session, target_id)
     invoice_id = db.create_invoice(
         telegram_id=target_id,
         amount=data["invoice_amount"],
         description=data["invoice_description"],
         due_at=due_at,
+        admin_username=target_admins[0].username if len(target_admins) == 1 else None,
     )
 
     delivered = True
@@ -1127,7 +1134,7 @@ async def start_mark_observer(message: Message, state: FSMContext) -> None:
 
 
 @router.message(MarkObserver.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
-async def finish_mark_observer(message: Message, state: FSMContext) -> None:
+async def finish_mark_observer(message: Message, state: FSMContext, bot: Bot) -> None:
     username = (message.text or "").strip()
     if not username:
         await message.answer(texts.ASK_OBSERVER_USERNAME)
@@ -1146,6 +1153,13 @@ async def finish_mark_observer(message: Message, state: FSMContext) -> None:
         marked_by=message.from_user.id,
         telegram_id=admin_obj.telegram_id,
     )
+    if result["added"]:
+        # Observers are exempt from automatic billing, so any lock this admin
+        # was under must not outlive the mark.
+        try:
+            await access_lock.force_release_if_locked(bot, username)
+        except Exception:
+            pass
     await state.clear()
     if not result["added"]:
         await message.answer(
