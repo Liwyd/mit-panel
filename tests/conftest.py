@@ -22,6 +22,8 @@ from sqlalchemy.pool import StaticPool
 
 import backend.bot.db as bot_db
 import backend.bot.panel_client as panel_client_module
+import backend.bot.access_lock as access_lock_module
+import backend.bot.approvals as approvals_module
 import backend.db.engin as engin_module
 from backend.db import crud
 from backend.db.engin import Base
@@ -57,6 +59,8 @@ def _isolate_from_live_database(db_session, monkeypatch):
     factory = sessionmaker(bind=db_session.get_bind(), autoflush=False)
     monkeypatch.setattr(engin_module, "sessionLocal", factory)
     monkeypatch.setattr(panel_client_module, "sessionLocal", factory)
+    monkeypatch.setattr(access_lock_module, "sessionLocal", factory)
+    monkeypatch.setattr(approvals_module, "sessionLocal", factory)
     yield
 
 
