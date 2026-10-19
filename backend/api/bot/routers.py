@@ -17,7 +17,6 @@ from backend.schema._input import (
 from backend.db import crud
 from backend.db.engin import get_db
 from backend.auth.auth import verify_bot_api_key
-from backend.bot import db as bot_db
 from backend.services.marzban.api import APIService as MarzbanAPI
 from backend.utils.logger import logger
 
@@ -115,11 +114,7 @@ async def list_admin_credentials(
     db: Session = Depends(get_db),
     _: None = Depends(verify_bot_api_key),
 ):
-    admins = [
-        a
-        for a in crud.get_all_admins(db)
-        if a.marzban_password and not bot_db.is_locked_admin(a.username)
-    ]
+    admins = [a for a in crud.get_all_admins(db) if a.marzban_password]
     return ResponseModel(
         success=True,
         message="Credentials retrieved successfully",
@@ -233,17 +228,6 @@ async def change_admin_marzban_password(
     admin, error = _resolve_target(db, payload.telegram_id, payload.username)
     if error:
         return error
-
-    # A locked admin's Marzban password is the known lock password; a change
-    # here would overwrite it and break the restore-on-payment path.
-    if bot_db.is_locked_admin(admin.username):
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={
-                "success": False,
-                "message": "This panel is locked due to unpaid invoices; settle first",
-            },
-        )
 
     panel = crud.get_panel_by_name(db, admin.panel)
     if not panel or panel.panel_type != "marzban":

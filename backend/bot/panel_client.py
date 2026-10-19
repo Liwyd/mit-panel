@@ -348,15 +348,6 @@ async def change_password(
         if not panel_obj or panel_obj.panel_type != "marzban":
             raise PanelClientError("This admin's panel is not a Marzban panel")
 
-        # A locked admin's Marzban password is the known lock password; letting
-        # this run would overwrite it with something the lock can't restore.
-        from backend.bot import db as bot_db
-
-        if bot_db.is_locked_admin(admin.username):
-            raise PanelClientError(
-                "This panel is locked due to unpaid invoices; settle first"
-            )
-
         if admin.username == panel_obj.username:
             raise PanelClientError(
                 "This is the panel's own service account; its password can't be changed"
