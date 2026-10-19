@@ -672,6 +672,37 @@ def is_locked_admin(admin_username: str) -> bool:
         return False
 
 
+# Superadmin override: an admin who was unlocked by hand is not re-locked by
+# the monitor until nothing is lock-worthy anymore. Keyed per admin in
+# bot_settings rather than a new table — it is a flag, nothing more.
+_LOCK_EXEMPT_PREFIX = "lock_exempt:"
+
+
+def set_lock_exempt(admin_username: str) -> None:
+    set_setting(_LOCK_EXEMPT_PREFIX + admin_username, "1")
+
+
+def is_lock_exempt(admin_username: str) -> bool:
+    return get_setting(_LOCK_EXEMPT_PREFIX + admin_username) == "1"
+
+
+def clear_lock_exempt(admin_username: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM bot_settings WHERE key = ?",
+            (_LOCK_EXEMPT_PREFIX + admin_username,),
+        )
+
+
+def list_lock_exempt() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT key FROM bot_settings WHERE key LIKE ?",
+            (_LOCK_EXEMPT_PREFIX + "%",),
+        ).fetchall()
+        return [r["key"].split(":", 1)[1] for r in rows]
+
+
 def get_effective_price(admin_username: str) -> float:
     per_admin = get_admin_price(admin_username)
     if per_admin is not None:

@@ -160,6 +160,14 @@ ACCESS_LOCKED_ADMIN = (
 ACCESS_UNLOCKED_ADMIN = "✅ دسترسی پنل شما بازیابی شد."
 ACCESS_LOCKED_SUPERADMIN = "🔒 دسترسی پنل «{username}» به دلیل {reason} قفل شد."
 ACCESS_UNLOCKED_SUPERADMIN = "🔓 دسترسی پنل «{username}» پس از تسویه بازیابی شد."
+BTN_UNLOCK_ADMIN = "🔓 باز کردن قفل پنل"
+ASK_UNLOCK_ADMIN = "🔓 نام پنل (ادمین) را برای باز کردن قفل وارد کنید:"
+UNLOCK_ADMIN_DONE = (
+    "✅ قفل پنل «{username}» باز شد و رمز قبلی بازگردانده شد.\n"
+    "🛡 تا تسویه‌ی کامل فاکتورهای سررسیدشده و بدهی‌ها، قفل خودکار دوباره اعمال نمی‌شود."
+)
+UNLOCK_ADMIN_NONE = "ℹ️ برای پنل «{username}» قفل فعالی ثبت نشده است."
+UNLOCK_ADMIN_FAILED = "⚠️ باز کردن قفل انجام نشد؛ لطفاً دوباره تلاش کنید."
 BTN_PAY_DEBT = "💳 پرداخت"
 DEBT_PAYMENT_INSTRUCTIONS = (
     "💳 لطفاً مبلغ {amount:,} تومان را به شماره کارت زیر واریز نمایید:\n\n"

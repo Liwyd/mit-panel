@@ -30,6 +30,7 @@ from backend.bot.states import (
     SetPricePerGb,
     TogglePaymentMode,
     UnmarkObserver,
+    UnlockAdmin,
 )
 from backend.bot import db
 from backend.bot.billing import apply_wallet_to_debts
@@ -1215,6 +1216,39 @@ async def list_observers(message: Message) -> None:
     await message.answer(
         texts.OBSERVERS_LIST.format(lines="\n".join(lines)),
         reply_markup=superadmin_kb(message.from_user.id),
+    )
+
+
+@router.message(F.text == texts.BTN_UNLOCK_ADMIN)
+async def start_unlock_admin(message: Message, state: FSMContext) -> None:
+    await state.set_state(UnlockAdmin.admin_username)
+    await message.answer(texts.ASK_UNLOCK_ADMIN, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(UnlockAdmin.admin_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def finish_unlock_admin(message: Message, state: FSMContext, bot: Bot) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer(texts.ASK_UNLOCK_ADMIN)
+        return
+    with sessionLocal() as session:
+        admin_obj = crud.get_admin_by_username(session, username)
+    if not admin_obj:
+        await state.clear()
+        await message.answer(
+            texts.ADMIN_NOT_FOUND.format(admin=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
+    status = await access_lock.manual_unlock(bot, username)
+    await state.clear()
+    text = {
+        "unlocked": texts.UNLOCK_ADMIN_DONE.format(username=username),
+        "no_lock": texts.UNLOCK_ADMIN_NONE.format(username=username),
+        "unknown": texts.ADMIN_NOT_FOUND.format(admin=username),
+    }.get(status, texts.UNLOCK_ADMIN_FAILED)
+    await message.answer(
+        text, reply_markup=superadmin_kb(message.from_user.id)
     )
 
 

@@ -48,6 +48,7 @@ ALL_MENU_TEXTS = {
     texts.BTN_MARK_OBSERVER,
     texts.BTN_UNMARK_OBSERVER,
     texts.BTN_LIST_OBSERVERS,
+    texts.BTN_UNLOCK_ADMIN,
     texts.BTN_PAY,
     texts.BTN_PAY_CARD,
     texts.BTN_SYNC_TELEGRAM_IDS,

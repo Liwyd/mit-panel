@@ -54,9 +54,9 @@ _REASON_FA = {
 def _age_reached(stamp: str | None) -> bool:
     """Whether an ISO timestamp is at least LOCK_GRACE old.
 
-    A missing stamp never locks: an un-stamped debt has never been through a
-    settlement, and an invoice without created_at shouldn't exist — either
-    way, guessing would lock the wrong people.
+    A missing stamp never locks: an invoice with no due date is open-ended
+    by choice, and an un-stamped debt has never been through a settlement —
+    either way, guessing would lock the wrong people.
     """
     if not stamp:
         return False
@@ -78,26 +78,23 @@ def _username_for_telegram_id(telegram_id: int) -> str | None:
 
 
 def has_obligation(admin_username: str) -> bool:
-    """Any reason at all to keep this admin locked — no grace, no filtering.
+    """Whether this admin currently meets the lock criteria.
 
-    Once locked, even a hair of remaining debt or one stale pending invoice
-    keeps the lock: releasing on a technicality and re-locking minutes later
-    would thrash the admin's dashboard for no reason.
+    Same predicate that would lock them (past-due invoice or overdue debt,
+    both past the grace) — not "any pending invoice", so an admin whose only
+    remaining bills still have days to run is never held. Exemption is not
+    considered here: it suppresses locking, never releases a lock.
     """
-    for debt in db.list_outstanding_debts():
-        if debt["username"] == admin_username:
-            return True
-    for invoice in db.list_pending_invoices():
-        owner = invoice.admin_username or _username_for_telegram_id(
-            invoice.telegram_id
-        )
-        if owner == admin_username:
-            return True
-    return False
+    return admin_username in _obligated()
 
 
 def _obligated() -> dict[str, str]:
-    """Admins past the grace period on an invoice or debt: username -> reason."""
+    """Admins past the grace period on an invoice or debt: username -> reason.
+
+    An invoice only counts once its own due_at has passed (plus grace) —
+    locking on invoice age alone would slam the dashboard shut seconds after
+    a 12-hour-old invoice that isn't due for a week.
+    """
     obligated: dict[str, str] = {}
     for debt in db.list_outstanding_debts():
         username = debt["username"]
@@ -111,7 +108,7 @@ def _obligated() -> dict[str, str]:
         )
         if not owner or owner in obligated:
             continue
-        if _age_reached(invoice.created_at):
+        if _age_reached(invoice.due_at):
             obligated[owner] = "unpaid_invoice"
     return obligated
 
@@ -245,8 +242,40 @@ async def force_release_if_locked(bot: Bot, admin_username: str) -> bool:
     return await release_admin(bot, admin_username)
 
 
+async def manual_unlock(bot: Bot, admin_username: str) -> str:
+    """Superadmin override: restore now and suppress re-locking until clean.
+
+    Returns ``"unlocked"`` (restored + exempt), ``"no_lock"`` (nothing to
+    restore), ``"failed"`` (the restore did not go through, so no exemption —
+    an exemption on top of a live lock would just confuse things) or
+    ``"unknown"`` (no such admin). The exemption is dropped by the next tick
+    that finds the admin no longer meets the lock criteria, so the next
+    genuinely overdue bill locks them again as usual.
+    """
+    with sessionLocal() as session:
+        admin = crud.get_admin_by_username(session, admin_username)
+    if admin is None:
+        return "unknown"
+    if db.get_admin_lock(admin_username) is None:
+        return "no_lock"
+    if not await release_admin(bot, admin_username):
+        return "failed"
+    db.set_lock_exempt(admin_username)
+    logger.info("manually unlocked admin %s (re-lock suppressed until clean)", admin_username)
+    return "unlocked"
+
+
 async def tick(bot: Bot) -> None:
     """One full reconcile: release the settled, lock the newly overdue."""
+    # A superadmin override outlives settlement of the bills it covered; the
+    # moment nothing is lock-worthy anymore it means nothing, so drop it.
+    for username in db.list_lock_exempt():
+        try:
+            if not has_obligation(username):
+                db.clear_lock_exempt(username)
+        except Exception:
+            logger.exception("exemption cleanup failed for %s", username)
+
     for row in db.list_admin_locks():
         username = row["admin_username"]
         try:
@@ -260,6 +289,8 @@ async def tick(bot: Bot) -> None:
     for username, reason in _obligated().items():
         try:
             if db.is_observer_admin(username):
+                continue
+            if db.is_lock_exempt(username):
                 continue
             if db.get_admin_lock(username):
                 continue

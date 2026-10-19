@@ -119,6 +119,10 @@ class UnmarkObserver(StatesGroup):
     admin_username = State()
 
 
+class UnlockAdmin(StatesGroup):
+    admin_username = State()
+
+
 class SetCardNumber(StatesGroup):
     value = State()
 

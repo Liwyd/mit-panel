@@ -11,6 +11,7 @@ idempotent under re-runs.
 """
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -78,13 +79,6 @@ def _make_admin(db_session, panel_name, username="fuad", telegram_id=TELEGRAM_ID
     db_session.commit()
 
 
-def _backdate_invoice(ledger, invoice_id):
-    with ledger._connect() as conn:
-        conn.execute(
-            "UPDATE invoices SET created_at = ? WHERE id = ?", (LONG_AGO, invoice_id)
-        )
-
-
 def _backdate_debt(ledger, username):
     with ledger._connect() as conn:
         conn.execute(
@@ -93,13 +87,29 @@ def _backdate_debt(ledger, username):
         )
 
 
-def _aged_invoice(ledger, telegram_id=TELEGRAM_ID, admin_username="fuad"):
+def _aged_invoice(
+    ledger,
+    telegram_id=TELEGRAM_ID,
+    admin_username="fuad",
+    due_at=LONG_AGO,
+    created_at=LONG_AGO,
+):
+    """A pending invoice whose due date (and creation) is already in the past."""
     invoice_id = ledger.create_invoice(
-        telegram_id=telegram_id, amount=100, description="d", due_at=None,
+        telegram_id=telegram_id, amount=100, description="d", due_at=due_at,
         admin_username=admin_username,
     )
-    _backdate_invoice(ledger, invoice_id)
+    if created_at is not None:
+        with ledger._connect() as conn:
+            conn.execute(
+                "UPDATE invoices SET created_at = ? WHERE id = ?",
+                (created_at, invoice_id),
+            )
     return invoice_id
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat()
 
 
 # --- locking -----------------------------------------------------------------
@@ -133,13 +143,16 @@ def test_lock_swaps_only_the_local_hash_and_keeps_the_original(
         assert LOCK_PASSWORD not in text
 
 
-def test_grace_period_blocks_premature_lock(
+def test_invoice_is_not_locked_before_its_due_date(
     db_session, marzban_panel, ledger, bot_config_stub
 ):
+    # The deploy-day regression: an invoice created long ago but still days
+    # away from its deadline must not lock anyone.
     _make_admin(db_session, marzban_panel.name)
-    ledger.create_invoice(
-        telegram_id=TELEGRAM_ID, amount=100, description="d", due_at=None,
-        admin_username="fuad",
+    _aged_invoice(
+        ledger,
+        created_at=LONG_AGO,
+        due_at=_iso(datetime.now(timezone.utc) + timedelta(days=3)),
     )
 
     asyncio.run(access_lock.tick(FakeBot()))
@@ -147,6 +160,32 @@ def test_grace_period_blocks_premature_lock(
     assert ledger.get_admin_lock("fuad") is None
     admin = crud.get_admin_by_username(db_session, "fuad")
     assert verify_password(ORIGINAL_PASSWORD, admin.hashed_password)
+
+
+def test_invoice_just_past_due_still_gets_the_grace_period(
+    db_session, marzban_panel, ledger, bot_config_stub
+):
+    _make_admin(db_session, marzban_panel.name)
+    _aged_invoice(
+        ledger,
+        due_at=_iso(datetime.now(timezone.utc) - timedelta(hours=1)),
+    )
+
+    asyncio.run(access_lock.tick(FakeBot()))
+
+    assert ledger.get_admin_lock("fuad") is None
+
+
+def test_open_ended_invoice_never_locks(
+    db_session, marzban_panel, ledger, bot_config_stub
+):
+    # due_at None = "no deadline" chosen on purpose — nothing to be past.
+    _make_admin(db_session, marzban_panel.name)
+    _aged_invoice(ledger, due_at=None)
+
+    asyncio.run(access_lock.tick(FakeBot()))
+
+    assert ledger.get_admin_lock("fuad") is None
 
 
 def test_debt_locks_only_after_overdue_grace(
@@ -258,18 +297,31 @@ def test_release_blocked_while_anything_still_owed(
     locked_admin, ledger, bot_config_stub
 ):
     ledger.add_debt("fuad", TELEGRAM_ID, 500)
+    _backdate_debt(ledger, "fuad")  # genuinely overdue, not just open
 
     assert asyncio.run(access_lock.release_if_clear(locked_admin, "fuad")) is False
     assert ledger.get_admin_lock("fuad") is not None
 
 
+def test_release_happens_when_only_not_yet_due_bills_remain(
+    locked_admin, ledger, bot_config_stub
+):
+    # An open invoice with days to run does not keep anyone locked — the
+    # lock criteria and the release criteria are the same predicate.
+    _aged_invoice(
+        ledger,
+        due_at=_iso(datetime.now(timezone.utc) + timedelta(days=3)),
+        created_at=None,
+    )
+
+    assert asyncio.run(access_lock.release_if_clear(locked_admin, "fuad")) is True
+    assert ledger.get_admin_lock("fuad") is None
+
+
 def test_tick_releases_when_the_invoice_disappears(
     locked_admin, ledger, bot_config_stub
 ):
-    invoice_id = ledger.create_invoice(
-        telegram_id=TELEGRAM_ID, amount=100, description="d", due_at=None,
-        admin_username="fuad",
-    )
+    invoice_id = _aged_invoice(ledger)  # past due — keeps the lock alive
     asyncio.run(access_lock.tick(locked_admin))
     assert ledger.get_admin_lock("fuad") is not None
 
@@ -348,3 +400,68 @@ def test_locked_admin_is_flagged_for_the_auth_guard(
 ):
     assert ledger.is_locked_admin("fuad") is True
     assert access_lock.has_obligation("fuad") is False
+
+
+# --- superadmin manual unlock ------------------------------------------------
+
+def test_manual_unlock_restores_and_suppresses_relocking(
+    db_session, marzban_panel, ledger, bot_config_stub
+):
+    _make_admin(db_session, marzban_panel.name)
+    _aged_invoice(ledger)
+    bot = FakeBot()
+    asyncio.run(access_lock.tick(bot))
+    assert ledger.get_admin_lock("fuad") is not None
+
+    assert asyncio.run(access_lock.manual_unlock(bot, "fuad")) == "unlocked"
+
+    db_session.expire_all()
+    admin = crud.get_admin_by_username(db_session, "fuad")
+    assert verify_password(ORIGINAL_PASSWORD, admin.hashed_password)
+    assert ledger.get_admin_lock("fuad") is None
+    assert ledger.is_lock_exempt("fuad")
+
+    # Still past due, but the monitor must not put the lock back.
+    asyncio.run(access_lock.tick(bot))
+    assert ledger.get_admin_lock("fuad") is None
+
+    # Settling everything retires the exemption...
+    with ledger._connect() as conn:
+        conn.execute(
+            "UPDATE invoices SET status = 'cancelled' WHERE admin_username = ?",
+            ("fuad",),
+        )
+    asyncio.run(access_lock.tick(bot))
+    assert not ledger.is_lock_exempt("fuad")
+
+    # ...so the next genuinely overdue bill locks them again.
+    _aged_invoice(ledger)
+    asyncio.run(access_lock.tick(bot))
+    assert ledger.get_admin_lock("fuad") is not None
+
+
+def test_manual_unlock_reports_lock_state(
+    db_session, marzban_panel, ledger, bot_config_stub
+):
+    _make_admin(db_session, marzban_panel.name)
+    bot = FakeBot()
+
+    # Nothing locked yet.
+    assert asyncio.run(access_lock.manual_unlock(bot, "fuad")) == "no_lock"
+    # No such admin at all.
+    assert asyncio.run(access_lock.manual_unlock(bot, "nobody")) == "unknown"
+
+
+def test_unlock_button_lives_in_the_settings_menu():
+    from backend.bot import texts, keyboards
+    from backend.bot.nav import ALL_MENU_TEXTS
+
+    # Without this the FSM username handler would swallow the tap.
+    assert texts.BTN_UNLOCK_ADMIN in ALL_MENU_TEXTS
+    rows = [
+        [button.text for button in row]
+        for row in keyboards.settings_section_kb().keyboard
+    ]
+    flat = [text for row in rows for text in row]
+    assert texts.BTN_UNLOCK_ADMIN in flat
+    assert rows[-1] == [texts.BTN_BACK]
