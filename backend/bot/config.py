@@ -36,7 +36,10 @@ class _BotConfig:
 
     @property
     def panel_link_url(self) -> str:
-        return get_settings().get("bot_panel_link_url", "https://wunli.draking.ir:4000/panpan/")
+        # Fallback for a panel with the setting cleared; see the note on
+        # bot_panel_link_url in settings_store.DEFAULTS for why this is the
+        # direct subdomain rather than the tunnelled one.
+        return get_settings().get("bot_panel_link_url", "https://dwunli.draking.ir:4000/panpan/")
 
     @property
     def sqlite_path(self) -> str:
