@@ -81,7 +81,8 @@ async def update_admin(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_current_superadmin),
 ):
-    if not crud.get_admin_by_username(db, admin_input.username):
+    target = crud.get_admin_by_username(db, admin_input.username)
+    if not target:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
@@ -89,8 +90,24 @@ async def update_admin(
                 "message": "Admin not found",
             },
         )
+
+    # While locked, MIT Panel's login hash belongs to the lock. A panel
+    # password change from here is the supported way out: update_admin_values
+    # writes the new hash, so the lock row is dropped rather than left to keep
+    # blocking a password the superadmin just set on purpose. Touching only
+    # marzban_password leaves the lock alone — the local hash is unchanged.
+    from backend.bot import db as bot_db
+
+    was_locked = bot_db.get_admin_lock(target.username) is not None
+    password_changed = bool(admin_input.password)
+
     update_admin = crud.update_admin_values(db, admin_id, admin_input)
     if update_admin:
+        if was_locked and password_changed:
+            bot_db.delete_admin_lock(target.username)
+            logger.info(
+                f"Locked admin {admin_input.username} unlocked via password change"
+            )
         return ResponseModel(
             success=True,
             message="Admin updated successfully",

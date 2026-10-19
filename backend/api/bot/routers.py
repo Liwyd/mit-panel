@@ -17,6 +17,7 @@ from backend.schema._input import (
 from backend.db import crud
 from backend.db.engin import get_db
 from backend.auth.auth import verify_bot_api_key
+from backend.bot import db as bot_db
 from backend.services.marzban.api import APIService as MarzbanAPI
 from backend.utils.logger import logger
 
@@ -228,6 +229,17 @@ async def change_admin_marzban_password(
     admin, error = _resolve_target(db, payload.telegram_id, payload.username)
     if error:
         return error
+
+    # A locked admin's local login hash belongs to the lock; this flow writes
+    # a new hash and would silently unlock the dashboard.
+    if bot_db.is_locked_admin(admin.username):
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "success": False,
+                "message": "This panel is locked due to unpaid invoices; settle first",
+            },
+        )
 
     panel = crud.get_panel_by_name(db, admin.panel)
     if not panel or panel.panel_type != "marzban":

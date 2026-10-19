@@ -9,6 +9,7 @@ from jose import jwt, JWTError
 from backend.auth.hash import verify_password
 from backend.db.engin import get_db
 from backend.db import crud
+from backend.bot import db as bot_db
 from backend.config import config
 from backend.utils.logger import logger
 
@@ -35,6 +36,17 @@ def get_current_admin(token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
+
+        # A JWT stays valid for days; an admin locked out since it was issued
+        # must not keep using it. 401 (not 403) so the frontend treats it like
+        # any expired session and lands on the login screen, where the lock
+        # itself is explained.
+        if payload.get("role") == "admin" and bot_db.is_locked_admin(username):
+            logger.info(f"Rejected request from locked admin: {username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+            )
 
         return {
             "username": username,
@@ -99,6 +111,19 @@ async def login_for_access_token(
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"success": False, "message": "Incorrect username or password"},
+        )
+
+    # Password verification already passed against whatever hash is stored —
+    # for a locked admin that is the known lock password, which must still
+    # not open the dashboard.
+    if bot_db.is_locked_admin(admin.username):
+        logger.info(f"Locked admin login attempt: {admin.username}")
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "success": False,
+                "message": "Your account is temporarily locked. Settle your outstanding invoices to regain access.",
+            },
         )
 
     # If this admin is set to use ALL inbounds of its Marzban panel, re-sync the
