@@ -9,6 +9,7 @@ button from double-crediting an admin's traffic balance.
 from __future__ import annotations
 
 import os
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -196,6 +197,21 @@ def init_db() -> None:
                 admin_username TEXT PRIMARY KEY,
                 marked_at TEXT NOT NULL,
                 marked_by INTEGER
+            )
+            """
+        )
+
+        # A reseller locked out of MIT Panel's dashboard while they owe money.
+        # Holds the exact pre-lock bcrypt hash, which is the only copy that can
+        # put the admin back the way they were. Marzban is deliberately not
+        # involved: the reseller's panel password there stays untouched.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_locks (
+                admin_username TEXT PRIMARY KEY,
+                original_hashed_password TEXT NOT NULL,
+                locked_at TEXT NOT NULL,
+                reason TEXT NOT NULL
             )
             """
         )
@@ -586,6 +602,74 @@ def list_observer_admins() -> list[str]:
             "SELECT admin_username FROM observer_admins ORDER BY admin_username"
         ).fetchall()
         return [r["admin_username"] for r in rows]
+
+
+def upsert_admin_lock(
+    admin_username: str, original_hashed_password: str, reason: str
+) -> None:
+    """Record a lock, keeping whichever original hash was stored first.
+
+    Upsert (rather than insert-or-fail) so a re-run after a crash converges.
+    An existing row's hash is never overwritten: the caller only ever reads
+    the original out of MIT Panel while the row does not exist yet, so the
+    first row written for an admin is always the good one.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO admin_locks
+                (admin_username, original_hashed_password, locked_at, reason)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(admin_username) DO UPDATE SET
+                locked_at = excluded.locked_at,
+                reason = excluded.reason
+            """,
+            (admin_username, original_hashed_password, now, reason),
+        )
+
+
+def get_admin_lock(admin_username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT admin_username, original_hashed_password, locked_at, reason "
+            "FROM admin_locks WHERE admin_username = ?",
+            (admin_username,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def delete_admin_lock(admin_username: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "DELETE FROM admin_locks WHERE admin_username = ?", (admin_username,)
+        )
+        return cur.rowcount == 1
+
+
+def list_admin_locks() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT admin_username, original_hashed_password, locked_at, reason "
+            "FROM admin_locks ORDER BY admin_username"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def is_locked_admin(admin_username: str) -> bool:
+    """Whether this admin is currently locked out of the dashboard.
+
+    Consulted from the API's auth path, where an unreadable or not-yet
+    initialised bot database must never lock every request out of the panel:
+    any failure reads as not locked, loudly.
+    """
+    try:
+        return get_admin_lock(admin_username) is not None
+    except sqlite3.Error as exc:
+        logging.getLogger(__name__).error(
+            "admin lock check failed for %s: %s", admin_username, exc
+        )
+        return False
 
 
 def get_effective_price(admin_username: str) -> float:
