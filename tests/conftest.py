@@ -24,6 +24,7 @@ import backend.bot.db as bot_db
 import backend.bot.panel_client as panel_client_module
 import backend.bot.access_lock as access_lock_module
 import backend.bot.approvals as approvals_module
+import backend.bot.routers.bot_provision as bot_provision_module
 import backend.bot.usage_sync as usage_sync_module
 import backend.db.engin as engin_module
 from backend.db import crud
@@ -62,9 +63,10 @@ def _isolate_from_live_database(db_session, monkeypatch):
     monkeypatch.setattr(panel_client_module, "sessionLocal", factory)
     monkeypatch.setattr(access_lock_module, "sessionLocal", factory)
     monkeypatch.setattr(approvals_module, "sessionLocal", factory)
-    # `usage_sync` imported the name rather than reading it through the
-    # module, so patching `engin` alone leaves it on the live file.
+    # These modules imported the name rather than reading it through the
+    # module, so patching `engin` alone leaves them on the live file.
     monkeypatch.setattr(usage_sync_module, "sessionLocal", factory)
+    monkeypatch.setattr(bot_provision_module, "sessionLocal", factory)
     yield
 
 
