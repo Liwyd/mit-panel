@@ -34,7 +34,10 @@ BOT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 # The name every bot's reseller panel is filed under, in Persian, so it reads
 # the same in every bot's "مدیریت پنل‌ها".
 VIP_PANEL_NAME = "پنل VIP"
-MIT_PANEL_NAME = "پنل MIT"
+# The reseller's own panel, as it is called in the bot's panel list. One name,
+# always: the reseller's shop items point at it, so a different name would
+# leave the services pointing at nothing.
+MIT_PANEL_NAME = "پنل VIP مولتی لوکیشن"
 
 _CERT_PATH = os.path.join(DATA_DIR, "mitseller-provision.crt")
 
@@ -266,6 +269,40 @@ async def add_bot_admin(*, bot_url: str, owner_key: str, admin_id: int) -> None:
         raise MitSellerError(f"ربات در دسترس نیست: {exc.__class__.__name__}") from exc
     except ValueError as exc:
         raise MitSellerError("پاسخ نامعتبر از ربات") from exc
+
+
+async def bind_products_to_panel(*, bot_url: str, owner_key: str, panel_name: str) -> int:
+    """Point the bot's shop items at one panel.
+
+    A new bot's catalogue comes with its services on "/all" — offered through
+    whichever panel exists. Once the reseller's own panel is in, the services
+    belong to it, the way a reseller bot that has been running for a while
+    has them: the bot then knows which panel to sell from. Services already
+    tied to another panel are left alone.
+    """
+    headers = {"Authorization": f"Bearer {owner_key}"}
+    bound = 0
+    try:
+        async with httpx.AsyncClient(timeout=BOT_TIMEOUT) as client:
+            res = await client.get(f"{bot_url}/api/v1/products", headers=headers)
+            if res.status_code != 200:
+                return 0
+            for row in (res.json().get("data") or []):
+                if row.get("Location") not in ("/all", "", None):
+                    continue
+                pid = row.get("id")
+                if pid is None:
+                    continue
+                put = await client.put(
+                    f"{bot_url}/api/v1/products/{pid}",
+                    headers=headers,
+                    json={"location": panel_name},
+                )
+                if put.status_code == 200:
+                    bound += 1
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning(f"could not bind the shop items to {panel_name}: {exc!r}")
+    return bound
 
 
 async def verify_panel_login(panel_base: str, username: str, password: str) -> bool | None:
