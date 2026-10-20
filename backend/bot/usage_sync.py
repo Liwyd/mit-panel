@@ -219,16 +219,24 @@ def _sweep() -> list[str]:
     than a single panel being read at once.
     """
     report: list[str] = []
-    # Read while the name still resolves to the module — the session below
-    # shadows it, exactly like the trap documented in `_issue_invoice`.
+    # `db` is the module imported at the top of this file, and it stays the
+    # module for as long as nothing in the function binds that name — reading
+    # it before the `with` does *not* help, because a function's local names
+    # are decided once for the whole of it. Binding the session to `db` here
+    # used to make line 224 raise UnboundLocalError, so every sweep aborted
+    # before touching a panel (production, 2026-10-19/20). The session is
+    # therefore named `session` all the way down; `_issue_invoice` is the
+    # other half of that lesson.
     observers = set(db.list_observer_admins())
-    with sessionLocal() as db:
-        panels = [p for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
-        ledger_all = crud.get_marzban_users_grouped(db)
+    with sessionLocal() as session:
+        panels = [
+            p for p in crud.get_all_panels(session) if p.panel_type == "marzban"
+        ]
+        ledger_all = crud.get_marzban_users_grouped(session)
 
         for index, panel in enumerate(panels):
             try:
-                report.extend(_sync_panel(db, panel, ledger_all, observers))
+                report.extend(_sync_panel(session, panel, ledger_all, observers))
             except Exception as exc:
                 logger.error(f"Usage sync failed for panel {panel.name}: {exc}")
                 report.append(f"❌ {panel.name}: خطا در همگام‌سازی ({exc})")
@@ -237,7 +245,7 @@ def _sweep() -> list[str]:
     return report
 
 
-def _sync_panel(db, panel, ledger_all, observers: set[str]) -> list[str]:
+def _sync_panel(session, panel, ledger_all, observers: set[str]) -> list[str]:
     raw_users = _read_panel_users(panel)
     grouped = group_by_owner(raw_users)
 
@@ -246,7 +254,7 @@ def _sync_panel(db, panel, ledger_all, observers: set[str]) -> list[str]:
         # The panel's own service account is not a reseller and is never billed.
         if owner == panel.username:
             continue
-        admin = crud.get_admin_by_username(db, owner)
+        admin = crud.get_admin_by_username(session, owner)
         if admin is None:
             continue
         if owner in observers:
@@ -274,7 +282,7 @@ def _sync_panel(db, panel, ledger_all, observers: set[str]) -> list[str]:
         before = int(admin.traffic or 0)
         for user in plan.adopted:
             crud.record_marzban_user(
-                db,
+                session,
                 username=user.username,
                 owner=owner,
                 data_limit=user.data_limit,
@@ -282,17 +290,17 @@ def _sync_panel(db, panel, ledger_all, observers: set[str]) -> list[str]:
             )
         for charge in plan.charges:
             crud.record_marzban_user(
-                db,
+                session,
                 username=charge.username,
                 owner=owner,
                 data_limit=charge.data_limit,
                 source="external",
             )
         for name in plan.pruned:
-            crud.delete_marzban_user(db, owner=owner, username=name)
+            crud.delete_marzban_user(session, owner=owner, username=name)
 
         for charge in plan.charges:
-            crud.reduce_admin_traffic_debt(db, admin, charge.amount)
+            crud.reduce_admin_traffic_debt(session, admin, charge.amount)
         after = int(admin.traffic or 0)
 
         if not plan.charges:
