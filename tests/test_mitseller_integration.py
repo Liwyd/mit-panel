@@ -201,6 +201,15 @@ def test_an_unreachable_server_is_reported_not_raised(settings_stub, monkeypatch
         )
 
 
+def test_the_panel_outlives_a_slow_install():
+    """install.sh new runs for minutes — certbot alone can retry for longer —
+    and the server allows it 15. Giving up first reports an install as failed
+    while it is still running, and the superadmin's retry asks for a second
+    bot on the same domain."""
+    assert mitseller.TIMEOUT.read >= 600
+    assert mitseller.TIMEOUT.read < 15 * 60  # before the server gives up too
+
+
 # ── writing the reseller's panel into the bot (R5) ────────────────────────
 
 
