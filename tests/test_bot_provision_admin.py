@@ -1,11 +1,15 @@
 """Who a new mit-seller bot belongs to, and the address its certificate uses.
 
-The bot's `ADMIN` is a Telegram id: install.sh writes it straight into the
-bot's config, and whoever ends up there owns the bot. The panel's own admin
-rows are keyed by an internal id, so sending that gave every bot an owner of
-`16` or `29` — a number that is nobody. The certificate email was never sent
-at all, so the server refused to build anything (`CERT_EMAIL: set CERT_EMAIL=`,
-production, 2026-10-20); every bot's certificate now goes to one address.
+The bot's main admin is written into its config at install time and the bot's
+API refuses to remove it, so that name belongs to the superadmin who issued the
+build command — whoever else is involved (the sub-admin the bot was built for,
+the buyer behind a request) is added as an ordinary admin afterwards and can be
+removed again later. Before this, the panel sent its own admin *row* id (16,
+29, …) as the bot's admin — a number that is nobody — and then the sub-admin
+whose panel it was ended up as the unremovable main admin instead
+(production, 2026-10-20). The certificate email was never sent at all, so the
+server refused to build anything (`CERT_EMAIL: set CERT_EMAIL=`); every bot's
+certificate now goes to one address.
 """
 
 import asyncio
@@ -66,9 +70,13 @@ def _run(coroutine):
     return asyncio.run(coroutine)
 
 
-def _install(monkeypatch, admin, **kwargs):
-    """Run `_install` and return what the panel asked the server for."""
+def _install(monkeypatch, admin, *, message=None, added=None, add_fails=False, **kwargs):
+    """Run `_install` and return what the panel asked the server for.
+
+    `added` collects whoever was given a second admin on the finished bot.
+    """
     seen: dict = {}
+    message = message or FakeMessage(SUPERADMIN)
 
     async def fake_provision(**kwargs_seen):
         seen.update(kwargs_seen)
@@ -81,10 +89,17 @@ def _install(monkeypatch, admin, **kwargs):
             "n": 7,
         }
 
+    async def fake_add_admin(*, bot_url, owner_key, admin_id):
+        if add_fails:
+            raise mitseller.MitSellerError("refused")
+        if added is not None:
+            added.append((bot_url, owner_key, int(admin_id)))
+
     monkeypatch.setattr(mitseller, "provision_bot", fake_provision)
+    monkeypatch.setattr(mitseller, "add_bot_admin", fake_add_admin)
     _run(
         bot_provision._install(
-            FakeMessage(SUPERADMIN),
+            message,
             FakeBot(),
             domain="new.example.com",
             token="123:AAH",
@@ -95,13 +110,34 @@ def _install(monkeypatch, admin, **kwargs):
     return seen
 
 
-def test_the_bot_is_built_for_the_admins_telegram_id(db_session, monkeypatch):
+def test_the_bot_belongs_to_the_superadmin_who_asked_for_it(db_session, monkeypatch):
     admin = _add_admin(db_session, "seller", 6900787101)
 
     seen = _install(monkeypatch, admin)
 
-    assert seen["admin_id"] == 6900787101
+    assert seen["admin_id"] == SUPERADMIN
     assert seen["admin_id"] != admin.id  # the row id is not a Telegram id
+    assert seen["admin_id"] != 6900787101  # and not the admin it was built for
+
+
+def test_the_admin_it_is_built_for_is_added_as_a_second_admin(db_session, monkeypatch):
+    admin = _add_admin(db_session, "seller", 6900787101)
+    added: list = []
+
+    _install(monkeypatch, admin, added=added)
+
+    assert added == [("https://new.example.com", "owner", 6900787101)]
+
+
+def test_the_same_person_is_not_added_twice(db_session, monkeypatch):
+    """Building a bot for the superadmin's own id needs nobody else on it."""
+    admin = _add_admin(db_session, "seller", SUPERADMIN)
+    added: list = []
+
+    seen = _install(monkeypatch, admin, added=added)
+
+    assert seen["admin_id"] == SUPERADMIN
+    assert added == []
 
 
 def test_the_certificate_goes_to_the_one_address(db_session, monkeypatch):
@@ -117,19 +153,35 @@ def test_a_row_without_a_telegram_id_belongs_to_whoever_builds_it(
     db_session, monkeypatch
 ):
     admin = _add_admin(db_session, "no-telegram-id", None)
+    added: list = []
 
-    seen = _install(monkeypatch, admin)
+    seen = _install(monkeypatch, admin, added=added)
 
     assert seen["admin_id"] == SUPERADMIN
+    assert added == []  # nobody known to add
 
 
-def test_an_explicit_owner_beats_the_row(db_session, monkeypatch):
-    """A buyer's request carries their own id, and it is theirs to keep."""
+def test_an_explicit_owner_keeps_admin_on_the_bot(db_session, monkeypatch):
+    """A buyer's request carries their own id: the bot is theirs to run."""
     admin = _add_admin(db_session, "seller", 6900787101)
+    added: list = []
 
-    seen = _install(monkeypatch, admin, owner_telegram_id=7000000001)
+    seen = _install(monkeypatch, admin, owner_telegram_id=7000000001, added=added)
 
-    assert seen["admin_id"] == 7000000001
+    assert seen["admin_id"] == SUPERADMIN  # the superadmin built it, and keeps it
+    assert added == [("https://new.example.com", "owner", 7000000001)]
+
+
+def test_a_second_admin_that_cannot_be_added_does_not_lose_the_bot(
+    db_session, monkeypatch
+):
+    admin = _add_admin(db_session, "seller", 6900787101)
+    message = FakeMessage(SUPERADMIN)
+
+    # No raise: the bot is installed and its keys are shown either way.
+    _install(monkeypatch, admin, message=message, add_fails=True)
+
+    assert any("6900787101" in answer or "refused" in answer for answer in message.answers)
 
 
 def test_an_admin_with_an_id_goes_straight_to_the_token(db_session):
