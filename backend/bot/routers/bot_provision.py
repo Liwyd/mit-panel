@@ -48,6 +48,29 @@ DOMAIN_RE = re.compile(
 )
 IPV4_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 TELEGRAM_API = "https://api.telegram.org"
+# The bot's management code. These are exactly the characters and the length
+# the mit-seller server accepts, so a code that passes here is a code the
+# server will not refuse: it ends up in the bot's config, and the bot asks
+# for it word for word when someone opens its panel section.
+SECRET_RE = re.compile(r"^[A-Za-z0-9._@%+=:,/-]{8,128}$")
+
+
+def _mit_panel_base() -> str:
+    """The address the bots use to reach this panel.
+
+    It is the panel's own setting, not a guess: a bot on another server has
+    to reach the panel over the very address the reseller opens in their
+    browser, or their traffic would be counted somewhere else.
+    """
+    return (get_settings().get("bot_panel_link_url") or "").strip().rstrip("/")
+
+
+def _admin_row(admin_id: int):
+    """The panel admin with that row id, or None."""
+    if not admin_id:
+        return None
+    with sessionLocal() as session:
+        return crud.get_admin_by_id(session, admin_id)
 
 
 def _is_superadmin(user_id: int) -> bool:
@@ -196,6 +219,24 @@ async def got_token(message: Message, state: FSMContext) -> None:
         await message.answer(texts.ASK_BOT_TOKEN_BAD, reply_markup=keyboards.cancel_kb())
         return
     await state.update_data(bot_token=token, bot_username=username)
+    await state.set_state(CreateBot.secret)
+    await message.answer(texts.ASK_BOT_SECRET, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(CreateBot.secret, ~F.text.in_(ALL_MENU_TEXTS))
+async def got_bot_secret(message: Message, state: FSMContext, bot) -> None:
+    """The code that gates the bot's panel management.
+
+    The superadmin picks it: it is written into the bot's config, and the bot
+    asks for it word for word before it opens the panel section. The panel
+    accepts exactly the characters the bot server accepts, so a code that
+    passes here cannot be refused over there.
+    """
+    secret = (message.text or "").strip()
+    if not SECRET_RE.match(secret):
+        await message.answer(texts.ASK_BOT_SECRET_BAD, reply_markup=keyboards.cancel_kb())
+        return
+    await state.update_data(bot_mit_secret=secret)
     await state.set_state(CreateBot.domain)
     await message.answer(texts.ASK_BOT_DOMAIN, reply_markup=keyboards.cancel_kb())
 
@@ -237,21 +278,122 @@ async def got_domain(message: Message, state: FSMContext, bot) -> None:
         )
         return
 
+    await state.update_data(bot_domain=domain)
+    await _start_install(message, state, bot)
+
+
+async def _start_install(message: Message, state: FSMContext, bot) -> None:
+    """Install the bot, once the server has everything it needs.
+
+    The reseller's panel password is settled first: the bot signs in to their
+    own mit-panel, and a bot that cannot sign in carries a dead panel.
+    """
     data = await state.get_data()
+    if not data.get("panel_cred_checked"):
+        if not await _settle_panel_password(message, state):
+            return  # the superadmin has been asked; the flow continues there
+        data = await state.get_data()
     await state.clear()
     await message.answer(texts.BOT_INSTALLING, reply_markup=superadmin_kb(message.from_user.id))
     await _install(
         message,
         bot,
-        domain=domain,
-        token=data["bot_token"],
+        domain=str(data.get("bot_domain") or ""),
+        token=str(data.get("bot_token") or ""),
+        mit_secret=str(data.get("bot_mit_secret") or ""),
         admin_id=int(data.get("bot_admin_id") or 0),
         owner_telegram_id=int(data.get("bot_admin_telegram_id") or 0),
         request_id=data.get("bot_request_id"),
+        panel_cred=data.get("panel_cred"),
     )
 
 
+async def _settle_panel_password(message: Message, state: FSMContext) -> bool:
+    """Work out how the bot will sign in to the reseller's own mit-panel.
+
+    The reseller's panel password is normally the very same string as their
+    Marzban password, and the panel keeps that one. When the mit-panel refuses
+    it, the superadmin is asked for the real one instead: a bot that cannot
+    sign in would carry a panel that never works.
+
+    Returns False when the superadmin has just been asked, so the flow waits.
+    """
+    data = await state.get_data()
+    admin = _admin_row(int(data.get("bot_admin_id") or 0))
+    if admin is None or not admin.panel or not admin.marzban_password:
+        await state.update_data(panel_cred_checked=True)
+        return True
+    base = _mit_panel_base()
+    if not base:
+        await state.update_data(panel_cred_checked=True)
+        return True
+    ok = await mitseller.verify_panel_login(base, admin.username, admin.marzban_password)
+    if ok is not False:
+        # True, or the panel could not be reached: this is the best credential
+        # the panel has, and the bot itself will complain if it is wrong.
+        await state.update_data(
+            panel_cred_checked=True,
+            panel_cred={"user": admin.username, "pass": admin.marzban_password},
+        )
+        return True
+    await state.set_state(CreateBot.panel_password)
+    await message.answer(
+        texts.ASK_BOT_PANEL_PASSWORD.format(username=admin.username),
+        reply_markup=keyboards.cancel_kb(),
+    )
+    return False
+
+
+@router.message(CreateBot.panel_password, ~F.text.in_(ALL_MENU_TEXTS))
+async def got_panel_password(message: Message, state: FSMContext, bot) -> None:
+    password = (message.text or "").strip()
+    if not password or len(password) > 128:
+        await message.answer(texts.ASK_BOT_PANEL_PASSWORD_BAD, reply_markup=keyboards.cancel_kb())
+        return
+    data = await state.get_data()
+    admin = _admin_row(int(data.get("bot_admin_id") or 0))
+    if admin is None:
+        await state.update_data(panel_cred_checked=True)
+        await _start_install(message, state, bot)
+        return
+    ok = await mitseller.verify_panel_login(_mit_panel_base(), admin.username, password)
+    if ok is False:
+        await message.answer(texts.ASK_BOT_PANEL_PASSWORD_BAD, reply_markup=keyboards.cancel_kb())
+        return
+    await state.update_data(
+        panel_cred_checked=True,
+        panel_cred={"user": admin.username, "pass": password},
+    )
+    await _start_install(message, state, bot)
+
+
 # ---------------------------------------------------------------- installing
+
+
+async def _push_plain_panel(url: str, owner_key: str, admin, panel_url: str) -> str:
+    """Put the reseller's Marzban into the bot as a plain panel.
+
+    This is the fallback for when the mit-panel row cannot be made: the bot
+    then sells straight from the Marzban, which is what it did before, and
+    the superadmin is told that the mit-panel is missing.
+    """
+    try:
+        note = await mitseller.push_vip_panel(
+            bot_url=url,
+            owner_key=owner_key,
+            username=admin.username,
+            password=admin.marzban_password,
+            panel_url=panel_url,
+        )
+        return "{} ({})".format(
+            texts.BOT_MIT_PANEL_FAILED.format(
+                name=mitseller.MIT_PANEL_NAME, error="به‌جایش پنل ساده‌ی مرزبان گذاشته شد"
+            ),
+            note,
+        )
+    except mitseller.MitSellerError as exc:
+        logger.warning(f"VIP panel not pushed to {url}: {exc}")
+        return texts.BOT_PANEL_FAILED.format(error=exc)
 
 
 async def _install(
@@ -260,9 +402,11 @@ async def _install(
     *,
     domain: str,
     token: str,
+    mit_secret: str = "",
     admin_id: int,
     owner_telegram_id: int = 0,
     request_id: int | None = None,
+    panel_cred: dict | None = None,
 ) -> None:
     admin = None
     panel_url = ""
@@ -293,6 +437,7 @@ async def _install(
             token=token,
             domain=domain,
             admin_id=owner_id,
+            mit_secret=mit_secret,
             cert_email=(get_settings().get("mitseller_cert_email") or "").strip(),
         )
     except mitseller.MitSellerError as exc:
@@ -305,7 +450,9 @@ async def _install(
     url = str(result.get("url") or f"https://{domain}")
     owner_key = str(result.get("owner_key") or "")
     manager_key = str(result.get("manager_key") or "")
-    mit_secret = str(result.get("mit_secret") or "")
+    # The code the bot will ask for: the one the superadmin chose, which the
+    # server echoes back unchanged.
+    bot_secret = str(result.get("mit_secret") or mit_secret)
     bot_username = str(result.get("bot_username") or "")
     bot_link = f"https://t.me/{bot_username}" if bot_username else url
 
@@ -329,17 +476,35 @@ async def _install(
 
     panel_note = ""
     if admin is not None and panel_url and admin.marzban_password:
-        try:
-            panel_note = await mitseller.push_vip_panel(
-                bot_url=url,
-                owner_key=owner_key,
-                username=admin.username,
-                password=admin.marzban_password,
-                panel_url=panel_url,
-            )
-        except mitseller.MitSellerError as exc:
-            panel_note = texts.BOT_PANEL_FAILED.format(error=exc)
-            logger.warning(f"VIP panel not pushed to {url}: {exc}")
+        # The bot's own panel list gets the reseller's mit-panel — their panel
+        # and the Marzban behind it — so that after the install there is
+        # nothing left to add by hand.
+        cred = panel_cred or {"user": admin.username, "pass": admin.marzban_password}
+        mit_base = _mit_panel_base()
+        if mit_base:
+            try:
+                await mitseller.push_mit_panel(
+                    bot_url=url,
+                    owner_key=owner_key,
+                    name=mitseller.MIT_PANEL_NAME,
+                    panel_url=mit_base,
+                    panel_user=str(cred.get("user") or admin.username),
+                    panel_password=str(cred.get("pass") or admin.marzban_password),
+                    marzban_url=panel_url,
+                    marzban_user=admin.username,
+                    marzban_password=admin.marzban_password,
+                )
+                panel_note = texts.BOT_MIT_PANEL_ADDED.format(
+                    name=mitseller.MIT_PANEL_NAME, username=admin.username
+                )
+            except mitseller.MitSellerError as exc:
+                # A bot whose only panel cannot be reached sells nothing, so
+                # the plain Marzban panel goes in instead: that is what every
+                # bot had before, and it works without the mit-panel.
+                logger.warning(f"mit panel not pushed to {url}: {exc}")
+                panel_note = await _push_plain_panel(url, owner_key, admin, panel_url)
+        else:
+            panel_note = await _push_plain_panel(url, owner_key, admin, panel_url)
     elif admin is not None:
         panel_note = texts.BOT_NO_PANEL_PASSWORD.format(username=admin.username)
 
@@ -355,7 +520,7 @@ async def _install(
             url=url,
             n=result.get("n", "?"),
             admin_id=owner_id,
-            mit_secret=mit_secret,
+            mit_secret=bot_secret,
             owner_key=owner_key,
             manager_key=manager_key,
         ),

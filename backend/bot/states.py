@@ -78,11 +78,19 @@ class CreateAdmin(StatesGroup):
 
 
 class CreateBot(StatesGroup):
-    """Collect a BotFather token and a domain, then ask the mit-seller server
-    to install the bot for whichever admin is in the state's data."""
+    """Collect a BotFather token, a management code and a domain, then ask the
+    mit-seller server to install the bot for whichever admin is in the state's
+    data."""
 
     token = State()
+    # The code that gates the bot's panel management. The superadmin picks it:
+    # it is written into the bot's config, and the bot asks for it word for
+    # word when someone opens the panel section.
+    secret = State()
     domain = State()
+    # Asked only when the reseller's mit-panel refuses the password the panel
+    # knows, so the bot would not be able to sign in to their own panel.
+    panel_password = State()
 
 
 class CreateBotPickAdmin(StatesGroup):
