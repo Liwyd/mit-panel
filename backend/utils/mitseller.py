@@ -239,3 +239,29 @@ async def set_bot_admin(*, bot_url: str, owner_key: str, admin_telegram_id: int)
             )
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning(f"could not set the bot's admin: {exc!r}")
+
+
+async def add_bot_admin(*, bot_url: str, owner_key: str, admin_id: int) -> None:
+    """Give a second person admin on a bot that is already installed.
+
+    The bot's *main* admin is written into its config when it is built and the
+    API refuses to remove them, so everyone else — the admin the bot was built
+    for, the buyer behind a request — is added here instead. An ordinary admin
+    has every power bar removing that first name, and this one can be given or
+    taken away later without touching the server.
+    """
+    if not admin_id:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=BOT_TIMEOUT) as client:
+            res = await client.post(
+                f"{bot_url}/api/v1/admins",
+                headers={"Authorization": f"Bearer {owner_key}"},
+                json={"id": str(admin_id)},
+            )
+        if res.status_code != 200:
+            raise MitSellerError(res.json().get("error") or f"HTTP {res.status_code}")
+    except httpx.HTTPError as exc:
+        raise MitSellerError(f"ربات در دسترس نیست: {exc.__class__.__name__}") from exc
+    except ValueError as exc:
+        raise MitSellerError("پاسخ نامعتبر از ربات") from exc
