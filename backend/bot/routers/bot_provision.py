@@ -385,12 +385,18 @@ async def _push_plain_panel(url: str, owner_key: str, admin, panel_url: str) -> 
             password=admin.marzban_password,
             panel_url=panel_url,
         )
-        return "{} ({})".format(
+        bound = await mitseller.bind_products_to_panel(
+            bot_url=url, owner_key=owner_key, panel_name=mitseller.VIP_PANEL_NAME
+        )
+        out = "{} ({})".format(
             texts.BOT_MIT_PANEL_FAILED.format(
                 name=mitseller.MIT_PANEL_NAME, error="به‌جایش پنل ساده‌ی مرزبان گذاشته شد"
             ),
             note,
         )
+        if bound:
+            out += "\n" + texts.BOT_PRODUCTS_BOUND.format(count=bound)
+        return out
     except mitseller.MitSellerError as exc:
         logger.warning(f"VIP panel not pushed to {url}: {exc}")
         return texts.BOT_PANEL_FAILED.format(error=exc)
@@ -497,6 +503,11 @@ async def _install(
                 panel_note = texts.BOT_MIT_PANEL_ADDED.format(
                     name=mitseller.MIT_PANEL_NAME, username=admin.username
                 )
+                bound = await mitseller.bind_products_to_panel(
+                    bot_url=url, owner_key=owner_key, panel_name=mitseller.MIT_PANEL_NAME
+                )
+                if bound:
+                    panel_note += "\n" + texts.BOT_PRODUCTS_BOUND.format(count=bound)
             except mitseller.MitSellerError as exc:
                 # A bot whose only panel cannot be reached sells nothing, so
                 # the plain Marzban panel goes in instead: that is what every

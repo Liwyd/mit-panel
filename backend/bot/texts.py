@@ -675,6 +675,7 @@ BOT_MIT_PANEL_ADDED = (
     "🔗 پنل «{name}» داخل ربات ساخته شد: پنل خودِ <b>{username}</b> و مرزبان او."
 )
 BOT_MIT_PANEL_FAILED = "⚠️ پنل «{name}» داخل ربات ساخته نشد: {error}"
+BOT_PRODUCTS_BOUND = "🛒 {count} سرویس ربات به همین پنل وصل شد."
 BOT_ADMIN_ADDED = "👥 <code>{admin_id}</code> هم به‌عنوان ادمین ربات اضافه شد."
 BOT_ADMIN_FAILED = "⚠️ ادمین دوم ربات اضافه نشد: {error}"
 
