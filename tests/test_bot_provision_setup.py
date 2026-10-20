@@ -71,7 +71,7 @@ def _add_admin(db_session, username: str, *, panel: str = "", marzban_password: 
 
 def _patch(monkeypatch, *, verify=True, mit_fails=False):
     """Stub the bot server and the panel's own login check."""
-    seen: dict = {"provision": {}, "mit": [], "vip": []}
+    seen: dict = {"provision": {}, "mit": [], "vip": [], "bound": []}
 
     async def fake_provision(**kwargs):
         seen["provision"] = kwargs
@@ -97,6 +97,10 @@ def _patch(monkeypatch, *, verify=True, mit_fails=False):
         seen["vip"].append(kwargs)
         return "ok"
 
+    async def fake_bind(*, bot_url, owner_key, panel_name):
+        seen["bound"].append(panel_name)
+        return 6
+
     async def fake_verify(panel_base, username, password):
         return verify
 
@@ -104,6 +108,7 @@ def _patch(monkeypatch, *, verify=True, mit_fails=False):
     monkeypatch.setattr(mitseller, "add_bot_admin", fake_add_admin)
     monkeypatch.setattr(mitseller, "push_mit_panel", fake_push_mit_panel)
     monkeypatch.setattr(mitseller, "push_vip_panel", fake_push_vip_panel)
+    monkeypatch.setattr(mitseller, "bind_products_to_panel", fake_bind)
     monkeypatch.setattr(mitseller, "verify_panel_login", fake_verify)
     return seen
 
@@ -168,6 +173,8 @@ def test_the_bots_panel_list_gets_the_resellers_own_panel(
 
     assert len(seen["mit"]) == 1
     pushed = seen["mit"][0]
+    # One name, always: the reseller's shop items point at it.
+    assert pushed["name"] == "پنل VIP مولتی لوکیشن"
     assert pushed["panel_user"] == "seller"
     assert pushed["panel_password"] == "reseller-pass"
     assert pushed["panel_url"].endswith("/panpan")
@@ -176,6 +183,8 @@ def test_the_bots_panel_list_gets_the_resellers_own_panel(
     assert pushed["marzban_password"] == "reseller-pass"
     # One panel, not two: the mit-panel replaces the plain one.
     assert seen["vip"] == []
+    # And the bot's shop items are sold from it.
+    assert seen["bound"] == ["پنل VIP مولتی لوکیشن"]
 
 
 def test_a_mit_panel_that_cannot_be_made_falls_back_to_the_plain_one(
@@ -190,6 +199,8 @@ def test_a_mit_panel_that_cannot_be_made_falls_back_to_the_plain_one(
     assert seen["mit"] == []
     assert len(seen["vip"]) == 1
     assert seen["vip"][0]["panel_url"] == marzban_panel.url
+    # The shop items follow the panel that is actually there.
+    assert seen["bound"] == [mitseller.VIP_PANEL_NAME]
 
 
 def test_a_reseller_without_a_marzban_password_gets_no_panel(db_session, monkeypatch):
