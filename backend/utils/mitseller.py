@@ -23,8 +23,12 @@ from backend.utils.settings_store import DATA_DIR, get_settings
 PROVISION_PORT = 18100
 
 # install.sh new takes a while — DNS, certbot, nginx, mysql — so the panel
-# waits for it rather than reporting a failure that has not happened yet.
-TIMEOUT = httpx.Timeout(150.0, connect=10.0)
+# waits for it rather than reporting a failure that has not happened yet. The
+# server keeps going for 15 minutes (its WriteTimeout), and giving up before
+# it finishes tells the superadmin the install failed while the bot is still
+# being built — the retry then asks for a second bot on the same domain.
+# Wait most of that window, but not all of it, so a dead server still returns.
+TIMEOUT = httpx.Timeout(600.0, connect=10.0)
 BOT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 # The name every bot's reseller panel is filed under, in Persian, so it reads
