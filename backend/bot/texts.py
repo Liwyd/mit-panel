@@ -599,6 +599,13 @@ BOT_NOT_CONFIGURED = (
 )
 NO_ADMINS_FOR_BOT = "⚠️ هیچ ساب‌ادمین فعالی وجود ندارد."
 ASK_PICK_ADMIN_FOR_BOT = "👤 ساب‌ادمین را انتخاب کنید:"
+ASK_ADMIN_TELEGRAM_ID = (
+    "🆔 ساب‌ادمین <b>{username}</b> شناسه‌ی تلگرامی ثبت ندارد.\n"
+    "آیدی عددی تلگرام او را بفرستید تا ربات به نام او ساخته شود:"
+)
+ASK_ADMIN_TELEGRAM_ID_BAD = (
+    "⚠️ این آیدی عددی نیست؛ یک عدد بفرستید (مثلاً 6900787101)."
+)
 ASK_PICK_BOT_REQUEST = "📨 درخواست‌های باز ربات را انتخاب کنید:"
 BOT_REGISTERED_AS = "🔗 ربات به‌صورت خودکار به‌ {assigned_to} داده شد."
 ASK_BOT_TOKEN = (

@@ -89,6 +89,10 @@ class CreateBotPickAdmin(StatesGroup):
     """R2: the same flow, started from an admin that already exists."""
 
     admin = State()
+    # Asked only when the picked admin has no Telegram id on their row. The
+    # bot's ADMIN is that id — the panel's own row id means nothing to the
+    # mit-seller server, and a bot built with it belongs to nobody.
+    telegram_id = State()
 
 
 class CreatePanel(StatesGroup):

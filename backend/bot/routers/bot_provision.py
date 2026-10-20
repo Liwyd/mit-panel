@@ -62,15 +62,57 @@ async def ask_token(
     state: FSMContext,
     admin_id: int,
     admin_username: str,
+    admin_telegram_id: int | None = None,
     request_id: int | None = None,
 ) -> None:
     """Ask for the BotFather token, remembering who this bot is for."""
     data: dict = {"bot_admin_id": admin_id, "bot_admin_username": admin_username}
+    if admin_telegram_id:
+        # The Telegram id the bot is built for. `bot_admin_id` is this panel's
+        # own row id — the mit-seller server would write that number into the
+        # bot as its ADMIN, and it would belong to nobody.
+        data["bot_admin_telegram_id"] = admin_telegram_id
     if request_id is not None:
         data["bot_request_id"] = request_id
     await state.set_data(data)
     await state.set_state(CreateBot.token)
     await message.answer(texts.ASK_BOT_TOKEN, reply_markup=keyboards.cancel_kb())
+
+
+async def _continue_for_admin(message: Message, state: FSMContext, admin) -> None:
+    """Go on towards the token for an existing admin.
+
+    The bot's ADMIN is the admin's Telegram id. When their row has none it is
+    asked for here instead of guessed: the superadmin knows it, and the bot
+    they are about to build belongs to whoever's id ends up in it.
+    """
+    if admin.telegram_id:
+        await ask_token(message, state, admin.id, admin.username, admin.telegram_id)
+        return
+    await state.set_state(CreateBotPickAdmin.telegram_id)
+    await state.set_data({"bot_admin_id": admin.id, "bot_admin_username": admin.username})
+    await message.answer(
+        texts.ASK_ADMIN_TELEGRAM_ID.format(username=admin.username),
+        reply_markup=keyboards.cancel_kb(),
+    )
+
+
+@router.message(CreateBotPickAdmin.telegram_id, ~F.text.in_(ALL_MENU_TEXTS))
+async def got_admin_telegram_id(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.isdigit():
+        await message.answer(
+            texts.ASK_ADMIN_TELEGRAM_ID_BAD, reply_markup=keyboards.cancel_kb()
+        )
+        return
+    data = await state.get_data()
+    await ask_token(
+        message,
+        state,
+        int(data["bot_admin_id"]),
+        data.get("bot_admin_username") or "",
+        admin_telegram_id=int(raw),
+    )
 
 
 @router.message(F.text == texts.BTN_CREATE_BOT_FOR_ADMIN, SuperadminFilter())
@@ -104,7 +146,7 @@ async def picked_admin(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer()
     await state.clear()
-    await ask_token(call.message, state, admin.id, admin.username)
+    await _continue_for_admin(call.message, state, admin)
 
 
 @router.callback_query(F.data.startswith("bot_make:"))
@@ -121,7 +163,7 @@ async def make_bot_for_new_admin(call: CallbackQuery, state: FSMContext) -> None
         return
     await call.answer()
     await state.clear()
-    await ask_token(call.message, state, admin.id, admin.username)
+    await _continue_for_admin(call.message, state, admin)
 
 
 @router.callback_query(F.data == "bot_skip")
@@ -202,6 +244,7 @@ async def got_domain(message: Message, state: FSMContext, bot) -> None:
         domain=domain,
         token=data["bot_token"],
         admin_id=int(data.get("bot_admin_id") or 0),
+        owner_telegram_id=int(data.get("bot_admin_telegram_id") or 0),
         request_id=data.get("bot_request_id"),
     )
 
@@ -216,6 +259,7 @@ async def _install(
     domain: str,
     token: str,
     admin_id: int,
+    owner_telegram_id: int = 0,
     request_id: int | None = None,
 ) -> None:
     admin = None
@@ -230,11 +274,21 @@ async def _install(
                         panel_url = p.url
                         break
 
+    # The bot's ADMIN is a Telegram id: the admin it is built for, else the
+    # row's own one, else the superadmin building it. `admin_id` is this
+    # panel's row id, which the bot server would treat as a Telegram id.
+    owner_id = (
+        owner_telegram_id
+        or (int(admin.telegram_id) if admin is not None and admin.telegram_id else 0)
+        or int(message.from_user.id)
+    )
+
     try:
         result = await mitseller.provision_bot(
             token=token,
             domain=domain,
-            admin_id=admin_id or message.from_user.id,
+            admin_id=owner_id,
+            cert_email=(get_settings().get("mitseller_cert_email") or "").strip(),
         )
     except mitseller.MitSellerError as exc:
         await message.answer(
@@ -283,7 +337,7 @@ async def _install(
             bot_link=bot_link,
             url=url,
             n=result.get("n", "?"),
-            admin_id=admin_id or message.from_user.id,
+            admin_id=owner_id,
             mit_secret=mit_secret,
             owner_key=owner_key,
             manager_key=manager_key,
@@ -394,5 +448,6 @@ async def open_bot_request(call: CallbackQuery, state: FSMContext) -> None:
         state,
         int(req["telegram_id"]),
         req.get("username") or "",
+        admin_telegram_id=int(req["telegram_id"]),
         request_id=request_id,
     )
