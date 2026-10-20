@@ -34,6 +34,7 @@ BOT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 # The name every bot's reseller panel is filed under, in Persian, so it reads
 # the same in every bot's "مدیریت پنل‌ها".
 VIP_PANEL_NAME = "پنل VIP"
+MIT_PANEL_NAME = "پنل MIT"
 
 _CERT_PATH = os.path.join(DATA_DIR, "mitseller-provision.crt")
 
@@ -261,6 +262,107 @@ async def add_bot_admin(*, bot_url: str, owner_key: str, admin_id: int) -> None:
             )
         if res.status_code != 200:
             raise MitSellerError(res.json().get("error") or f"HTTP {res.status_code}")
+    except httpx.HTTPError as exc:
+        raise MitSellerError(f"ربات در دسترس نیست: {exc.__class__.__name__}") from exc
+    except ValueError as exc:
+        raise MitSellerError("پاسخ نامعتبر از ربات") from exc
+
+
+async def verify_panel_login(panel_base: str, username: str, password: str) -> bool | None:
+    """Ask the Mit Panel whether this account can sign in.
+
+    True when the panel says yes, False when it says no, and None when the
+    panel could not be reached at all: an unreachable panel is not a wrong
+    password, and a working account must not be thrown away over it.
+    """
+    if not panel_base or not username or not password:
+        return None
+    try:
+        # The panel's own certificate is the one the bot trusts blindly too,
+        # so this check says the same thing the bot will find.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0), verify=False) as client:
+            res = await client.post(
+                f"{panel_base.rstrip('/')}/login",
+                data={"username": username, "password": password},
+            )
+    except httpx.HTTPError:
+        return None
+    if res.status_code == 200:
+        try:
+            return bool((res.json() or {}).get("success"))
+        except ValueError:
+            return None
+    if res.status_code in (400, 401, 403, 422):
+        return False
+    return None
+
+
+async def push_mit_panel(
+    *,
+    bot_url: str,
+    owner_key: str,
+    name: str,
+    panel_url: str,
+    panel_user: str,
+    panel_password: str,
+    marzban_url: str,
+    marzban_user: str,
+    marzban_password: str,
+) -> str:
+    """Put the reseller's own Mit Panel into the bot's panel list.
+
+    A "mit" panel is two servers in one row: the reseller's Mit Panel, where
+    their traffic is counted, and the Marzban behind it, where the accounts
+    are made. The bot signs in to the panel as the reseller, so they can sell
+    from their own panel without adding anything by hand afterwards.
+
+    The bot's API names these fields differently when a row is created
+    (`url`, `username`, `password`) and when it is updated (`url_panel`,
+    `username_panel`, `password_panel`), so both shapes are sent.
+    """
+    headers = {"Authorization": f"Bearer {owner_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=BOT_TIMEOUT) as client:
+            res = await client.get(f"{bot_url}/api/v1/panels", headers=headers)
+            found: dict | None = None
+            if res.status_code == 200:
+                for row in (res.json().get("data") or []):
+                    if row.get("name_panel") == name:
+                        found = row
+                        break
+            if found is not None:
+                put = await client.put(
+                    f"{bot_url}/api/v1/panels/{found.get('id')}",
+                    headers=headers,
+                    json={
+                        "url_panel": panel_url,
+                        "username_panel": panel_user,
+                        "password_panel": panel_password,
+                        "marzban_url_direct": marzban_url,
+                        "marzban_username_direct": marzban_user,
+                        "marzban_password_direct": marzban_password,
+                    },
+                )
+                if put.status_code != 200:
+                    raise MitSellerError(put.json().get("error") or f"HTTP {put.status_code}")
+                return f"پنل «{name}» به‌روزرسانی شد"
+            post = await client.post(
+                f"{bot_url}/api/v1/panels",
+                headers=headers,
+                json={
+                    "name": name,
+                    "type": "mit",
+                    "url": panel_url,
+                    "username": panel_user,
+                    "password": panel_password,
+                    "marzban_url_direct": marzban_url,
+                    "marzban_username_direct": marzban_user,
+                    "marzban_password_direct": marzban_password,
+                },
+            )
+            if post.status_code != 200:
+                raise MitSellerError(post.json().get("error") or f"HTTP {post.status_code}")
+            return f"پنل «{name}» ساخته شد"
     except httpx.HTTPError as exc:
         raise MitSellerError(f"ربات در دسترس نیست: {exc.__class__.__name__}") from exc
     except ValueError as exc:
