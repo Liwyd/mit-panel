@@ -632,7 +632,7 @@ BOT_DONE_SUPERADMIN = (
     "🔗 لینک ربات: {bot_link}\n"
     "🏠 نشانی: <code>{url}</code>\n"
     "🔢 شماره روی سرور: {n}\n"
-    "👤 ادمین ربات: <code>{admin_id}</code>\n\n"
+    "👤 ادمین اصلی ربات: <code>{admin_id}</code>\n\n"
     "🔑 <b>کد مدیریت پنل ربات:</b>\n<code>{mit_secret}</code>\n\n"
     "کلیدها (فقط برای اتصال به این پنل):\n"
     "• owner: <code>{owner_key}</code>\n"
@@ -652,6 +652,8 @@ BOT_REGISTER_FAILED = (
 )
 BOT_SKIPPED = "✅ باشه. بعداً از «ساخت ربات برای ساب‌ادمین» می‌توانید ربات بسازید."
 BOT_PANEL_FAILED = "⚠️ پنل داخل ربات ساخته نشد: {error}"
+BOT_ADMIN_ADDED = "👥 <code>{admin_id}</code> هم به‌عنوان ادمین ربات اضافه شد."
+BOT_ADMIN_FAILED = "⚠️ ادمین دوم ربات اضافه نشد: {error}"
 
 # A buyer asking for a bot of their own. The panel only records the request and
 # tells the superadmin — the token and the domain are the superadmin's to

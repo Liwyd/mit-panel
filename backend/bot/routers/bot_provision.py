@@ -68,9 +68,10 @@ async def ask_token(
     """Ask for the BotFather token, remembering who this bot is for."""
     data: dict = {"bot_admin_id": admin_id, "bot_admin_username": admin_username}
     if admin_telegram_id:
-        # The Telegram id the bot is built for. `bot_admin_id` is this panel's
-        # own row id — the mit-seller server would write that number into the
-        # bot as its ADMIN, and it would belong to nobody.
+        # The Telegram id of the person this bot is for: they are made an
+        # admin of it after the install. `bot_admin_id` is this panel's own
+        # row id — the mit-seller server would write that number into the bot
+        # as its admin, and it would belong to nobody.
         data["bot_admin_telegram_id"] = admin_telegram_id
     if request_id is not None:
         data["bot_request_id"] = request_id
@@ -82,9 +83,10 @@ async def ask_token(
 async def _continue_for_admin(message: Message, state: FSMContext, admin) -> None:
     """Go on towards the token for an existing admin.
 
-    The bot's ADMIN is the admin's Telegram id. When their row has none it is
-    asked for here instead of guessed: the superadmin knows it, and the bot
-    they are about to build belongs to whoever's id ends up in it.
+    Their Telegram id is what makes them an admin of the bot once it is
+    built. When their row has none it is asked for here instead of guessed:
+    the superadmin knows it, and the person the bot is built for has to be
+    able to use it.
     """
     if admin.telegram_id:
         await ask_token(message, state, admin.id, admin.username, admin.telegram_id)
@@ -274,13 +276,16 @@ async def _install(
                         panel_url = p.url
                         break
 
-    # The bot's ADMIN is a Telegram id: the admin it is built for, else the
-    # row's own one, else the superadmin building it. `admin_id` is this
-    # panel's row id, which the bot server would treat as a Telegram id.
-    owner_id = (
-        owner_telegram_id
-        or (int(admin.telegram_id) if admin is not None and admin.telegram_id else 0)
-        or int(message.from_user.id)
+    # The bot's main admin is the superadmin who asked for it — that is the
+    # one id the bot's API refuses to remove, and nothing gets built without a
+    # superadmin. Whoever the bot is *for* (the admin picked for it, the buyer
+    # behind a request) is added as an ordinary admin right after, so that
+    # access can be granted or taken back later without touching the server.
+    # `admin_id` is this panel's row id, not a Telegram id: written into the
+    # bot it would be an admin of nobody.
+    owner_id = int(message.from_user.id)
+    for_admin_id = owner_telegram_id or (
+        int(admin.telegram_id) if admin is not None and admin.telegram_id else 0
     )
 
     try:
@@ -309,6 +314,18 @@ async def _install(
     assigned_to = str(result.get("assigned_to") or "")
     if not result.get("registered"):
         _record_bot(url, owner_key, manager_key, bot_username, admin.id if admin else None)
+
+    # The person the bot was built for gets their own admin on it, once the
+    # install is done: the main admin is fixed in the bot's config, and only
+    # the ones after them can be added or removed over the API.
+    admin_note = ""
+    if for_admin_id and for_admin_id != owner_id:
+        try:
+            await mitseller.add_bot_admin(bot_url=url, owner_key=owner_key, admin_id=for_admin_id)
+            admin_note = texts.BOT_ADMIN_ADDED.format(admin_id=for_admin_id)
+        except mitseller.MitSellerError as exc:
+            admin_note = texts.BOT_ADMIN_FAILED.format(error=exc)
+            logger.warning(f"admin {for_admin_id} not added to {url}: {exc}")
 
     panel_note = ""
     if admin is not None and panel_url and admin.marzban_password:
@@ -344,6 +361,8 @@ async def _install(
         ),
         reply_markup=superadmin_kb(message.from_user.id),
     )
+    if admin_note:
+        await message.answer(admin_note, reply_markup=superadmin_kb(message.from_user.id))
     if panel_note:
         await message.answer(panel_note, reply_markup=superadmin_kb(message.from_user.id))
     if assigned_to:
