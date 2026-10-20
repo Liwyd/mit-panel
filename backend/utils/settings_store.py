@@ -54,6 +54,10 @@ DEFAULTS = {
     # The self-signed certificate that server presents. The panel trusts this
     # one certificate and nothing else — it is what makes a bare address safe.
     "mitseller_server_cert": "",
+    # The address every bot's TLS certificate is issued to. One address for
+    # every bot on purpose: it is what the certificate reminder and the
+    # renewal notices are sent to, wherever the panel runs.
+    "mitseller_cert_email": "mitgetcert@gmail.com",
 }
 
 
