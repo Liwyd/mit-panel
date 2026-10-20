@@ -120,3 +120,20 @@ def test_issue_invoice_prices_from_the_bot_ledger(ledger):
     assert invoice.amount == round(5 * 2900)
     assert invoice.admin_username == "alice"
     assert invoice.traffic_gb == 5.0  # paying it credits exactly the debt
+
+
+def test_the_sweep_reaches_the_panels(marzban_panel, monkeypatch, ledger):
+    """Regression: `_sweep` bound its session to `db` — the name of the module
+    it reads the observers from. A function's local names are decided once for
+    the whole of it, so the read *before* the `with` raised UnboundLocalError
+    and every sweep died before touching a panel: usage sync had run zero
+    complete sweeps (production, app.log 2026-10-19/20)."""
+    from backend.bot import usage_sync
+
+    read: list[str] = []
+    monkeypatch.setattr(
+        usage_sync, "_read_panel_users", lambda panel: read.append(panel.name) or []
+    )
+
+    assert usage_sync._sweep() == []
+    assert read == ["panel-one"]
