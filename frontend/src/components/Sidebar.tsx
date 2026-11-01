@@ -54,6 +54,12 @@ const navigationItems = [
         roles: ['admin', 'superadmin'],
     },
     {
+        label: 'Top-up bot',
+        href: '/topup-bot',
+        icon: Zap,
+        roles: ['superadmin'],
+    },
+    {
         label: 'Settings',
         href: '/settings',
         icon: Settings,

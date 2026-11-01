@@ -4,5 +4,14 @@ from .public.routers import router as public_routers
 from .bot.routers import router as bot_routers
 from .agent.routers import router as agent_routers
 from .bots.routers import router as bots_routers
+from .topup_bot.routers import router as topup_bot_routers
 
-roter_list = [superadmin_routers, admin_routers, public_routers, bot_routers, agent_routers, bots_routers]
+roter_list = [
+    superadmin_routers,
+    admin_routers,
+    public_routers,
+    bot_routers,
+    agent_routers,
+    bots_routers,
+    topup_bot_routers,
+]
