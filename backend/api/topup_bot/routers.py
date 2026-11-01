@@ -64,7 +64,7 @@ async def get_connection(user: dict = Depends(get_current_admin)):
             "own_key": True,
             "connected": True,
             "error": None,
-            "bot_username": st.get("telegram_bot_token") and "mitpanelbot" or "mitpanelbot",
+            "bot_username": "mitpanelbot",
             "bot_name": "MIT TOPUP-bot",
         },
     )
@@ -138,11 +138,10 @@ async def api_stats(user: dict = Depends(get_current_admin)):
 async def api_settings(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    st = get_settings()
     cfg = _get_topup_config()
     settings_data = cfg.get("settings", {})
     
-    card_number = db.get_setting("card_number") or st.get("telegram_chat_id") or ""
+    card_number = db.get_setting("card_number") or ""
     price_str = db.get_setting("price_per_gb")
     try:
         price_per_gb = float(price_str) if price_str else 10000.0
@@ -226,26 +225,36 @@ async def api_buttons(user: dict = Depends(get_current_admin)):
         return denied
     cfg = _get_topup_config()
     buttons_data = cfg.get("buttons", {})
-    if not buttons_data or not buttons_data.get("buttons"):
-        buttons_data = {
-            "buttons": {
-                "topup": {"style": "default", "emoji": ""},
-                "balance": {"style": "default", "emoji": ""},
-                "support": {"style": "default", "emoji": ""},
-            },
-            "labels": {
-                "topup": getattr(texts, "BTN_TOPUP", "💳 شارژ حجم"),
-                "balance": getattr(texts, "BTN_BALANCE", "📊 موجودی من"),
-                "support": "پشتیبانی",
-            },
-            "defaults": {
-                "topup": "default",
-                "balance": "default",
-                "support": "default",
-            },
-            "styles": ["default", "primary", "success", "danger"],
-        }
-    return ResponseModel(success=True, message="ok", data=buttons_data)
+    stored_buttons = buttons_data.get("buttons", {})
+    stored_labels = buttons_data.get("labels", {})
+
+    base_buttons = {
+        "topup": {"style": "default", "emoji": ""},
+        "balance": {"style": "default", "emoji": ""},
+        "support": {"style": "default", "emoji": ""},
+    }
+    base_labels = {
+        "topup": getattr(texts, "BTN_TOPUP", "💳 شارژ حجم"),
+        "balance": getattr(texts, "BTN_BALANCE", "📊 موجودی من"),
+        "support": "پشتیبانی",
+    }
+
+    for k, v in stored_buttons.items():
+        base_buttons[k] = v
+    for k, v in stored_labels.items():
+        base_labels[k] = v
+
+    response_data = {
+        "buttons": base_buttons,
+        "labels": base_labels,
+        "defaults": {
+            "topup": "default",
+            "balance": "default",
+            "support": "default",
+        },
+        "styles": ["default", "primary", "success", "danger"],
+    }
+    return ResponseModel(success=True, message="ok", data=response_data)
 
 
 @router.put("/api/buttons", description="Update bot buttons")
@@ -253,6 +262,15 @@ async def api_update_buttons(body: dict, user: dict = Depends(get_current_admin)
     if denied := _superadmin_only(user):
         return denied
     cfg = _get_topup_config()
-    cfg["buttons"] = {**cfg.get("buttons", {}), **body}
+    if "buttons" not in cfg:
+        cfg["buttons"] = {}
+    
+    if "buttons" in body and isinstance(body["buttons"], dict):
+        cfg["buttons"].setdefault("buttons", {}).update(body["buttons"])
+    if "labels" in body and isinstance(body["labels"], dict):
+        cfg["buttons"].setdefault("labels", {}).update(body["labels"])
+    if not cfg["buttons"]:
+        cfg["buttons"] = body
+
     _save_topup_config(cfg)
     return ResponseModel(success=True, message="Updated", data=cfg["buttons"])
