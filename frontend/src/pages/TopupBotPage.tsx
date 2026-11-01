@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LayoutDashboard, LayoutGrid, Settings2, Type, Zap } from 'lucide-react'
 import { topupBotAPI } from '@/lib/bots-api'
 import { cn } from '@/lib/utils'
+import { PageLayout } from '@/components/PageLayout'
 import { TopupOverview } from './topup/TopupOverview'
 import { TopupSettings } from './topup/TopupSettings'
 import { TopupTexts } from './topup/TopupTexts'
@@ -36,41 +37,47 @@ export function TopupBotPage() {
         }
     }
 
-    return (
-        <div dir="rtl" className="space-y-5 p-4 md:p-6 max-w-6xl">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <Zap className="h-7 w-7 text-primary" /> ربات تاپ‌آپ
-                </h1>
-                <p className="text-muted-foreground">مدیریت ربات شارژ پنل نماینده‌ها: تنظیمات، متن پیام‌ها و دکمه‌ها، رنگ دکمه‌ها و ایموجی پریمیوم.</p>
+    const header = (
+        <div className="space-y-4 p-4 md:p-6 pb-2 border-b border-border bg-background">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+                        <Zap className="h-7 w-7 text-primary" /> ربات تاپ‌آپ
+                    </h1>
+                    <p className="text-muted-foreground text-sm">مدیریت ربات شارژ پنل نماینده‌ها: تنظیمات، متن پیام‌ها و دکمه‌ها، رنگ دکمه‌ها و ایموجی پریمیوم.</p>
+                </div>
             </div>
+            <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+                {TABS.map((t) => {
+                    const Icon = t.icon
+                    return (
+                        <button
+                            key={t.key}
+                            onClick={() => choose(t.key)}
+                            className={cn(
+                                'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+                                tab === t.key ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground'
+                            )}
+                        >
+                            <Icon className="h-4 w-4" />
+                            {t.label}
+                        </button>
+                    )
+                })}
+            </nav>
+        </div>
+    )
 
-            <div>
-                <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
-                    {TABS.map((t) => {
-                        const Icon = t.icon
-                        return (
-                            <button
-                                key={t.key}
-                                onClick={() => choose(t.key)}
-                                className={cn(
-                                    'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition',
-                                    tab === t.key ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground'
-                                )}
-                            >
-                                <Icon className="h-4 w-4" />
-                                {t.label}
-                            </button>
-                        )
-                    })}
-                </nav>
-                <div key={tab} className="mt-4">
+    return (
+        <PageLayout header={header}>
+            <div dir="rtl" className="p-4 md:p-6 max-w-6xl">
+                <div key={tab}>
                     {tab === 'overview' && <TopupOverview api={topupBotAPI} />}
                     {tab === 'settings' && <TopupSettings api={topupBotAPI} />}
                     {tab === 'texts' && <TopupTexts api={topupBotAPI} />}
                     {tab === 'buttons' && <TopupButtons api={topupBotAPI} />}
                 </div>
             </div>
-        </div>
+        </PageLayout>
     )
 }

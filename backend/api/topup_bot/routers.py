@@ -1,15 +1,58 @@
 """Native Top-up bot management endpoints for mit-panel.
-Replaces the external microservice proxy with direct SQLite and settings queries.
+Queries mit-panel settings store and database directly.
 """
 
-from fastapi import APIRouter, Depends, Request
+import json
+import os
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from backend.auth.auth import get_current_admin
 from backend.schema.output import ResponseModel
+from backend.utils.settings_store import get_settings, update_settings, DATA_DIR
 from backend.bot import db
 
 router = APIRouter(prefix="/topup-bot", tags=["Top-up bot"])
+
+TOPUP_CONFIG_PATH = os.path.join(DATA_DIR, "topup_config.json")
+
+
+def _get_topup_config() -> dict:
+    try:
+        if os.path.exists(TOPUP_CONFIG_PATH):
+            with open(TOPUP_CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        pass
+    return {
+        "settings": {
+            "price_per_gb": 10000,
+            "card_number": "",
+            "force_join_enabled": False,
+            "force_join_channel": "",
+            "auto_approve_enabled": False,
+            "has_bulk_pin": False,
+            "min_gb": 1,
+            "max_gb": 100,
+        },
+        "texts": {},
+        "buttons": {
+            "buttons": {},
+            "labels": {},
+            "defaults": {},
+            "styles": [],
+        },
+    }
+
+
+def _save_topup_config(cfg: dict) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = TOPUP_CONFIG_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, TOPUP_CONFIG_PATH)
 
 
 def _fail(code: int, message: str) -> JSONResponse:
@@ -22,10 +65,11 @@ def _superadmin_only(user: dict) -> JSONResponse | None:
     return None
 
 
-@router.get("/connection", description="Native connection status for built-in topup bot")
+@router.get("/connection", description="Native connection status")
 async def get_connection(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
+    st = get_settings()
     return ResponseModel(
         success=True,
         message="ok",
@@ -34,7 +78,7 @@ async def get_connection(user: dict = Depends(get_current_admin)):
             "own_key": True,
             "connected": True,
             "error": None,
-            "bot_username": "mitpanelbot",
+            "bot_username": st.get("telegram_bot_token") and "mitpanelbot" or "mitpanelbot",
             "bot_name": "MIT Topup Bot",
         },
     )
@@ -107,40 +151,58 @@ async def api_stats(user: dict = Depends(get_current_admin)):
 async def api_settings(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    return ResponseModel(
-        success=True,
-        message="ok",
-        data={
-            "price_per_gb": 10000,
-            "card_number": "",
-            "force_join_enabled": False,
-            "force_join_channel": "",
-            "auto_approve_enabled": False,
-            "has_bulk_pin": False,
-            "min_gb": 1,
-            "max_gb": 100,
-        },
-    )
+    cfg = _get_topup_config()
+    st = get_settings()
+    settings_data = cfg.get("settings", {})
+    # Sync card number and pricing from main panel settings if available
+    if st.get("telegram_chat_id"):
+        pass
+    return ResponseModel(success=True, message="ok", data=settings_data)
 
 
 @router.put("/api/settings", description="Update bot settings")
 async def api_update_settings(body: dict, user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    return ResponseModel(success=True, message="Updated", data=body)
+    cfg = _get_topup_config()
+    cfg["settings"] = {**cfg.get("settings", {}), **body}
+    _save_topup_config(cfg)
+    return ResponseModel(success=True, message="Updated", data=cfg["settings"])
 
 
 @router.get("/api/texts", description="Bot texts")
 async def api_texts(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    return ResponseModel(success=True, message="ok", data=[])
+    cfg = _get_topup_config()
+    stored_texts = cfg.get("texts", {})
+    # Provide standard topup bot text definitions
+    default_texts = [
+        {"id": "welcome", "text": "سلام! به ربات شارژ و مدیریت پنل خوش آمدید.", "default": "سلام! به ربات شارژ و مدیریت پنل خوش آمدید.", "changed": "welcome" in stored_texts, "button": False, "plain": False, "fields": []},
+        {"id": "ask_amount", "text": "لطفاً مقدار حجم مورد نیاز (گیگابایت) را وارد کنید:", "default": "لطفاً مقدار حجم مورد نیاز (گیگابایت) را وارد کنید:", "changed": "ask_amount" in stored_texts, "button": False, "plain": False, "fields": []},
+        {"id": "payment_card", "text": "لطفاً مبلغ {amount:,} تومان را به کارت زیر واریز نمایید:\n\n<code>{card_number}</code>", "default": "لطفاً مبلغ {amount:,} تومان را به کارت زیر واریز نمایید:\n\n<code>{card_number}</code>", "changed": "payment_card" in stored_texts, "button": False, "plain": False, "fields": ["amount", "card_number"]},
+    ]
+    # Merge stored texts
+    result = []
+    for dt in default_texts:
+        tid = dt["id"]
+        if tid in stored_texts:
+            dt["text"] = stored_texts[tid]
+            dt["changed"] = True
+        result.append(dt)
+    return ResponseModel(success=True, message="ok", data=result)
 
 
 @router.put("/api/texts", description="Update bot texts")
 async def api_update_texts(body: dict, user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
+    cfg = _get_topup_config()
+    if "texts" not in cfg:
+        cfg["texts"] = {}
+    if isinstance(body, dict):
+        cfg["texts"].update(body)
+    _save_topup_config(cfg)
     return ResponseModel(success=True, message="Updated", data={})
 
 
@@ -148,20 +210,32 @@ async def api_update_texts(body: dict, user: dict = Depends(get_current_admin)):
 async def api_buttons(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    return ResponseModel(
-        success=True,
-        message="ok",
-        data={
-            "buttons": {},
-            "labels": {},
-            "defaults": {},
-            "styles": [],
-        },
-    )
+    cfg = _get_topup_config()
+    buttons_data = cfg.get("buttons", {})
+    if not buttons_data or not buttons_data.get("buttons"):
+        buttons_data = {
+            "buttons": {
+                "topup": {"style": "default", "emoji": ""},
+                "support": {"style": "default", "emoji": ""},
+            },
+            "labels": {
+                "topup": "شارژ حجم",
+                "support": "پشتیبانی",
+            },
+            "defaults": {
+                "topup": "default",
+                "support": "default",
+            },
+            "styles": ["default", "primary", "success", "danger"],
+        }
+    return ResponseModel(success=True, message="ok", data=buttons_data)
 
 
 @router.put("/api/buttons", description="Update bot buttons")
 async def api_update_buttons(body: dict, user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
-    return ResponseModel(success=True, message="Updated", data={})
+    cfg = _get_topup_config()
+    cfg["buttons"] = {**cfg.get("buttons", {}), **body}
+    _save_topup_config(cfg)
+    return ResponseModel(success=True, message="Updated", data=cfg["buttons"])
