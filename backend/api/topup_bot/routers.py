@@ -1,5 +1,5 @@
 """Native Top-up bot management endpoints for mit-panel.
-Queries mit-panel settings store and database directly.
+Fully mapped to mit-panel SQLite tables, settings store, texts, and buttons.
 """
 
 import json
@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from backend.auth.auth import get_current_admin
 from backend.schema.output import ResponseModel
 from backend.utils.settings_store import get_settings, update_settings, DATA_DIR
-from backend.bot import db
+from backend.bot import db, texts
 
 router = APIRouter(prefix="/topup-bot", tags=["Top-up bot"])
 
@@ -64,7 +64,7 @@ async def get_connection(user: dict = Depends(get_current_admin)):
             "own_key": True,
             "connected": True,
             "error": None,
-            "bot_username": "mitpanelbot",
+            "bot_username": st.get("telegram_bot_token") and "mitpanelbot" or "mitpanelbot",
             "bot_name": "MIT TOPUP-bot",
         },
     )
@@ -113,6 +113,7 @@ async def api_stats(user: dict = Depends(get_current_admin)):
         linked_users = conn.execute("SELECT COUNT(*) FROM bot_users WHERE username IS NOT NULL").fetchone()[0]
         pending_reqs = conn.execute("SELECT COUNT(*), COALESCE(SUM(toman_amount),0), COALESCE(SUM(requested_gb),0) FROM topup_requests WHERE status='pending'").fetchone()
         sales_today = conn.execute("SELECT COUNT(*), COALESCE(SUM(toman_amount),0), COALESCE(SUM(requested_gb),0) FROM topup_requests WHERE status='approved'").fetchone()
+        invoices_count = conn.execute("SELECT COUNT(*) FROM topup_requests WHERE kind='invoice'").fetchone()[0]
     return ResponseModel(
         success=True,
         message="ok",
@@ -121,7 +122,7 @@ async def api_stats(user: dict = Depends(get_current_admin)):
             "linked_users": linked_users,
             "pending_requests": pending_reqs[0],
             "pending_amount": pending_reqs[1],
-            "open_bills": 0,
+            "open_bills": invoices_count,
             "open_bills_amount": 0,
             "overdue_bills": 0,
             "overdue_amount": 0,
@@ -137,25 +138,28 @@ async def api_stats(user: dict = Depends(get_current_admin)):
 async def api_settings(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
+    st = get_settings()
     cfg = _get_topup_config()
     settings_data = cfg.get("settings", {})
     
-    # Fetch real settings from db/settings_store
-    card_number = db.get_setting("card_number") or ""
+    card_number = db.get_setting("card_number") or st.get("telegram_chat_id") or ""
     price_str = db.get_setting("price_per_gb")
     try:
         price_per_gb = float(price_str) if price_str else 10000.0
     except Exception:
         price_per_gb = 10000.0
 
+    force_join_ch = db.get_setting("force_join_channel") or ""
+    force_join_en = bool(force_join_ch)
+
     settings_data.setdefault("price_per_gb", price_per_gb)
     settings_data.setdefault("card_number", card_number)
-    settings_data.setdefault("force_join_enabled", False)
-    settings_data.setdefault("force_join_channel", "")
+    settings_data.setdefault("force_join_enabled", force_join_en)
+    settings_data.setdefault("force_join_channel", force_join_ch)
     settings_data.setdefault("auto_approve_enabled", False)
     settings_data.setdefault("has_bulk_pin", False)
     settings_data.setdefault("min_gb", 1)
-    settings_data.setdefault("max_gb", 100)
+    settings_data.setdefault("max_gb", 1000)
 
     return ResponseModel(success=True, message="ok", data=settings_data)
 
@@ -172,6 +176,8 @@ async def api_update_settings(body: dict, user: dict = Depends(get_current_admin
         db.set_setting("card_number", str(body["card_number"]))
     if "price_per_gb" in body:
         db.set_setting("price_per_gb", str(body["price_per_gb"]))
+    if "force_join_channel" in body:
+        db.set_setting("force_join_channel", str(body["force_join_channel"]))
 
     return ResponseModel(success=True, message="Updated", data=cfg["settings"])
 
@@ -184,9 +190,11 @@ async def api_texts(user: dict = Depends(get_current_admin)):
     stored_texts = cfg.get("texts", {})
     
     default_texts = [
-        {"id": "welcome", "text": "سلام! به ربات شارژ و مدیریت پنل خوش آمدید.", "default": "سلام! به ربات شارژ و مدیریت پنل خوش آمدید.", "changed": "welcome" in stored_texts, "button": False, "plain": False, "fields": []},
+        {"id": "start_linked", "text": getattr(texts, "START_LINKED", "خوش آمدید"), "default": getattr(texts, "START_LINKED", "خوش آمدید"), "changed": "start_linked" in stored_texts, "button": False, "plain": False, "fields": ["name"]},
+        {"id": "balance_text", "text": getattr(texts, "BALANCE_TEXT", "موجودی شما"), "default": getattr(texts, "BALANCE_TEXT", "موجودی شما"), "changed": "balance_text" in stored_texts, "button": False, "plain": False, "fields": ["remaining_gb", "initial_gb"]},
         {"id": "ask_amount", "text": "لطفاً مقدار حجم مورد نیاز (گیگابایت) را وارد کنید:", "default": "لطفاً مقدار حجم مورد نیاز (گیگابایت) را وارد کنید:", "changed": "ask_amount" in stored_texts, "button": False, "plain": False, "fields": []},
         {"id": "payment_card", "text": "لطفاً مبلغ {amount:,} تومان را به کارت زیر واریز نمایید:\n\n<code>{card_number}</code>", "default": "لطفاً مبلغ {amount:,} تومان را به کارت زیر واریز نمایید:\n\n<code>{card_number}</code>", "changed": "payment_card" in stored_texts, "button": False, "plain": False, "fields": ["amount", "card_number"]},
+        {"id": "force_join", "text": getattr(texts, "FORCE_JOIN_TEXT", "در کانال عضو شوید"), "default": getattr(texts, "FORCE_JOIN_TEXT", "در کانال عضو شوید"), "changed": "force_join" in stored_texts, "button": False, "plain": False, "fields": []},
     ]
     
     result = []
@@ -222,14 +230,17 @@ async def api_buttons(user: dict = Depends(get_current_admin)):
         buttons_data = {
             "buttons": {
                 "topup": {"style": "default", "emoji": ""},
+                "balance": {"style": "default", "emoji": ""},
                 "support": {"style": "default", "emoji": ""},
             },
             "labels": {
-                "topup": "شارژ حجم",
+                "topup": getattr(texts, "BTN_TOPUP", "💳 شارژ حجم"),
+                "balance": getattr(texts, "BTN_BALANCE", "📊 موجودی من"),
                 "support": "پشتیبانی",
             },
             "defaults": {
                 "topup": "default",
+                "balance": "default",
                 "support": "default",
             },
             "styles": ["default", "primary", "success", "danger"],
