@@ -114,23 +114,25 @@ export interface PushResult {
     error: string | null
 }
 
-// One bot's management API, through the panel.
-export function botAPI(botId: number) {
-    const base = `/sales-bots/${botId}/api`
+export function managementAPI(basePath: string, _kind?: string) {
     return {
         get: async <T = Record<string, unknown>>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> =>
-            unwrap(await api.get<ResponseModel<T>>(`${base}/${path}`, { params })),
+            unwrap(await api.get<ResponseModel<T>>(`${basePath}/${path}`, { params })),
         post: async <T = Record<string, unknown>>(path: string, body: unknown = {}): Promise<T> =>
-            unwrap(await api.post<ResponseModel<T>>(`${base}/${path}`, body)),
+            unwrap(await api.post<ResponseModel<T>>(`${basePath}/${path}`, body)),
         put: async <T = Record<string, unknown>>(path: string, body: unknown = {}): Promise<T> =>
-            unwrap(await api.put<ResponseModel<T>>(`${base}/${path}`, body)),
+            unwrap(await api.put<ResponseModel<T>>(`${basePath}/${path}`, body)),
         del: async <T = Record<string, unknown>>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> =>
-            unwrap(await api.delete<ResponseModel<T>>(`${base}/${path}`, { params })),
+            unwrap(await api.delete<ResponseModel<T>>(`${basePath}/${path}`, { params })),
         blobURL: async (path: string): Promise<string> => {
-            const res = await api.get(`${base}/${path}`, { responseType: 'blob' })
+            const res = await api.get(`${basePath}/${path}`, { responseType: 'blob' })
             return URL.createObjectURL(res.data as Blob)
         },
     }
+}
+
+export function botAPI(botId: number) {
+    return managementAPI(`/sales-bots/${botId}/api`)
 }
 
 export type BotAPI = ReturnType<typeof botAPI>
@@ -354,3 +356,63 @@ export interface BotAffiliates {
     description: string
     has_banner: boolean
 }
+
+export interface TopupConnection {
+    url: string
+    own_key?: boolean
+    connected: boolean
+    error?: string | null
+    bot_username?: string | null
+    bot_name?: string | null
+}
+
+export const topupConnectionAPI = {
+    get: async (): Promise<TopupConnection> => unwrap(await api.get<ResponseModel<TopupConnection>>('/topup-bot/connection')),
+    set: async (url: string, key: string): Promise<TopupConnection> =>
+        unwrap(await api.put<ResponseModel<TopupConnection>>('/topup-bot/connection', { url, key })),
+}
+
+export interface TopupStats {
+    users: number
+    linked_users: number
+    pending_requests: number
+    pending_amount: number
+    open_bills: number
+    open_bills_amount: number
+    overdue_bills: number
+    overdue_amount: number
+    locked_panels: number
+    sales_today: number
+    sales_today_amount: number
+    sales_today_gb: number
+}
+
+export interface TopupSettings {
+    price_per_gb: number | null
+    card_number: string
+    force_join_enabled: boolean
+    force_join_channel: string
+    auto_approve_enabled: boolean
+    has_bulk_pin: boolean
+    min_gb: number
+    max_gb: number
+}
+
+export interface TopupText {
+    id: string
+    text: string
+    default: string
+    changed: boolean
+    button: boolean
+    plain: boolean
+    fields: string[]
+}
+
+export interface TopupButtons {
+    buttons: Record<string, { style: string; emoji: string }>
+    labels: Record<string, string>
+    defaults: Record<string, string>
+    styles: string[]
+}
+
+export const topupBotAPI = managementAPI('/topup-bot/api', 'topup')

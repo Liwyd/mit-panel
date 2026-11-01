@@ -27,7 +27,7 @@ function Editor({ api, d, onSaved }: { api: BotAPI; d: Buttons; onSaved: (b: But
     const [selected, setSelected] = useState<string | null>(null)
     const [query, setQuery] = useState('')
     const act = useAction()
-    const botKey = String(api.id)
+    const botKey = 'topup'
     // on a phone the editor sits above the list, out of sight of the tap
     const editorRef = useRef<HTMLDivElement>(null)
     const choose = (k: string) => {

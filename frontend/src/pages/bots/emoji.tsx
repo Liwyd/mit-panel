@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 // bot (Telegram serves them only to bots) and kept for the page's lifetime.
 const cache = new Map<string, Promise<string | null>>()
 
-function previewURL(api: BotAPI, botKey: string, id: string): Promise<string | null> {
+export function previewURL(api: BotAPI, botKey: string, id: string): Promise<string | null> {
     const k = `${botKey}:${id}`
     let p = cache.get(k)
     if (!p) {

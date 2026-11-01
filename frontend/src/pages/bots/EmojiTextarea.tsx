@@ -34,7 +34,7 @@ export function useEmojiBoard() {
 
 // EmojiBoard puts one emoji panel beside a page of text boxes (sticky on wide
 // screens): a pick goes into the box that was clicked last.
-export function EmojiBoard({ api, children }: { api: BotAPI; children: React.ReactNode }) {
+export function EmojiBoard({ children }: { api?: BotAPI; children: React.ReactNode }) {
     const target = useRef<Insert | null>(null)
     const [name, setName] = useState('')
     const board = useMemo<Board>(
@@ -64,7 +64,7 @@ export function EmojiBoard({ api, children }: { api: BotAPI; children: React.Rea
                                 'اول روی یک متن بزنید، بعد ایموجی را انتخاب کنید.'
                             )}
                         </p>
-                        <Palette api={api} botKey={String(api.id)} onPick={(id, f) => target.current?.(id, f)} disabled={!name} />
+    const botKey = 'topup'
                     </div>
                 </aside>
             </div>
@@ -74,7 +74,7 @@ export function EmojiBoard({ api, children }: { api: BotAPI; children: React.Rea
 
 export function EmojiTextarea({ api, value, onChange, className, name, rows = 3, placeholder }: Props) {
     const board = useContext(BoardContext)
-    const botKey = String(api.id)
+        const botKey = 'topup'
     const editor = useRef<RichHandle>(null)
     const insert: Insert = (id, fallback) => editor.current?.insertEmoji(id, fallback)
 
@@ -129,7 +129,7 @@ function emojiChip(api: BotAPI, botKey: string, id: string, fallback: string): H
     chip.contentEditable = 'false'
     chip.className = 'inline-block align-[-0.2em] mx-px'
     chip.textContent = fallback
-    previewURL(api, botKey, id).then((url) => {
+    previewURL(api, botKey, id).then((url: string | null) => {
         if (!url) return
         const img = document.createElement('img')
         img.src = url
