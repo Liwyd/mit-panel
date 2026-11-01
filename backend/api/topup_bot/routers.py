@@ -29,7 +29,10 @@ def _get_topup_config() -> dict:
     return {
         "settings": {},
         "texts": {},
-        "buttons": {},
+        "buttons": {
+            "buttons": {},
+            "labels": {},
+        },
     }
 
 
@@ -224,9 +227,9 @@ async def api_buttons(user: dict = Depends(get_current_admin)):
     if denied := _superadmin_only(user):
         return denied
     cfg = _get_topup_config()
-    buttons_data = cfg.get("buttons", {})
-    stored_buttons = buttons_data.get("buttons", {})
-    stored_labels = buttons_data.get("labels", {})
+    buttons_config = cfg.get("buttons", {})
+    stored_buttons = buttons_config.get("buttons", {})
+    stored_labels = buttons_config.get("labels", {})
 
     base_buttons = {
         "topup": {"style": "default", "emoji": ""},
@@ -240,9 +243,11 @@ async def api_buttons(user: dict = Depends(get_current_admin)):
     }
 
     for k, v in stored_buttons.items():
-        base_buttons[k] = v
+        if isinstance(v, dict):
+            base_buttons[k] = v
     for k, v in stored_labels.items():
-        base_labels[k] = v
+        if isinstance(v, str):
+            base_labels[k] = v
 
     response_data = {
         "buttons": base_buttons,
@@ -262,15 +267,16 @@ async def api_update_buttons(body: dict, user: dict = Depends(get_current_admin)
     if denied := _superadmin_only(user):
         return denied
     cfg = _get_topup_config()
-    if "buttons" not in cfg:
-        cfg["buttons"] = {}
+    if "buttons" not in cfg or not isinstance(cfg["buttons"], dict):
+        cfg["buttons"] = {"buttons": {}, "labels": {}}
     
     if "buttons" in body and isinstance(body["buttons"], dict):
         cfg["buttons"].setdefault("buttons", {}).update(body["buttons"])
     if "labels" in body and isinstance(body["labels"], dict):
         cfg["buttons"].setdefault("labels", {}).update(body["labels"])
-    if not cfg["buttons"]:
-        cfg["buttons"] = body
+    # Fallback if body itself is the buttons dict
+    if "buttons" not in body and "labels" not in body and isinstance(body, dict):
+        cfg["buttons"].setdefault("buttons", {}).update(body)
 
     _save_topup_config(cfg)
     return ResponseModel(success=True, message="Updated", data=cfg["buttons"])
