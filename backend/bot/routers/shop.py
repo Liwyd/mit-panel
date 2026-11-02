@@ -57,18 +57,22 @@ async def request_panel_start(message: Message, state: FSMContext) -> None:
     if message.from_user.id in settings.superadmin_id_list:
         return
 
-    # 1 panel per account limit
+    # Existing accounts may request additional panels, but never interpret a
+    # panel API outage as an empty account.
     try:
-        existing_panels = await panel_client.get_admins(message.from_user.id)
-    except Exception:
-        existing_panels = []
-    if existing_panels:
-        await message.answer(texts.SHOP_ALREADY_HAS_PANEL)
+        current_admins = await panel_client.get_admins(message.from_user.id)
+    except Exception as exc:
+        logger.warning("Could not verify existing panels for %s: %s", message.from_user.id, exc)
+        await message.answer(texts.PANEL_UNREACHABLE)
         return
+    if current_admins:
+        db.ensure_panel_metadata(
+            message.from_user.id, [admin["username"] for admin in current_admins]
+        )
 
-    # Check for existing pending request
-    existing = db.get_panel_request(message.from_user.id)
-    if existing and existing.get("status") == "pending":
+    # Check for an existing open request (including one being provisioned).
+    existing = db.get_pending_panel_request(message.from_user.id)
+    if existing:
         await message.answer(texts.SHOP_ALREADY_PENDING)
         return
 
@@ -315,7 +319,7 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         await bot.download(photo, destination=receipt_path)
 
         # Create panel request
-        request_id = db.create_panel_request(
+        request_id = db.create_panel_request_if_unowned(
             telegram_id=message.from_user.id,
             panel_name=panel_name,
             traffic_gb=gb,
@@ -324,6 +328,9 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
             desired_username=desired_username,
             desired_password=desired_password,
         )
+        if request_id is None:
+            await message.answer(texts.SHOP_ALREADY_PENDING)
+            return
 
         await message.answer(
             texts.SHOP_REQUEST_SUBMITTED + texts.SHOP_RECEIPT_WARNING,
@@ -334,11 +341,20 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         price_per_gb = _resolve_price(panel_name, referral_code_id)
         total = int(gb * price_per_gb)
         username = message.from_user.username or ""
+        metadata = db.ensure_panel_metadata(
+            message.from_user.id,
+            [admin["username"] for admin in current_admins],
+        )
+        next_panel_number = max(
+            (row["panel_number"] for row in metadata.values()), default=0
+        ) + 1
         caption = (
             texts.PANEL_REQUEST_HEADER.format(
                 username=username, telegram_id=message.from_user.id
             )
             + "\n\n"
+            + texts.PANEL_NUMBER_LABEL.format(panel_number=next_panel_number)
+            + "\n"
             + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
         )
         for sid in settings.superadmin_id_list:
@@ -379,6 +395,10 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
         await call.answer(texts.ALREADY_HANDLED, show_alert=True)
         return
 
+    if not db.claim_panel_request(request_id, call.from_user.id):
+        await call.answer(texts.ALREADY_HANDLED, show_alert=True)
+        return
+
     await call.answer()
 
     # Use user-provided credentials
@@ -397,20 +417,24 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
         )
     except Exception as exc:
         logger.error(f"Shop panel creation failed for request {request_id}: {exc}")
+        db.release_panel_request_claim(request_id)
         await call.message.answer(f"❌ Failed to create panel: {exc}")
         return
 
     # Mark approved
-    db.mark_panel_request_reviewed(request_id, "approved", call.from_user.id)
+    if not db.mark_panel_request_reviewed(request_id, "approved", call.from_user.id):
+        logger.critical("Provisioned panel for request %s but could not mark it approved", request_id)
     db.ensure_user(req["telegram_id"])
     db.set_user_linked(req["telegram_id"], True)
+    metadata = db.ensure_panel_metadata(req["telegram_id"], [username])
+    panel_number = metadata.get(username, {}).get("panel_number")
 
     # Panel link
     panel_url = settings.panel_link_url
 
     # Send credentials to buyer + full menu (transition from prospect to linked)
     creds_text = texts.SHOP_REQUEST_APPROVED.format(
-        url=panel_url, username=username, password=password
+        url=panel_url, username=username, password=password, panel_number=panel_number or "—"
     )
     try:
         await bot.send_message(
@@ -423,7 +447,9 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
 
     # Send credentials to superadmin
     await call.message.answer(
-        texts.PANEL_LINK_INFO.format(url=panel_url, username=username, password=password)
+        texts.PANEL_NUMBER_LABEL.format(panel_number=panel_number or "—")
+        + "\n"
+        + texts.PANEL_LINK_INFO.format(url=panel_url, username=username, password=password)
     )
 
     # Referral bonus
@@ -544,11 +570,24 @@ async def list_pending_panel_requests(message: Message, bot: Bot) -> None:
     shop_requests = db.list_pending_panel_requests()
     for req in shop_requests:
         username = req.get("username") or str(req["telegram_id"])
-        price_per_gb = db.get_effective_price(req["panel_name"])
+        try:
+            owned_admins = await panel_client.get_admins(req["telegram_id"])
+        except Exception as exc:
+            logger.warning("Could not resolve existing panels for request %s: %s", req["id"], exc)
+            owned_admins = []
+        existing_metadata = db.ensure_panel_metadata(
+            req["telegram_id"], [admin["username"] for admin in owned_admins]
+        )
+        requested_panel_number = max(
+            (row["panel_number"] for row in existing_metadata.values()), default=0
+        ) + 1
+        price_per_gb = _resolve_price(req["panel_name"], req.get("referral_code_id"))
         total = int(req["traffic_gb"] * price_per_gb)
         caption = (
             texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=req["telegram_id"])
             + "\n\n"
+            + texts.PANEL_NUMBER_LABEL.format(panel_number=requested_panel_number)
+            + "\n"
             + texts.PANEL_REQUEST_INFO.format(
                 panel=req["panel_name"], gb=req["traffic_gb"], price=total
             )

@@ -62,6 +62,7 @@ class NewInvoice(StatesGroup):
     amount = State()
     description = State()
     due = State()
+    panel = State()
 
 
 class InvoicePayment(StatesGroup):
@@ -159,6 +160,10 @@ class ShopBuy(StatesGroup):
 
 class ShopApprove(StatesGroup):
     reason = State()
+
+
+class PanelNote(StatesGroup):
+    value = State()
 
 
 class ReferralManage(StatesGroup):

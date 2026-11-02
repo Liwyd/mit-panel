@@ -327,12 +327,19 @@ PANEL_ACTIVATION = (
 )
 PANELS_LIST_HEADER = "▪️ پنل‌های شما:\n\n"
 PANEL_LINE = (
-    "▫️ <b>{username}</b>\n"
+    "▫️ <b>پنل {panel_number} — {username}</b>\n"
+    "   👤 نام کاربری: <code>{username}</code>\n"
+    "   🔑 رمز عبور: <code>{password}</code>\n"
+    "{note_line}"
     "   📊 موجودی: {remaining_gb:.2f} / {initial_gb:.2f} گیگابایت\n"
     "   {expiry_line}\n"
 )
 PANEL_EXPIRY_LINE = "📅 انقضا: {expiry}"
 PANEL_NO_EXPIRY = "📅 بدون تاریخ انقضا"
+PANEL_NOTE_LINE = "   📝 یادداشت: {note}\n"
+ASK_PANEL_NOTE = "یادداشت کوتاه پنل {username} را وارد کنید (حداکثر ۱۶۰ نویسه؛ خالی برای پاک‌کردن):"
+PANEL_NOTE_TOO_LONG = "یادداشت باید حداکثر ۱۶۰ نویسه باشد."
+PANEL_NOTE_SAVED = "✅ یادداشت پنل ذخیره شد."
 REFERRAL_PANELS_HEADER = "\n\n🎁 پنل‌های رفرال:\n\n"
 REFERRAL_PANEL_LINE = (
     "▫️ <b>{username}</b> (🎁 رفرال)\n"
@@ -988,7 +995,7 @@ SHOP_REQUEST_SUBMITTED = "✅ درخواست شما ثبت شد و در انتظ
 SHOP_RECEIPT_WARNING = "\n\n⚠️ لطفاً رسید پرداخت را مجدداً ارسال نکنید. درخواست شما ثبت شده و در حال بررسی است."
 RECEIPT_WARNING = "\n\n⚠️ لطفاً رسید پرداخت را مجدداً ارسال نکنید. درخواست شما ثبت شده و در حال بررسی است."
 SHOP_REQUEST_APPROVED = (
-    "🎉 پنل شما آماده است!\n\n"
+    "🎉 پنل شماره {panel_number} شما آماده است!\n\n"
     "🔗 لینک پنل: {url}\n"
     "👤 نام کاربری: <code>{username}</code>\n"
     "🔑 رمز عبور: <code>{password}</code>\n\n"
@@ -997,13 +1004,15 @@ SHOP_REQUEST_APPROVED = (
 SHOP_REQUEST_REJECTED = "❌ درخواست شما رد شد.\nعلت: {reason}"
 SHOP_ALREADY_PENDING = "⚠️ شما یک درخواست در حال بررسی دارید. لطفاً منتظر بمانید."
 SHOP_ALREADY_HAS_PANEL = (
-    "⚠️ شما از قبل یک پنل دارید. هر اکانت تلگرام فقط امکان داشتن یک پنل را دارد.\n\n"
+    "⚠️ شما از قبل پنل دارید. می‌توانید برای پنل اضافه هم درخواست ثبت کنید.\n\n"
     "💡 اگر برای دیگران نیاز به پنل دارید، می‌توانید درخواست کد رفرال بدهید. "
     "با کد رفرال، آن‌ها می‌توانند با تخفیف ویژه از ربات خرید کنند "
     "و درصدی از خرید آن‌ها نیز به شما تعلق می‌گیرد.\n\n"
     "📝 برای درخواست کد رفرال، از منوی زیر استفاده کنید."
 )
 SHOP_PANELS_HEADER = "🖥 پنل‌های موجود:"
+CHOOSE_PANEL_FOR_INVOICE = "پنلی را که این فاکتور مربوط به آن است انتخاب کنید:"
+CHOOSE_PANEL_NOTE = "برای افزودن یا ویرایش یادداشت، پنل را انتخاب کنید:"
 
 # --- referral ---
 REFERRAL_ASK_CODE = "🔑 کد رفرال را وارد کنید (یا رد شید):"
@@ -1032,6 +1041,7 @@ PANEL_LINK_INFO = (
 # --- panel request approval (superadmin) ---
 PANEL_REQUEST_HEADER = "🛒 درخواست پنل جدید از @{username} (ID: <code>{telegram_id}</code>)"
 PANEL_REQUEST_INFO = "🖥 پنل: {panel}\n📦 ترافیک: {gb} GB\n💰 مبلغ: {price:,} تومان"
+PANEL_NUMBER_LABEL = "شماره پنل: {panel_number}"
 PANEL_REQUEST_APPROVED = "✅ درخواست پنل تأیید و ایجاد شد."
 PANEL_REQUEST_REJECTED = "❌ درخواست پنل رد شد."
 

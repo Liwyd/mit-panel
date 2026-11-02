@@ -10,6 +10,7 @@ from __future__ import annotations
 from aiogram.types import Message
 
 import logging
+from html import escape
 
 from backend.bot import keyboards, texts
 from backend.bot import db
@@ -43,9 +44,17 @@ def format_expiry(expiry) -> str:
     return texts.PANEL_EXPIRY_LINE.format(expiry=str(expiry)[:10])
 
 
-def format_panel_line(admin: dict) -> str:
+def format_panel_line(admin: dict, metadata: dict | None = None) -> str:
+    if metadata is None:
+        metadata = db.ensure_panel_metadata(
+            admin.get("telegram_id") or 0, [admin["username"]]
+        ).get(admin["username"], {})
+    note = metadata.get("admin_note", "")
     return texts.PANEL_LINE.format(
-        username=admin["username"],
+        username=escape(admin["username"]),
+        panel_number=metadata.get("panel_number", "—"),
+        password=escape(str(admin.get("marzban_password") or "—")),
+        note_line=texts.PANEL_NOTE_LINE.format(note=escape(note)) if note else "",
         remaining_gb=bytes_to_gb(admin.get("traffic")),
         initial_gb=bytes_to_gb(admin.get("initial_traffic")),
         expiry_line=format_expiry(admin.get("expiry_date")),

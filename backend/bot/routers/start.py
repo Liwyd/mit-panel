@@ -110,12 +110,22 @@ async def my_panels(message: Message) -> None:
 
     parts: list[str] = []
     if admins:
-        parts.append(texts.PANELS_LIST_HEADER + "".join(format_panel_line(a) for a in admins))
+        metadata = db.ensure_panel_metadata(
+            message.from_user.id, [admin["username"] for admin in admins]
+        )
+        parts.append(
+            texts.PANELS_LIST_HEADER
+            + "".join(
+                format_panel_line(admin, metadata.get(admin["username"], {}))
+                for admin in admins
+            )
+        )
     if referral_panels:
         parts.append(texts.REFERRAL_PANELS_HEADER + "".join(format_referral_panel_line(p) for p in referral_panels))
+    markup = keyboards.panel_history_kb(admins) if admins else None
     await message.answer(
         "".join(parts),
-        reply_markup=keyboards.panel_history_kb(admins) if admins else None,
+        reply_markup=markup,
     )
 
 
@@ -173,16 +183,7 @@ async def create_panel_stub(message: Message, state: FSMContext) -> None:
         await state.set_state(CreatePanel.name)
         await message.answer(texts.ASK_PANEL_NAME, reply_markup=keyboards.cancel_kb())
         return
-    # Regular admin — redirect to shop flow (1 panel per account)
-    from backend.bot import panel_client
-    try:
-        admins = await panel_client.get_admins(message.from_user.id)
-    except Exception:
-        admins = []
-    if admins:
-        await message.answer(texts.SHOP_ALREADY_HAS_PANEL)
-        return
-    # Redirect to shop: trigger the same flow as BTN_REQUEST_PANEL
+    # Regular admin — redirect to the shared shop flow, which permits additional panels.
     from backend.bot.routers.shop import request_panel_start
     await request_panel_start(message, state)
 

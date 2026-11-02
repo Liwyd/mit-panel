@@ -253,6 +253,27 @@ def init_db() -> None:
             )
             """
         )
+        # Presentation metadata belongs in the bot ledger rather than the
+        # panel's ORM schema: deployments update this file idempotently and
+        # existing admins must remain untouched.  The number is stable for a
+        # Telegram account even when a panel is later deleted (gaps are OK).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS panel_metadata (
+                admin_username TEXT PRIMARY KEY,
+                telegram_id INTEGER NOT NULL,
+                panel_number INTEGER NOT NULL,
+                admin_note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(telegram_id, panel_number)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_panel_metadata_owner "
+            "ON panel_metadata(telegram_id, panel_number)"
+        )
+        _ensure_column(conn, "panel_metadata", "admin_note", "TEXT NOT NULL DEFAULT ''")
 
         conn.execute(
             """
@@ -1342,6 +1363,68 @@ def create_panel_request(
         return cur.lastrowid
 
 
+def get_pending_panel_request(telegram_id: int) -> dict | None:
+    """The one outstanding shop purchase for an account, if any."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM panel_requests WHERE telegram_id = ? AND status IN ('pending', 'provisioning') "
+            "ORDER BY id DESC LIMIT 1",
+            (telegram_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def claim_panel_request(request_id: int, reviewed_by: int) -> bool:
+    """Make one approver the sole provisioner for a request.
+
+    Provisioning calls an external Marzban service and cannot be wrapped in a
+    SQLite transaction.  This atomic state transition prevents two admins from
+    both creating the same panel after tapping Approve at the same time.
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE panel_requests SET status = 'provisioning', reviewed_by = ? "
+            "WHERE id = ? AND status = 'pending'",
+            (reviewed_by, request_id),
+        )
+        return cur.rowcount == 1
+
+
+def create_panel_request_if_unowned(
+    telegram_id: int, panel_name: str, traffic_gb: float, receipt_path: str,
+    referral_code_id: int | None = None, desired_username: str | None = None,
+    desired_password: str | None = None,
+) -> int | None:
+    """Atomically enforce one open request per account while inserting it."""
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT id FROM panel_requests WHERE telegram_id = ? "
+            "AND status IN ('pending', 'provisioning') LIMIT 1", (telegram_id,)
+        ).fetchone()
+        if existing:
+            return None
+        cur = conn.execute(
+            "INSERT INTO panel_requests "
+            "(telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id, desired_username, desired_password) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id,
+             desired_username, desired_password),
+        )
+        return cur.lastrowid
+
+
+def release_panel_request_claim(request_id: int) -> bool:
+    """Return a failed provisioning attempt to the review queue."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE panel_requests SET status = 'pending', reviewed_by = NULL "
+            "WHERE id = ? AND status = 'provisioning'",
+            (request_id,),
+        )
+        return cur.rowcount == 1
+
+
 def get_panel_request(request_id: int) -> dict | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM panel_requests WHERE id = ?", (request_id,)).fetchone()
@@ -1361,8 +1444,63 @@ def mark_panel_request_reviewed(
 ) -> bool:
     with _connect() as conn:
         cur = conn.execute(
-            "UPDATE panel_requests SET status = ?, reject_reason = ?, reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status = 'pending'",
+            "UPDATE panel_requests SET status = ?, reject_reason = ?, reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ? AND status IN ('pending', 'provisioning')",
             (status, reason, reviewed_by, request_id),
+        )
+        return cur.rowcount == 1
+
+
+def ensure_panel_metadata(telegram_id: int, usernames: list[str]) -> dict[str, dict]:
+    """Return stable numbers for an owner's panels, allocating missing ones.
+
+    Callers supply the authoritative panel list from the main database.  A
+    short IMMEDIATE transaction serializes allocations for concurrent shop
+    approvals without coupling the two databases into an unsafe pseudo-
+    transaction.
+    """
+    if not usernames:
+        return {}
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        for username in usernames:
+            existing = conn.execute(
+                "SELECT 1 FROM panel_metadata WHERE admin_username = ?", (username,)
+            ).fetchone()
+            if existing:
+                continue
+            next_number = conn.execute(
+                "SELECT COALESCE(MAX(panel_number), 0) + 1 FROM panel_metadata "
+                "WHERE telegram_id = ?",
+                (telegram_id,),
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO panel_metadata (admin_username, telegram_id, panel_number) "
+                "VALUES (?, ?, ?)",
+                (username, telegram_id, next_number),
+            )
+        rows = conn.execute(
+            "SELECT admin_username, telegram_id, panel_number, admin_note "
+            "FROM panel_metadata WHERE telegram_id = ?",
+            (telegram_id,),
+        ).fetchall()
+        return {row["admin_username"]: dict(row) for row in rows}
+
+
+def get_panel_metadata(admin_username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT admin_username, telegram_id, panel_number, admin_note "
+            "FROM panel_metadata WHERE admin_username = ?",
+            (admin_username,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def set_panel_admin_note(admin_username: str, note: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE panel_metadata SET admin_note = ? WHERE admin_username = ?",
+            (note, admin_username),
         )
         return cur.rowcount == 1
 

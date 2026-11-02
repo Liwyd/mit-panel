@@ -23,6 +23,7 @@ from backend.bot.states import (
     MarkObserver,
     NewInvoice,
     PanelHistory,
+    PanelNote,
     ReferralManage,
     SetAdminPrice,
     SetCardNumber,
@@ -174,8 +175,12 @@ async def list_all_panels(message: Message) -> None:
 
     header = texts.ALL_PANELS_HEADER.format(count=len(admins))
     chunks: list[str] = []
+    note_admins = []
     current = header
     for a in admins:
+        if a.get("telegram_id"):
+            db.ensure_panel_metadata(a["telegram_id"], [a["username"]])
+        note_admins.append(a)
         line = texts.ADMIN_PANEL_LINE.format(
             username=a["username"],
             status="" if a.get("is_active") else texts.PANEL_INACTIVE_MARK,
@@ -191,6 +196,11 @@ async def list_all_panels(message: Message) -> None:
 
     for chunk in chunks:
         await message.answer(chunk)
+    if note_admins:
+        await message.answer(
+            texts.CHOOSE_PANEL_NOTE,
+            reply_markup=keyboards.admin_panel_note_picker_kb(note_admins),
+        )
 
 
 @router.message(F.text == texts.BTN_GRANT_TRAFFIC)
@@ -306,24 +316,52 @@ async def invoice_description(message: Message, state: FSMContext) -> None:
 async def invoice_due(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     key = call.data.split(":", 1)[1]
     data = await state.get_data()
-    await state.clear()
     await call.answer()
 
-    due_at = due_at_for(key)
     target_id = data["invoice_target"]
     # Checked before the invoice exists — afterwards everyone is a customer.
-    was_customer = db.has_billing_account(target_id)
     # Stamp the panel this invoice bills, so paying it (or leaving it unpaid)
     # can lock/unlock that reseller. Only when the Telegram id maps to exactly
     # one admin — guessing would bill the wrong panel later.
     with sessionLocal() as session:
         target_admins = crud.get_admins_by_telegram_id(session, target_id)
+    if len(target_admins) > 1:
+        await state.update_data(invoice_due_key=key)
+        await state.set_state(NewInvoice.panel)
+        await call.message.answer(
+            texts.CHOOSE_PANEL_FOR_INVOICE,
+            reply_markup=keyboards.invoice_panel_picker_kb(target_admins),
+        )
+        return
+    await state.clear()
+    selected_admin = target_admins[0] if target_admins else None
+    await _finish_invoice(call, state, bot, data, key, selected_admin)
+
+
+@router.callback_query(F.data.startswith("invoice_panel:"), NewInvoice.panel)
+async def invoice_panel(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    username = call.data.split(":", 1)[1]
+    data = await state.get_data()
+    with sessionLocal() as session:
+        selected_admin = crud.get_owned_admin(session, data["invoice_target"], username)
+    if not selected_admin:
+        await call.answer(texts.NOT_LINKED_RETRY, show_alert=True)
+        return
+    await call.answer()
+    await state.clear()
+    await _finish_invoice(call, state, bot, data, data["invoice_due_key"], selected_admin)
+
+
+async def _finish_invoice(call, state, bot, data, due_key, selected_admin) -> None:
+    due_at = due_at_for(due_key)
+    target_id = data["invoice_target"]
+    was_customer = db.has_billing_account(target_id)
     invoice_id = db.create_invoice(
         telegram_id=target_id,
         amount=data["invoice_amount"],
         description=data["invoice_description"],
         due_at=due_at,
-        admin_username=target_admins[0].username if len(target_admins) == 1 else None,
+        admin_username=selected_admin.username if selected_admin else None,
     )
 
     delivered = True
@@ -405,6 +443,39 @@ async def finish_panel_history(message: Message, state: FSMContext) -> None:
     await message.answer(
         sales.history(username), reply_markup=superadmin_kb(message.from_user.id)
     )
+
+
+@router.callback_query(F.data.startswith("admin_panel_note:"))
+async def admin_panel_note_selected(call: CallbackQuery, state: FSMContext) -> None:
+    username = call.data.split(":", 1)[1]
+    with sessionLocal() as session:
+        admin = crud.get_admin_by_username(session, username)
+    if not admin:
+        await call.answer(texts.NOT_LINKED_RETRY, show_alert=True)
+        return
+    db.ensure_panel_metadata(admin.telegram_id or 0, [admin.username])
+    await state.set_state(PanelNote.value)
+    await state.update_data(panel_note_username=admin.username)
+    await call.answer()
+    await call.message.answer(
+        texts.ASK_PANEL_NOTE.format(username=admin.username),
+        reply_markup=keyboards.cancel_kb(),
+    )
+
+
+@router.message(PanelNote.value, ~F.text.in_(ALL_MENU_TEXTS))
+async def admin_save_panel_note(message: Message, state: FSMContext) -> None:
+    note = (message.text or "").strip()
+    if len(note) > 160:
+        await message.answer(texts.PANEL_NOTE_TOO_LONG, reply_markup=keyboards.cancel_kb())
+        return
+    username = (await state.get_data()).get("panel_note_username")
+    if not username or not db.set_panel_admin_note(username, note):
+        await message.answer(texts.NOT_LINKED_RETRY)
+        await state.clear()
+        return
+    await state.clear()
+    await message.answer(texts.PANEL_NOTE_SAVED, reply_markup=superadmin_kb(message.from_user.id))
 
 
 async def _refresh_customer_card(call: CallbackQuery, telegram_id: int) -> None:

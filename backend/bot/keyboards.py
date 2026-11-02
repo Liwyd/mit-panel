@@ -370,6 +370,30 @@ def panel_history_kb(admins) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def panel_note_kb(admins) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for admin in admins:
+        kb.button(text=f"📝 {admin['username']}", callback_data=f"panel_note:{admin['username']}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def invoice_panel_picker_kb(admins) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for admin in admins:
+        kb.button(text=f"▪️ {admin.username}", callback_data=f"invoice_panel:{admin.username}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def admin_panel_note_picker_kb(admins) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for admin in admins:
+        kb.button(text=f"📝 {admin.username}", callback_data=f"admin_panel_note:{admin.username}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def panel_picker_kb(admins, action: str) -> InlineKeyboardMarkup:
     """One button per panel. `action` routes the choice (e.g. 'topup', 'pwd')."""
     kb = InlineKeyboardBuilder()
