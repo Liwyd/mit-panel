@@ -18,12 +18,24 @@ class AdminOutput(BaseModel):
     inbound_id: Optional[str]
     marzban_inbounds: Optional[str] = None
     marzban_all_inbounds: bool = False
+    inbound_group_id: Optional[int] = None
     traffic: float
     initial_traffic: float = 0
     update_return_traffic: bool
     delete_return_traffic: bool
     expiry_date: Optional[datetime]
     telegram_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InboundGroupOutput(BaseModel):
+    id: int
+    panel: str
+    name: str
+    inbounds: dict[str, list[str]]
+    is_default: bool
 
     class Config:
         from_attributes = True

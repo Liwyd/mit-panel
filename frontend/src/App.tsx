@@ -10,6 +10,7 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { BotsPage } from '@/pages/BotsPage'
 import { TopupBotPage } from '@/pages/TopupBotPage'
+import { InboundGroupsPage } from '@/pages/InboundGroupsPage'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -56,6 +57,15 @@ function App() {
                             <Layout>
                                 <PanelsPage />
                             </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/inbound-groups"
+                    element={
+                        <ProtectedRoute allowedRoles={['superadmin']}>
+                            <Layout><InboundGroupsPage /></Layout>
                         </ProtectedRoute>
                     }
                 />

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 
 from backend.db.engin import get_db
+from backend.db import crud
 from backend.auth import get_current_admin
 from backend.schema._input import ClientInput, ClientUpdateInput
 from backend.services import (
@@ -15,6 +16,22 @@ from backend.services import (
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+@router.get("/inbound-groups")
+async def list_my_inbound_groups(
+    db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)
+):
+    if current_admin["role"] != "admin":
+        return JSONResponse(status_code=403, content={"detail": "Not authorized"})
+    owner = crud.get_admin_by_username(db, current_admin["username"])
+    groups = crud.get_admin_inbound_groups(db, owner.id) if owner else []
+    return {
+        "success": True,
+        "message": "Assigned inbound groups retrieved",
+        "data": [{"id": group.id, "name": group.name, "is_default": group.id == owner.inbound_group_id}
+                 for group in groups],
+    }
 
 
 @router.get("/user", description="Get all users")

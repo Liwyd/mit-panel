@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 import os
+import json
 
 from backend.schema.output import (
     ResponseModel,
@@ -9,6 +10,7 @@ from backend.schema.output import (
     PanelOutput,
     ServerOutput,
     ServerCreatedOutput,
+    InboundGroupOutput,
 )
 from backend.schema._input import (
     AdminInput,
@@ -18,6 +20,8 @@ from backend.schema._input import (
     ServerInput,
     ServerReorderInput,
     SettingsInput,
+    InboundGroupInput,
+    AdminInboundGroupsInput,
 )
 from backend.db import crud
 from backend.db.engin import get_db
@@ -335,6 +339,134 @@ async def get_panel_inbounds(
                 "message": f"Failed to fetch inbounds: {str(e)}",
             },
         )
+
+
+@router.get("/inbound-groups")
+async def list_inbound_groups(panel: str, db: Session = Depends(get_db), admin: dict = Depends(get_current_superadmin)):
+    groups = crud.get_inbound_groups(db, panel)
+    data = []
+    for group in groups:
+        try:
+            inbounds = json.loads(group.inbounds)
+        except (TypeError, json.JSONDecodeError):
+            inbounds = {}
+        data.append({"id": group.id, "panel": group.panel, "name": group.name,
+                     "inbounds": inbounds, "is_default": group.is_default})
+    return ResponseModel(success=True, message="Inbound groups retrieved", data=data)
+
+
+@router.post("/inbound-groups")
+async def create_inbound_group(payload: InboundGroupInput, db: Session = Depends(get_db), admin: dict = Depends(get_current_superadmin)):
+    if not payload.name.strip():
+        return JSONResponse(status_code=422, content={"success": False, "message": "Group name cannot be empty"})
+    panel = crud.get_panel_by_name(db, payload.panel)
+    if not panel or panel.panel_type != "marzban":
+        return JSONResponse(status_code=400, content={"success": False, "message": "Inbound groups require a Marzban panel"})
+    try:
+        live = await MarzbanAPI(url=panel.url, username=panel.username, password=panel.password).get_inbounds()
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"success": False, "message": f"Could not verify current inbounds: {exc}"})
+    if not _inbounds_are_subset(payload.inbounds, live):
+        return JSONResponse(status_code=422, content={"success": False, "message": "Group must contain only currently available inbounds"})
+    if payload.is_default:
+        payload.inbounds = live
+    try:
+        group = crud.save_inbound_group(db, panel=payload.panel, name=payload.name.strip(),
+                                        inbounds=json.dumps(payload.inbounds), is_default=payload.is_default)
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(status_code=409, content={"success": False, "message": str(exc)})
+    return ResponseModel(success=True, message="Inbound group created", data=InboundGroupOutput(
+        id=group.id, panel=group.panel, name=group.name, inbounds=payload.inbounds, is_default=group.is_default))
+
+
+def _inbounds_are_subset(candidate: dict[str, list[str]], available: dict[str, list[str]]) -> bool:
+    return bool(candidate) and all(
+        protocol in available and tags and set(tags) <= set(available[protocol])
+        for protocol, tags in candidate.items()
+    )
+
+
+@router.put("/inbound-groups/{group_id}")
+async def update_inbound_group(group_id: int, payload: InboundGroupInput, db: Session = Depends(get_db), admin: dict = Depends(get_current_superadmin)):
+    if not payload.name.strip():
+        return JSONResponse(status_code=422, content={"success": False, "message": "Group name cannot be empty"})
+    group = crud.get_inbound_group(db, group_id)
+    if not group:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Inbound group not found"})
+    if group.panel != payload.panel:
+        return JSONResponse(status_code=422, content={"success": False, "message": "Group panel cannot be changed"})
+    panel = crud.get_panel_by_name(db, group.panel)
+    try:
+        live = await MarzbanAPI(url=panel.url, username=panel.username, password=panel.password).get_inbounds()
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"success": False, "message": f"Could not verify current inbounds: {exc}"})
+    if not _inbounds_are_subset(payload.inbounds, live):
+        return JSONResponse(status_code=422, content={"success": False, "message": "Group must contain only currently available inbounds"})
+    if payload.is_default:
+        payload.inbounds = live
+    try:
+        group = crud.save_inbound_group(db, panel=group.panel, name=payload.name.strip(),
+                                        inbounds=json.dumps(payload.inbounds), group_id=group_id,
+                                        is_default=payload.is_default)
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(status_code=409, content={"success": False, "message": str(exc)})
+    return ResponseModel(success=True, message="Inbound group updated", data=InboundGroupOutput(
+        id=group.id, panel=group.panel, name=group.name, inbounds=payload.inbounds, is_default=group.is_default))
+
+
+@router.delete("/inbound-groups/{group_id}")
+async def remove_inbound_group(group_id: int, db: Session = Depends(get_db), admin: dict = Depends(get_current_superadmin)):
+    if not crud.delete_inbound_group(db, group_id):
+        return JSONResponse(status_code=404, content={"success": False, "message": "Inbound group not found"})
+    return ResponseModel(success=True, message="Inbound group deleted")
+
+
+@router.get("/admin/{admin_id}/inbound-groups")
+async def get_admin_inbound_groups(admin_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_superadmin)):
+    target = crud.get_admin_by_id(db, admin_id)
+    if not target:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Admin not found"})
+    assigned = crud.get_admin_inbound_groups(db, admin_id)
+    groups = crud.get_inbound_groups(db, target.panel)
+    return ResponseModel(success=True, message="Assigned groups retrieved", data={
+        "assigned_group_ids": [group.id for group in assigned],
+        "groups": [{"id": g.id, "panel": g.panel, "name": g.name,
+                    "inbounds": json.loads(g.inbounds), "is_default": g.is_default} for g in groups],
+        "default_group_id": target.inbound_group_id,
+    })
+
+
+@router.put("/admin/{admin_id}/inbound-groups")
+async def set_admin_inbound_groups(admin_id: int, payload: AdminInboundGroupsInput, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_superadmin)):
+    target = crud.get_admin_by_id(db, admin_id)
+    if not target:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Admin not found"})
+    groups = {group.id: group for group in crud.get_inbound_groups(db, target.panel)}
+    group_ids = sorted(set(payload.group_ids))
+    if any(group_id not in groups for group_id in group_ids):
+        return JSONResponse(status_code=422, content={"success": False, "message": "All groups must belong to this admin's panel"})
+    default_group_id = payload.default_group_id
+    if default_group_id is None and len(group_ids) == 1:
+        default_group_id = group_ids[0]
+    if default_group_id is not None and default_group_id not in group_ids:
+        return JSONResponse(status_code=422, content={"success": False, "message": "Default group must be assigned"})
+    crud.assign_admin_inbound_groups(db, admin_id, group_ids)
+    target.inbound_group_id = default_group_id
+    db.commit()
+    return ResponseModel(success=True, message="Admin inbound groups updated")
+
+
+@router.get("/admin-inbound-groups")
+async def list_admin_group_assignments(db: Session = Depends(get_db), current_admin: dict = Depends(get_current_superadmin)):
+    panel_types = {panel.name: panel.panel_type for panel in crud.get_all_panels(db)}
+    admins = [a for a in crud.get_all_admins(db) if panel_types.get(a.panel) == "marzban"]
+    return ResponseModel(success=True, message="Admins retrieved", data=[{
+        "id": a.id, "username": a.username, "panel": a.panel,
+        "assigned_group_ids": [g.id for g in crud.get_admin_inbound_groups(db, a.id)],
+        "default_group_id": a.inbound_group_id,
+    } for a in admins])
 
 
 @router.get("/backup", description="Download database backup")

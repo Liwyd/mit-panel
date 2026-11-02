@@ -12,6 +12,9 @@ import {
     MarzbanOverview,
     ServerOutput,
     ServerCreatedOutput,
+    InboundGroup,
+    InboundGroupPayload,
+    AdminGroupAssignment,
 } from '@/types'
 
 
@@ -163,6 +166,29 @@ export const adminAPI = {
         }
 
         return response.data.data || {}
+    },
+
+    listInboundGroups: async (panel: string): Promise<InboundGroup[]> => {
+        const response = await api.get<ResponseModel<InboundGroup[]>>('/superadmin/inbound-groups', { params: { panel } })
+        return response.data.data || []
+    },
+    saveInboundGroup: async (group: InboundGroupPayload, id?: number): Promise<InboundGroup> => {
+        const response = id
+            ? await api.put<ResponseModel<InboundGroup>>(`/superadmin/inbound-groups/${id}`, group)
+            : await api.post<ResponseModel<InboundGroup>>('/superadmin/inbound-groups', group)
+        if (!response.data.success) throw new Error(response.data.message || 'Failed to save inbound group')
+        return response.data.data!
+    },
+    deleteInboundGroup: async (id: number): Promise<void> => {
+        await api.delete(`/superadmin/inbound-groups/${id}`)
+    },
+    listAdminGroupAssignments: async (): Promise<AdminGroupAssignment[]> => {
+        const response = await api.get<ResponseModel<AdminGroupAssignment[]>>('/superadmin/admin-inbound-groups')
+        return response.data.data || []
+    },
+    setAdminGroups: async (adminId: number, group_ids: number[], default_group_id: number | null): Promise<void> => {
+        const response = await api.put<ResponseModel<void>>(`/superadmin/admin/${adminId}/inbound-groups`, { group_ids, default_group_id })
+        if (!response.data.success) throw new Error(response.data.message || 'Failed to assign inbound groups')
     },
 }
 
@@ -320,7 +346,11 @@ function toExpiryTimestamp(expiryDatetime: string | number | null | undefined): 
 
 // User API
 export const userAPI = {
-    createUser: async (email: string, totalGb: number, expiryDatetime?: string | number | null): Promise<ClientsOutput> => {
+    getInboundGroups: async (): Promise<{ id: number; name: string; is_default: boolean }[]> => {
+        const response = await api.get<ResponseModel<{ id: number; name: string; is_default: boolean }[]>>('/admin/inbound-groups')
+        return response.data.data || []
+    },
+    createUser: async (email: string, totalGb: number, expiryDatetime?: string | number | null, inboundGroupId?: number): Promise<ClientsOutput> => {
         const submitData = {
             email,
             id: uuidv4(),
@@ -329,6 +359,7 @@ export const userAPI = {
             total: Math.round(totalGb * 1024 * 1024 * 1024),
             sub_id: generateSubId(),
             flow: '',
+            inbound_group_id: inboundGroupId,
         }
 
         const response = await api.post<ResponseModel<ClientsOutput>>(`/admin/user`, submitData)

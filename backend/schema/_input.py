@@ -3,6 +3,18 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class InboundGroupInput(BaseModel):
+    panel: str
+    name: str = Field(min_length=1, max_length=80)
+    inbounds: dict[str, list[str]]
+    is_default: bool = False
+
+
+class AdminInboundGroupsInput(BaseModel):
+    group_ids: list[int]
+    default_group_id: Optional[int] = None
+
+
 class AdminInput(BaseModel):
     username: str
     password: str
@@ -13,6 +25,7 @@ class AdminInput(BaseModel):
     marzban_inbounds: Optional[str] = None
     marzban_password: Optional[str] = None
     marzban_all_inbounds: bool = False
+    inbound_group_id: Optional[int] = None
     traffic: float = 0.0
     update_return_traffic: bool = False
     delete_return_traffic: bool = False
@@ -30,6 +43,7 @@ class AdminUpdateInput(BaseModel):
     marzban_inbounds: Optional[str] = None
     marzban_password: Optional[str] = None
     marzban_all_inbounds: bool = False
+    inbound_group_id: Optional[int] = None
     traffic: float
     initial_traffic: Optional[float] = None
     update_return_traffic: bool = False
@@ -60,6 +74,7 @@ class ClientInput(BaseModel):
     total: float = Field(ge=104857600, description="Minimum 0.1 GB (100 MB)")
     sub_id: str
     flow: str = ""
+    inbound_group_id: Optional[int] = None
 
 
 class ClientUpdateInput(BaseModel):

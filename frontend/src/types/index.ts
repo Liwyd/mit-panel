@@ -131,6 +131,7 @@ export interface AdminOutput {
     inbound_id: string | null
     marzban_inbounds: string | null
     marzban_all_inbounds?: boolean
+    inbound_group_id?: number | null
     marzban_password: string | null
     flow?: string | null
     traffic: number
@@ -139,6 +140,29 @@ export interface AdminOutput {
     delete_return_traffic: boolean | false
     expiry_date: string | null
     telegram_id?: number | null
+}
+
+export interface InboundGroup {
+    id: number
+    panel: string
+    name: string
+    inbounds: Record<string, string[]>
+    is_default: boolean
+}
+
+export interface InboundGroupPayload {
+    panel: string
+    name: string
+    inbounds: Record<string, string[]>
+    is_default: boolean
+}
+
+export interface AdminGroupAssignment {
+    id: number
+    username: string
+    panel: string
+    assigned_group_ids: number[]
+    default_group_id: number | null
 }
 
 // Panel Form
@@ -258,6 +282,7 @@ export const userSchema = z.object({
         .union([z.string(), z.number()])
         .optional()
         .nullable(),
+    inboundGroupId: z.number().optional(),
 })
 
 export type UserFormData = z.infer<typeof userSchema>

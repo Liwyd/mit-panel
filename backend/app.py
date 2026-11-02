@@ -48,6 +48,10 @@ async def serve_frontend(path_name: str = ""):
 
 @app.on_event("startup")
 async def _start_background_tasks():
+    from backend.db.engin import ensure_inbound_group_schema
+
+    ensure_inbound_group_schema()
+
     # Periodic Telegram backup (configurable from Settings)
     from backend.services.backup_scheduler import backup_scheduler
 
