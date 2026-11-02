@@ -514,58 +514,10 @@ async def add_new_user(
 
         admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
 
-        assigned_groups = crud.get_admin_inbound_groups(db, _admin.id)
-        if assigned_groups:
-            requested_group_id = user_input.inbound_group_id
-            if requested_group_id is None:
-                requested_group_id = _admin.inbound_group_id
-            selected_group = next(
-                (group for group in assigned_groups
-                 if group.id == requested_group_id and group.panel == _admin.panel), None
-            )
-            if selected_group is None:
-                return JSONResponse(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    content={"success": False, "message": "Choose one of your assigned inbound groups"},
-                )
-            if selected_group.is_default:
-                try:
-                    admin_task.api_service.inbounds = await admin_task.api_service_for_main_tasks.get_inbounds()
-                except Exception as exc:
-                    logger.error("Could not refresh default inbound group for %s: %s", admin_username, exc)
-                    return JSONResponse(status_code=503, content={
-                        "success": False,
-                        "message": "Could not load the default inbound group; please retry",
-                    })
-            else:
-                try:
-                    selected_inbounds = json.loads(selected_group.inbounds)
-                except (TypeError, json.JSONDecodeError):
-                    logger.error("Invalid inbound group JSON for group %s", selected_group.id)
-                    return JSONResponse(status_code=409, content={
-                        "success": False,
-                        "message": "This inbound group is invalid. Contact your administrator.",
-                    })
-                try:
-                    live = await admin_task.api_service_for_main_tasks.get_inbounds()
-                except Exception as exc:
-                    logger.error("Could not validate inbound group %s: %s", selected_group.id, exc)
-                    return JSONResponse(status_code=503, content={
-                        "success": False,
-                        "message": "Could not verify this inbound group; please retry",
-                    })
-                if any(protocol not in live or not set(tags) <= set(live[protocol])
-                       for protocol, tags in selected_inbounds.items()):
-                    return JSONResponse(status_code=409, content={
-                        "success": False,
-                        "message": "This inbound group has unavailable inbounds. Contact your administrator.",
-                    })
-                admin_task.api_service.inbounds = selected_inbounds
-
         # Admins configured with "all inbounds" always get the live full set from
         # the master panel at creation time (complementing the per-login refresh),
         # so inbounds added/removed upstream are reflected immediately.
-        if _admin.marzban_all_inbounds and not assigned_groups:
+        if _admin.marzban_all_inbounds:
             try:
                 live = await admin_task.api_service_for_main_tasks.get_inbounds()
                 admin_task.api_service.inbounds = live

@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { userSchema, UserFormData, ClientsOutput } from '@/types'
 import { userAPI } from '@/lib/api'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,22 +51,6 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user, existingUsern
     // Expiry as it stands on the server, kept so an edit that doesn't touch the
     // days field re-sends the exact same timestamp instead of a rounded date.
     const [originalExpiry, setOriginalExpiry] = useState<{ days: number; unix: number } | null>(null)
-    const [inboundGroups, setInboundGroups] = useState<{ id: number; name: string; is_default: boolean }[]>([])
-    const [inboundGroupId, setInboundGroupId] = useState('')
-
-    useEffect(() => {
-        if (!isOpen || user) return
-        let active = true
-        userAPI.getInboundGroups().then((groups) => {
-            if (!active) return
-            setInboundGroups(groups)
-            const preferred = groups.find((group) => group.is_default) || groups[0]
-            setInboundGroupId(preferred ? String(preferred.id) : '')
-        }).catch(() => {
-            if (active) setInboundGroups([])
-        })
-        return () => { active = false }
-    }, [isOpen, user])
 
     const {
         register,
@@ -155,8 +138,7 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user, existingUsern
                 await userAPI.createUser(
                     data.email,
                     data.totalGb,
-                    expiryForSubmit,
-                    inboundGroups.length ? Number(inboundGroupId) || undefined : undefined,
+                    expiryForSubmit
                 )
             }
 
@@ -182,16 +164,6 @@ export function UserFormDialog({ isOpen, onClose, onSuccess, user, existingUsern
                         <div className="flex items-gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
                             <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
                             <p>{serverError}</p>
-                        </div>
-                    )}
-
-                    {!user && inboundGroups.length > 1 && (
-                        <div className="space-y-2">
-                            <Label>Inbound group</Label>
-                            <Select value={inboundGroupId} onValueChange={setInboundGroupId}>
-                                <SelectTrigger><SelectValue placeholder="Select inbound group" /></SelectTrigger>
-                                <SelectContent>{inboundGroups.map((group) => <SelectItem key={group.id} value={String(group.id)}>{group.name}{group.is_default ? ' (default)' : ''}</SelectItem>)}</SelectContent>
-                            </Select>
                         </div>
                     )}
 

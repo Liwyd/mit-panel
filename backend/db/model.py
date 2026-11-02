@@ -25,7 +25,6 @@ class Admins(Base):
     marzban_inbounds = Column(String, nullable=True)
     marzban_password = Column(String, nullable=True)
     marzban_all_inbounds = Column(Boolean, default=False, nullable=True)
-    inbound_group_id = Column(Integer, nullable=True, index=True)
     traffic = Column(BigInteger, default=0)
     initial_traffic = Column(BigInteger, default=0, nullable=True)
     update_return_traffic = Column(Boolean, default=False)
@@ -48,27 +47,6 @@ class Panels(Base):
     password = Column(String, nullable=False)
     token = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-
-
-class InboundGroups(Base):
-    __tablename__ = "inbound_groups"
-    __table_args__ = (UniqueConstraint("panel", "name", name="uq_inbound_groups_panel_name"),)
-
-    id = Column(Integer, primary_key=True, index=True)
-    panel = Column(String, nullable=False, index=True)
-    name = Column(String, nullable=False)
-    inbounds = Column(String, nullable=False)
-    is_default = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-
-class AdminInboundGroups(Base):
-    __tablename__ = "admin_inbound_groups"
-    __table_args__ = (UniqueConstraint("admin_id", "group_id", name="uq_admin_inbound_group"),)
-
-    id = Column(Integer, primary_key=True, index=True)
-    admin_id = Column(Integer, ForeignKey("admins.id", ondelete="CASCADE"), nullable=False, index=True)
-    group_id = Column(Integer, ForeignKey("inbound_groups.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
 class News(Base):

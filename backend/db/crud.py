@@ -4,8 +4,6 @@ from sqlalchemy.orm import Session
 
 from backend.db.model import (
     Admins,
-    InboundGroups,
-    AdminInboundGroups,
     Panels,
     News,
     SanaeiUsers,
@@ -37,7 +35,6 @@ def add_admin(db: Session, admin_input: AdminInput) -> None:
         marzban_inbounds=admin_input.marzban_inbounds,
         marzban_password=admin_input.marzban_password,
         marzban_all_inbounds=admin_input.marzban_all_inbounds,
-        inbound_group_id=admin_input.inbound_group_id,
         traffic=admin_input.traffic,
         initial_traffic=admin_input.traffic,
         update_return_traffic=admin_input.update_return_traffic,
@@ -77,7 +74,6 @@ def update_admin_values(
         else admin.hashed_password
     )
     if admin:
-        panel_changed = admin.panel != admin_input.panel
         admin.username = admin_input.username
         admin.hashed_password = new_password
         admin.is_active = admin_input.is_active
@@ -88,11 +84,6 @@ def update_admin_values(
         if admin_input.marzban_password is not None:
             admin.marzban_password = admin_input.marzban_password
         admin.marzban_all_inbounds = admin_input.marzban_all_inbounds
-        if panel_changed:
-            db.query(AdminInboundGroups).filter(AdminInboundGroups.admin_id == admin_id).delete(synchronize_session=False)
-            admin.inbound_group_id = None
-        if not panel_changed and admin_input.inbound_group_id is not None:
-            admin.inbound_group_id = admin_input.inbound_group_id
         if admin_input.initial_traffic is not None:
             admin.traffic = int(admin_input.traffic)
             admin.initial_traffic = int(admin_input.initial_traffic)
@@ -116,7 +107,6 @@ def remove_admin(db: Session, admin_id: int) -> bool:
         # SQLite doesn't enforce the FK's ON DELETE here; unassign by hand so
         # the bot stays (superadmin-only) instead of pointing at a dead id.
         db.query(TelegramBots).filter(TelegramBots.admin_id == admin_id).update({TelegramBots.admin_id: None})
-        db.query(AdminInboundGroups).filter(AdminInboundGroups.admin_id == admin_id).delete(synchronize_session=False)
         db.delete(admin)
         db.commit()
         return True
@@ -197,56 +187,6 @@ def get_panel_by_name(db: Session, name: str) -> Panels | None:
     return db.query(Panels).filter(Panels.name == name).first()
 
 
-def get_inbound_groups(db: Session, panel: str) -> list[InboundGroups]:
-    return db.query(InboundGroups).filter(InboundGroups.panel == panel).order_by(InboundGroups.is_default.desc(), InboundGroups.id).all()
-
-
-def get_inbound_group(db: Session, group_id: int) -> InboundGroups | None:
-    return db.query(InboundGroups).filter(InboundGroups.id == group_id).first()
-
-
-def get_admin_inbound_groups(db: Session, admin_id: int) -> list[InboundGroups]:
-    return (
-        db.query(InboundGroups)
-        .join(AdminInboundGroups, AdminInboundGroups.group_id == InboundGroups.id)
-        .filter(AdminInboundGroups.admin_id == admin_id)
-        .order_by(InboundGroups.is_default.desc(), InboundGroups.id)
-        .all()
-    )
-
-
-def assign_admin_inbound_groups(db: Session, admin_id: int, group_ids: list[int]) -> None:
-    db.query(AdminInboundGroups).filter(AdminInboundGroups.admin_id == admin_id).delete()
-    db.add_all(AdminInboundGroups(admin_id=admin_id, group_id=group_id) for group_id in sorted(set(group_ids)))
-
-
-def save_inbound_group(db: Session, *, panel: str, name: str, inbounds: str, group_id: int | None = None, is_default: bool = False) -> InboundGroups:
-    if is_default:
-        db.query(InboundGroups).filter(InboundGroups.panel == panel).update({InboundGroups.is_default: False})
-    group = get_inbound_group(db, group_id) if group_id else InboundGroups(panel=panel, name=name, inbounds=inbounds)
-    if group is None:
-        raise ValueError("Inbound group not found")
-    group.panel = panel
-    group.name = name
-    group.inbounds = inbounds
-    group.is_default = is_default
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return group
-
-
-def delete_inbound_group(db: Session, group_id: int) -> bool:
-    group = get_inbound_group(db, group_id)
-    if not group:
-        return False
-    db.query(Admins).filter(Admins.inbound_group_id == group_id).update({Admins.inbound_group_id: None})
-    db.query(AdminInboundGroups).filter(AdminInboundGroups.group_id == group_id).delete(synchronize_session=False)
-    db.delete(group)
-    db.commit()
-    return True
-
-
 def add_panel(db: Session, panel_input: PanelInput) -> None:
     panel = Panels(
         panel_type=panel_input.panel_type,
@@ -281,11 +221,6 @@ def update_panel_values(db: Session, panel_id: int, panel_input: PanelInput) -> 
 def remove_panel(db: Session, panel_id: int) -> bool:
     panel = db.query(Panels).filter(Panels.id == panel_id).first()
     if panel:
-        group_ids = [g.id for g in db.query(InboundGroups).filter(InboundGroups.panel == panel.name).all()]
-        if group_ids:
-            db.query(AdminInboundGroups).filter(AdminInboundGroups.group_id.in_(group_ids)).delete(synchronize_session=False)
-            db.query(Admins).filter(Admins.inbound_group_id.in_(group_ids)).update({Admins.inbound_group_id: None}, synchronize_session=False)
-            db.query(InboundGroups).filter(InboundGroups.id.in_(group_ids)).delete(synchronize_session=False)
         db.delete(panel)
         db.commit()
         return True

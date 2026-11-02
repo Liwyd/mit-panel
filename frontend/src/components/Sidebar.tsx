@@ -12,7 +12,6 @@ import {
     Sun,
     Moon,
     Server,
-    Layers,
     Bot,
     Lock,
 } from 'lucide-react'
@@ -46,12 +45,6 @@ const navigationItems = [
         label: 'Panels',
         href: '/panels',
         icon: Server,
-        roles: ['superadmin'],
-    },
-    {
-        label: 'Inbound Groups',
-        href: '/inbound-groups',
-        icon: Layers,
         roles: ['superadmin'],
     },
     {
