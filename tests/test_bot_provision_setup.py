@@ -187,6 +187,36 @@ def test_the_bots_panel_list_gets_the_resellers_own_panel(
     assert seen["bound"] == ["پنل VIP مولتی لوکیشن"]
 
 
+def test_bot_receives_each_panel_owned_by_the_selected_telegram_account(
+    db_session, monkeypatch, marzban_panel
+):
+    first = _add_admin(
+        db_session, "seller-one", panel=marzban_panel.name, marzban_password="pass-one"
+    )
+    second_panel = type(marzban_panel)(
+        panel_type="marzban",
+        name="panel-two",
+        url="https://second.example",
+        username="sudo-two",
+        password="sudo-pass-two",
+    )
+    db_session.add(second_panel)
+    db_session.commit()
+    _add_admin(
+        db_session, "seller-two", panel=second_panel.name, marzban_password="pass-two"
+    )
+    # The selected row determines the owner; both rows share one Telegram ID.
+    seen = _install(monkeypatch, first)
+
+    assert [row["name"] for row in seen["mit"]] == [
+        "پنل VIP مولتی لوکیشن",
+        "پنل VIP مولتی لوکیشن 2",
+    ]
+    assert [row["marzban_user"] for row in seen["mit"]] == ["seller-one", "seller-two"]
+    assert [row["marzban_password"] for row in seen["mit"]] == ["pass-one", "pass-two"]
+    assert seen["bound"] == ["پنل VIP مولتی لوکیشن"]
+
+
 def test_a_mit_panel_that_cannot_be_made_falls_back_to_the_plain_one(
     db_session, monkeypatch, marzban_panel
 ):

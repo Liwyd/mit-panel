@@ -166,13 +166,13 @@ async def push_vip_panel(
     username: str,
     password: str,
     panel_url: str,
+    name: str = VIP_PANEL_NAME,
 ) -> str:
     """Put the reseller's panel into the bot's «مدیریت پنل‌ها» as «پنل VIP».
 
     The bot sells from a panel of its own, so after it is installed nobody
-    should have to type the panel in by hand. This writes the one row it needs,
-    creating it or updating it — the create endpoint refuses a second panel
-    with the same name, so an existing row is updated rather than duplicated.
+    should have to type the panel in by hand. This writes or updates one row;
+    `name` allows accounts with several panels to keep a separate row for each.
 
     `username`/`password` are the reseller's own Marzban login, not the panel's
     sudo account: the bot has to create users as that reseller, and giving every
@@ -190,7 +190,7 @@ async def push_vip_panel(
             )
             if res.status_code == 200:
                 for row in (res.json().get("data") or []):
-                    if row.get("name_panel") == VIP_PANEL_NAME:
+                    if row.get("name_panel", row.get("name")) == name:
                         found = row
                         break
             if found is not None:
@@ -198,19 +198,19 @@ async def push_vip_panel(
                     f"{bot_url}/api/v1/panels/{found.get('id')}",
                     headers={"Authorization": f"Bearer {owner_key}"},
                     json={
-                        "url_panel": panel_url,
+                    "url_panel": panel_url,
                         "username_panel": username,
                         "password_panel": password or "",
                     },
                 )
                 if put.status_code != 200:
                     raise MitSellerError(put.json().get("error") or f"HTTP {put.status_code}")
-                return f"پنل «{VIP_PANEL_NAME}» به‌روزرسانی شد"
+                return f"پنل «{name}» به‌روزرسانی شد"
             post = await client.post(
                 f"{bot_url}/api/v1/panels",
                 headers={"Authorization": f"Bearer {owner_key}"},
                 json={
-                    "name": VIP_PANEL_NAME,
+                    "name": name,
                     "type": "marzban",
                     "url": panel_url,
                     "username": username,
@@ -219,7 +219,7 @@ async def push_vip_panel(
             )
             if post.status_code != 200:
                 raise MitSellerError(post.json().get("error") or f"HTTP {post.status_code}")
-            return f"پنل «{VIP_PANEL_NAME}» ساخته شد"
+            return f"پنل «{name}» ساخته شد"
     except httpx.HTTPError as exc:
         raise MitSellerError(f"ربات در دسترس نیست: {exc.__class__.__name__}") from exc
     except ValueError as exc:
@@ -364,7 +364,7 @@ async def push_mit_panel(
             found: dict | None = None
             if res.status_code == 200:
                 for row in (res.json().get("data") or []):
-                    if row.get("name_panel") == name:
+                    if row.get("name_panel", row.get("name")) == name:
                         found = row
                         break
             if found is not None:

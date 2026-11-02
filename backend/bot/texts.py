@@ -681,8 +681,11 @@ BOT_PANEL_FAILED = "⚠️ پنل داخل ربات ساخته نشد: {error}"
 BOT_MIT_PANEL_ADDED = (
     "🔗 پنل «{name}» داخل ربات ساخته شد: پنل خودِ <b>{username}</b> و مرزبان او."
 )
+BOT_PLAIN_PANEL_ADDED = "🔗 پنل مرزبان «{name}» داخل ربات ساخته شد: <b>{username}</b>."
 BOT_MIT_PANEL_FAILED = "⚠️ پنل «{name}» داخل ربات ساخته نشد: {error}"
 BOT_PRODUCTS_BOUND = "🛒 {count} سرویس ربات به همین پنل وصل شد."
+BOT_PANEL_CREDENTIALS_MISSING = "⚠️ پنل شماره {panel_number} ({username}) به دلیل نبود اطلاعات مرزبان اضافه نشد."
+BOT_PANEL_FAILED_NUMBERED = "⚠️ افزودن پنل شماره {panel_number} ناموفق بود: {error}"
 BOT_ADMIN_ADDED = "👥 <code>{admin_id}</code> هم به‌عنوان ادمین ربات اضافه شد."
 BOT_ADMIN_FAILED = "⚠️ ادمین دوم ربات اضافه نشد: {error}"
 
