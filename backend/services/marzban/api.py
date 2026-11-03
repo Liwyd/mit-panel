@@ -2,6 +2,7 @@ import time
 import json
 import asyncio
 import requests
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 
 from backend.schema._input import ClientInput, ClientUpdateInput
@@ -14,6 +15,10 @@ REQUEST_TIMEOUT = 10
 
 class MarzbanAPIError(Exception):
     """A panel call failed in a way the caller must not silently absorb."""
+
+
+class MarzbanUserUnavailable(MarzbanAPIError):
+    """The user is missing or inaccessible to this Marzban admin."""
 
 
 class APIService:
@@ -306,6 +311,29 @@ class APIService:
             timeout=REQUEST_TIMEOUT,
         )
         return response.status_code
+
+    async def revoke_subscription(self, username: str) -> dict:
+        await self._login()
+        response = self.session.post(
+            f"{self.url}api/user/{quote(username, safe='')}/revoke_sub",
+            headers=self.headers, timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code in (403, 404):
+            raise MarzbanUserUnavailable("User unavailable")
+        if response.status_code != 200:
+            raise MarzbanAPIError(f"Marzban revoke returned status {response.status_code}")
+        try:
+            user = response.json()
+        except ValueError as exc:
+            raise MarzbanAPIError("Invalid revoke response") from exc
+        if (
+            not isinstance(user, dict)
+            or user.get("username") != username
+            or not isinstance(user.get("subscription_url"), str)
+            or not user["subscription_url"]
+        ):
+            raise MarzbanAPIError("Invalid revoke response")
+        return user
 
     async def delete_user(self, username: str) -> int:
         await self._login()

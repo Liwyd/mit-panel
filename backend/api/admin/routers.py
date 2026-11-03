@@ -13,8 +13,39 @@ from backend.services import (
     get_all_users_from_panel,
     reset_a_user_usage,
 )
+from backend.db import crud
+from backend.services.limit_handler import AdminLimiter
+from backend.services.marzban.api import APIService, MarzbanUserUnavailable
+from backend.utils.logger import logger
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+@router.post("/user/{username}/revoke-subscription")
+async def revoke_subscription(
+    username: str,
+    db: Session = Depends(get_db),
+    current_admin: dict = Depends(get_current_admin),
+):
+    if current_admin.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "message": "Not authorized"})
+    admin = crud.get_admin_by_username(db, current_admin["username"])
+    if not admin or not AdminLimiter(db, current_admin["username"]).admin_is_active():
+        return JSONResponse(status_code=403, content={"success": False, "message": "Admin account is inactive"})
+    panel = crud.get_panel_by_name(db, admin.panel)
+    if not panel or panel.panel_type != "marzban":
+        return JSONResponse(status_code=400, content={"success": False, "message": "Subscription revocation unavailable"})
+    try:
+        user = await APIService(
+            panel.url, admin.username, admin.marzban_password or ""
+        ).revoke_subscription(username)
+    except MarzbanUserUnavailable:
+        return JSONResponse(status_code=404, content={"success": False, "message": "User unavailable"})
+    except Exception:
+        logger.exception("Subscription revoke failed for admin %s user %s", admin.username, username)
+        return JSONResponse(status_code=502, content={"success": False, "message": "Could not confirm revocation; refresh before retrying"})
+    logger.info("Subscription revoked by admin %s for user %s", admin.username, username)
+    return {"success": True, "message": "Subscription revoked", "data": {"subscription_url": user["subscription_url"]}}
 
 
 @router.get("/user", description="Get all users")

@@ -58,6 +58,7 @@ async def read_dashboard_data(
                     for news in news_data
                 ],
                 "sub_url": panel_data.sub_url,
+                "can_revoke_subscription": panel_data.panel_type == "marzban",
                 "users": users,
             },
         )

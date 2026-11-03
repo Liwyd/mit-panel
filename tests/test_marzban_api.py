@@ -78,6 +78,27 @@ def service(script=()) -> tuple[APIService, FakeSession]:
     return svc, session
 
 
+def test_revoke_subscription_uses_authenticated_post_and_returns_user():
+    svc, session = service([FakeResponse(payload={"username": "alice", "subscription_url": "/sub/new"})])
+    assert asyncio.run(svc.revoke_subscription("alice"))["subscription_url"] == "/sub/new"
+    assert session.calls[0]["url"].endswith("/api/user/alice/revoke_sub")
+    assert session.calls[0]["headers"] == {"Authorization": "Bearer test-token"}
+    assert session.calls[0]["timeout"] == marzban_api.REQUEST_TIMEOUT
+
+
+@pytest.mark.parametrize("code", [403, 404])
+def test_revoke_subscription_hides_user_access_failure(code):
+    svc, _ = service([FakeResponse(status_code=code)])
+    with pytest.raises(marzban_api.MarzbanUserUnavailable):
+        asyncio.run(svc.revoke_subscription("alice"))
+
+
+def test_revoke_subscription_rejects_malformed_response():
+    svc, _ = service([FakeResponse(payload={"username": "alice"})])
+    with pytest.raises(MarzbanAPIError):
+        asyncio.run(svc.revoke_subscription("alice"))
+
+
 def test_inbounds_survive_a_flaky_read():
     svc, session = service(
         [
