@@ -2,28 +2,9 @@ from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from backend.bot import texts
-from backend.bot.content import BUTTON_TEXTS, button_config, configured_button_label
-
-
-def _configurable_reply(menu: str, defaults: list[list[str]]) -> ReplyKeyboardMarkup:
-    config = button_config().get(menu)
-    rows = config["layout"] if config else defaults
-    styles = config.get("buttons", {}) if config else {}
-    kb = ReplyKeyboardBuilder()
-    for row in rows:
-        for action in row:
-            label = configured_button_label(menu, action)
-            item = styles.get(action, {})
-            kwargs = {key: item[key] for key in ("style", "icon_custom_emoji_id") if item.get(key)}
-            kb.button(text=label, **kwargs)
-        kb.adjust(len(row))
-    return kb.as_markup(resize_keyboard=True)
 
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
-    config = button_config().get("main")
-    if config:
-        return _configurable_reply("main", config["layout"])
     kb = ReplyKeyboardBuilder()
     kb.button(text=texts.BTN_TOPUP)
     kb.button(text=texts.BTN_MY_PANELS)
@@ -45,9 +26,6 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
     """Someone with no panel yet still has an account with us: they can hold a
     balance and be invoiced, so the money side of the bot is open to them. The
     panel button is where activation and the requests live."""
-    config = button_config().get("unlinked")
-    if config:
-        return _configurable_reply("unlinked", config["layout"])
     kb = ReplyKeyboardBuilder()
     kb.button(text=texts.BTN_WALLET)
     kb.button(text=texts.BTN_MY_INVOICES)
@@ -61,9 +39,6 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
 
 def prospect_menu_kb() -> ReplyKeyboardMarkup:
     """Shown to users who have no panel yet — shop-style."""
-    config = button_config().get("prospect")
-    if config:
-        return _configurable_reply("prospect", config["layout"])
     kb = ReplyKeyboardBuilder()
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_MY_PANELS)
@@ -98,9 +73,6 @@ def superadmin_menu_kb() -> ReplyKeyboardMarkup:
     thing that is actually time-critical — the pending requests — so everything
     else moves a tap away, grouped by what it is for.
     """
-    config = button_config().get("superadmin")
-    if config:
-        return _configurable_reply("superadmin", config["layout"])
     return _reply_kb(
         texts.BTN_PENDING_REQUESTS,
         texts.BTN_PENDING_REFERRAL_REQUESTS,

@@ -12,7 +12,6 @@ import logging
 from functools import partial
 
 from backend.bot.config import bot_config
-from backend.utils.settings_store import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ async def _run_bot() -> None:
 
     from backend.bot import db
     from backend.bot import access_lock
-    from backend.bot.middlewares import ForceJoinMiddleware, MenuLabelMiddleware
+    from backend.bot.middlewares import ForceJoinMiddleware
     from backend.bot.digest import run_digest_scheduler
     from backend.bot.forecast import run_forecast_scheduler
     from backend.bot.warnings import run_warning_scanner
@@ -59,7 +58,7 @@ async def _run_bot() -> None:
     from backend.bot.auto_approve import run_auto_approver
     from backend.bot.usage_sync import run_usage_sync
 
-    if not bot_config.bot_token or not get_settings().get("topup_bot_enabled", True):
+    if not bot_config.bot_token:
         return
 
     logger.info("Starting Telegram top-up bot...")
@@ -79,7 +78,6 @@ async def _run_bot() -> None:
     )
 
     dp = Dispatcher(storage=MemoryStorage())
-    dp.message.outer_middleware(MenuLabelMiddleware())
     force_join = ForceJoinMiddleware()
     dp.message.outer_middleware(force_join)
     dp.callback_query.outer_middleware(force_join)
@@ -107,17 +105,14 @@ async def _run_bot() -> None:
         logger.info("Bot polling stopped")
 
 
-def start_bot() -> bool:
+def start_bot() -> None:
     """Create the asyncio task (called from FastAPI startup)."""
     global _bot_task
-    if is_running():
-        return True
-    if not bot_config.bot_token or not get_settings().get("topup_bot_enabled", True):
+    if not bot_config.bot_token:
         logger.info("BOT_TOKEN not set — top-up bot disabled")
-        return False
+        return
     _bot_task = asyncio.create_task(_run_bot())
     logger.info("Top-up bot task created")
-    return True
 
 
 async def stop_bot() -> None:

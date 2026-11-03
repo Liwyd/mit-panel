@@ -36,12 +36,6 @@ DEFAULTS = {
     # backend.bot.texts at startup and after a dashboard save; keeping them in
     # the panel settings store avoids a second, disconnected configuration file.
     "topup_text_overrides": {},
-    # Presentation configuration for built-in bot keyboards. Action identifiers
-    # remain code-owned so dashboard edits cannot redirect financial actions.
-    "topup_button_config": {},
-    # Kept true by default so existing configured production bots retain their
-    # current startup behaviour when this setting is introduced.
-    "topup_bot_enabled": True,
     # The Mit panel the reseller bots call over its API. This has to be an
     # address the bot *servers* can reach directly: wunli.draking.ir sits
     # behind a tunnel meant for end users in Iran, and the tunnel drops the
