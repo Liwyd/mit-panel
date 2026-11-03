@@ -11,10 +11,22 @@ from aiogram.types import User as TgUser
 from backend.bot import db
 from backend.bot.config import bot_config as settings
 from backend.bot import keyboards, texts
+from backend.bot.content import normalize_menu_text
 
 logger = logging.getLogger(__name__)
 
 _MEMBER_OK = {"member", "administrator", "creator"}
+
+
+class MenuLabelMiddleware(BaseMiddleware):
+    """Map configured visible labels to canonical handler labels at ingress."""
+    async def __call__(self, handler, event, data):
+        if hasattr(event, "text") and event.text:
+            canonical = normalize_menu_text(event.text)
+            if canonical != event.text:
+                event = event.model_copy(update={"text": canonical})
+                data["event"] = event
+        return await handler(event, data)
 
 
 class ForceJoinMiddleware(BaseMiddleware):

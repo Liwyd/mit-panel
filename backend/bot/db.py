@@ -366,9 +366,39 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bot_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target TEXT,
+                detail TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
 
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()
+
+
+def record_audit(actor: str, action: str, target: str | None = None, detail: str | None = None) -> None:
+    """Persist dashboard actions without storing credentials or receipt paths."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO bot_audit_log(actor, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?)",
+            (actor, action, target, detail, datetime.now(timezone.utc).isoformat()),
+        )
+
+
+def list_audit(limit: int = 100) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, actor, action, target, detail, created_at FROM bot_audit_log ORDER BY id DESC LIMIT ?",
+            (max(1, min(limit, 200)),),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 @dataclass
