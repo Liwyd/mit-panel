@@ -373,6 +373,8 @@ export const topupConnectionAPI = {
 }
 
 export interface TopupStats {
+    configured: boolean
+    running: boolean
     users: number
     linked_users: number
     pending_requests: number
@@ -385,6 +387,21 @@ export interface TopupStats {
     sales_today: number
     sales_today_amount: number
     sales_today_gb: number
+}
+
+export interface TopupRequest {
+    id: number
+    telegram_id: number
+    username: string | null
+    requested_gb: number
+    amount: number
+    kind: 'topup' | 'wallet' | 'invoice' | 'settlement' | string
+    invoice_id: number | null
+    status: string
+    created_at: string
+    reviewed_at: string | null
+    reject_reason: string | null
+    has_receipt: boolean
 }
 
 export interface TopupSettings {

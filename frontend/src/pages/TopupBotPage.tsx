@@ -1,18 +1,18 @@
 import { useState } from 'react'
-import { LayoutDashboard, LayoutGrid, Settings2, Type, Zap } from 'lucide-react'
+import { ClipboardCheck, LayoutDashboard, Settings2, Type, Zap } from 'lucide-react'
 import { topupBotAPI } from '@/lib/bots-api'
 import { cn } from '@/lib/utils'
 import { PageLayout } from '@/components/PageLayout'
 import { TopupOverview } from './topup/TopupOverview'
 import { TopupSettings } from './topup/TopupSettings'
 import { TopupTexts } from './topup/TopupTexts'
-import { TopupButtons } from './topup/TopupButtons'
+import { TopupRequests } from './topup/TopupRequests'
 
 const TABS = [
     { key: 'overview', label: 'خلاصه', icon: LayoutDashboard },
     { key: 'settings', label: 'تنظیمات', icon: Settings2 },
     { key: 'texts', label: 'متن‌ها', icon: Type },
-    { key: 'buttons', label: 'دکمه‌ها', icon: LayoutGrid },
+    { key: 'requests', label: 'رسیدها', icon: ClipboardCheck },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -44,7 +44,7 @@ export function TopupBotPage() {
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
                         <Zap className="h-7 w-7 text-primary" /> ربات تاپ‌آپ
                     </h1>
-                    <p className="text-muted-foreground text-sm">مدیریت ربات شارژ پنل نماینده‌ها: تنظیمات، متن پیام‌ها و دکمه‌ها، رنگ دکمه‌ها و ایموجی پریمیوم.</p>
+                    <p className="text-muted-foreground text-sm">مدیریت زنده‌ی ربات شارژ: وضعیت، رسیدها، تنظیمات مالی و متن پیام‌ها.</p>
                 </div>
             </div>
             <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
@@ -75,7 +75,7 @@ export function TopupBotPage() {
                     {tab === 'overview' && <TopupOverview api={topupBotAPI} />}
                     {tab === 'settings' && <TopupSettings api={topupBotAPI} />}
                     {tab === 'texts' && <TopupTexts api={topupBotAPI} />}
-                    {tab === 'buttons' && <TopupButtons api={topupBotAPI} />}
+                    {tab === 'requests' && <TopupRequests api={topupBotAPI} />}
                 </div>
             </div>
         </PageLayout>

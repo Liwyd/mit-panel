@@ -8,13 +8,20 @@ export function TopupOverview({ api }: { api: BotAPI }) {
         <div className="space-y-4">
             <ErrorBox error={error} />
             {s && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Stat label="فروش امروز" value={money(s.sales_today_amount)} sub={`${num(s.sales_today)} خرید · ${num(s.sales_today_gb)} گیگ`} />
-                    <Stat label="رسیدهای در انتظار" value={num(s.pending_requests)} sub={money(s.pending_amount)} />
-                    <Stat label="بدهی‌های باز" value={money(s.open_bills_amount)} sub={`${num(s.open_bills)} مورد`} />
-                    <Stat label="سررسید گذشته" value={money(s.overdue_amount)} sub={`${num(s.overdue_bills)} مورد`} />
-                    <Stat label="کاربران ربات" value={num(s.users)} sub={`${num(s.linked_users)} نماینده با پنل`} />
-                    <Stat label="پنل‌های مسدود" value={num(s.locked_panels)} />
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-border bg-card p-3 text-sm">
+                        <span className={s.running ? 'text-brand-green' : s.configured ? 'text-amber-600' : 'text-destructive'}>
+                            {s.running ? '● ربات در حال اجرا است' : s.configured ? '● توکن تنظیم شده، اما ربات در این پردازش اجرا نیست' : '● توکن ربات هنوز تنظیم نشده است'}
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Stat label="فروش امروز" value={money(s.sales_today_amount)} sub={`${num(s.sales_today)} خرید · ${num(s.sales_today_gb)} گیگ`} />
+                        <Stat label="رسیدهای در انتظار" value={num(s.pending_requests)} sub={money(s.pending_amount)} />
+                        <Stat label="بدهی‌های باز" value={money(s.open_bills_amount)} sub={`${num(s.open_bills)} مورد`} />
+                        <Stat label="سررسید گذشته" value={money(s.overdue_amount)} sub={`${num(s.overdue_bills)} مورد`} />
+                        <Stat label="کاربران ربات" value={num(s.users)} sub={`${num(s.linked_users)} نماینده با پنل`} />
+                        <Stat label="پنل‌های مسدود" value={num(s.locked_panels)} />
+                    </div>
                 </div>
             )}
         </div>

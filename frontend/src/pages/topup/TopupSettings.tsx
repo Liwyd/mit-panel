@@ -18,6 +18,8 @@ function Editor({ api, d, onSaved }: { api: BotAPI; d: Settings; onSaved: (s: Se
     const [joinOn, setJoinOn] = useState(d.force_join_enabled)
     const [channel, setChannel] = useState(d.force_join_channel)
     const [autoApprove, setAutoApprove] = useState(d.auto_approve_enabled)
+    const [minGb, setMinGb] = useState(String(d.min_gb))
+    const [maxGb, setMaxGb] = useState(String(d.max_gb))
     const [pin, setPin] = useState('')
     const act = useAction()
 
@@ -27,6 +29,8 @@ function Editor({ api, d, onSaved }: { api: BotAPI; d: Settings; onSaved: (s: Se
     if (channel !== d.force_join_channel) body.force_join_channel = channel
     if (joinOn !== d.force_join_enabled) body.force_join_enabled = joinOn
     if (autoApprove !== d.auto_approve_enabled) body.auto_approve_enabled = autoApprove
+    if (Number(minGb) !== d.min_gb) body.min_gb = minGb
+    if (Number(maxGb) !== d.max_gb) body.max_gb = maxGb
     if (pin.trim()) body.bulk_password_pin = pin
     const changes = Object.keys(body).length
 
@@ -38,11 +42,19 @@ function Editor({ api, d, onSaved }: { api: BotAPI; d: Settings; onSaved: (s: Se
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="قیمت هر گیگابایت (تومان)" hint={`هر خرید بین ${num(d.min_gb)} تا ${num(d.max_gb)} گیگابایت است (از .env ربات).`}>
+                    <Field label="قیمت هر گیگابایت (تومان)" hint={`هر خرید بین ${num(d.min_gb)} تا ${num(d.max_gb)} گیگابایت است.`}>
                         <Input dir="ltr" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
                     </Field>
                     <Field label="شماره کارت" hint="برای کارت به کارت، شارژ کیف پول و پرداخت فاکتورها نشان داده می‌شود.">
                         <Input dir="ltr" value={card} onChange={(e) => setCard(e.target.value)} />
+                    </Field>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="حداقل حجم هر خرید (گیگابایت)">
+                        <Input dir="ltr" inputMode="decimal" value={minGb} onChange={(e) => setMinGb(e.target.value)} />
+                    </Field>
+                    <Field label="حداکثر حجم هر خرید (گیگابایت)">
+                        <Input dir="ltr" inputMode="decimal" value={maxGb} onChange={(e) => setMaxGb(e.target.value)} />
                     </Field>
                 </div>
                 <Switch
