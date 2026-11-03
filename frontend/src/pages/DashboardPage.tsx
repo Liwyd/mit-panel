@@ -281,6 +281,8 @@ export function DashboardPage() {
     const [selectedUser, setSelectedUser] = useState<ClientsOutput | null>(null)
     const [showUserDialog, setShowUserDialog] = useState(false)
     const [userToDelete, setUserToDelete] = useState<string | null>(null)
+    const [userToRevoke, setUserToRevoke] = useState<string | null>(null)
+    const [revoking, setRevoking] = useState(false)
     const [showQrDialog, setShowQrDialog] = useState(false)
     const [qrUser, setQrUser] = useState<ClientsOutput | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
@@ -510,6 +512,24 @@ export function DashboardPage() {
         } catch (err: any) {
             console.error('Failed to reset usage:', err)
             alert(err?.message || 'Failed to reset usage')
+        }
+    }
+
+    const handleRevoke = async () => {
+        if (!userToRevoke || revoking) return
+        setRevoking(true)
+        try {
+            const subscriptionUrl = await userAPI.revokeSubscription(userToRevoke)
+            setDashboardData((previous) => previous ? {
+                ...previous,
+                users: previous.users?.map((user) => user.username === userToRevoke ? { ...user, sub_id: subscriptionUrl } : user),
+            } : previous)
+            setUserToRevoke(null)
+            await fetchDashboardData()
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Could not confirm revocation; refresh before retrying')
+        } finally {
+            setRevoking(false)
         }
     }
 
@@ -1248,6 +1268,7 @@ export function DashboardPage() {
                                                     }}
                                                     onDelete={() => setUserToDelete(`${user.uuid || '0'}|${user.username}|${user.id}`)}
                                                     onResetUsage={() => handleResetUsage(user.username)}
+                                                    onRevoke={dashboardData.can_revoke_subscription ? () => setUserToRevoke(user.username) : undefined}
                                                     onShowQr={(user) => {
                                                         setQrUser(user)
                                                         setShowQrDialog(true)
@@ -1292,6 +1313,7 @@ export function DashboardPage() {
                                                             }}
                                                             onDelete={() => setUserToDelete(`${user.uuid || '0'}|${user.username}|${user.id}`)}
                                                             onResetUsage={() => handleResetUsage(user.username)}
+                                                            onRevoke={dashboardData.can_revoke_subscription ? () => setUserToRevoke(user.username) : undefined}
                                                             onShowQr={(user) => {
                                                                 setQrUser(user)
                                                                 setShowQrDialog(true)
@@ -1328,6 +1350,18 @@ export function DashboardPage() {
             />
 
             {/* Delete Confirmation Dialog */}
+            <AlertDialog open={!!userToRevoke} onOpenChange={(open) => { if (!open && !revoking) setUserToRevoke(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Revoke subscription for {userToRevoke}?</AlertDialogTitle>
+                        <AlertDialogDescription>Current proxy credentials will stop working. The user must update their configuration.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="flex justify-end gap-3">
+                        <AlertDialogCancel disabled={revoking}>Cancel</AlertDialogCancel>
+                        <Button variant="destructive" disabled={revoking} onClick={handleRevoke}>{revoking ? 'Revoking...' : 'Revoke Subscription'}</Button>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
             <AlertDialog open={!!userToDelete} onOpenChange={() => userToDelete && setUserToDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -1408,6 +1442,7 @@ export function DashboardPage() {
 }
 
 interface DetailsRowProps {
+    onRevoke?: () => void
     user: ClientsOutput
     isExpanded: boolean
     subUrl?: string
@@ -1420,6 +1455,7 @@ interface DetailsRowProps {
 }
 
 function DetailsRow({
+    onRevoke,
     user,
     isExpanded,
     subUrl,
@@ -1538,6 +1574,7 @@ function DetailsRow({
                                     <RotateCcw className="h-4 w-4 mr-2" />
                                     Reset Usage
                                 </Button>
+                                {onRevoke && <Button size="sm" variant="outline" onClick={onRevoke}>Revoke Subscription</Button>}
                                 {subUrl && user.sub_id && (
                                     <CopyButton
                                         text={buildSubUrl(subUrl, user.sub_id)}
@@ -1574,6 +1611,7 @@ function DetailsRow({
 
 // Mobile User Card Component
 interface MobileUserCardProps {
+    onRevoke?: () => void
     user: ClientsOutput
     isExpanded: boolean
     subUrl?: string
@@ -1586,6 +1624,7 @@ interface MobileUserCardProps {
 }
 
 function MobileUserCard({
+    onRevoke,
     user,
     isExpanded,
     subUrl,
@@ -1717,6 +1756,7 @@ function MobileUserCard({
                                 onClickCapture={(e) => e.stopPropagation()}
                             />
                         )}
+                        {onRevoke && <Button size="sm" variant="outline" className="flex-1 min-w-[80px]" onClick={onRevoke}>Revoke Subscription</Button>}
                         {subUrl && user.sub_id && (
                             <Button
                                 size="sm"

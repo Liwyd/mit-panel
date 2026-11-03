@@ -352,6 +352,7 @@ export interface NewsFeedItem {
 }
 
 export interface DashboardData {
+    can_revoke_subscription?: boolean
     remaining_traffic?: number
     initial_traffic?: number
     expiry_time?: string

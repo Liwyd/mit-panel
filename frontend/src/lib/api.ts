@@ -320,6 +320,11 @@ function toExpiryTimestamp(expiryDatetime: string | number | null | undefined): 
 
 // User API
 export const userAPI = {
+    revokeSubscription: async (username: string): Promise<string> => {
+        const response = await api.post<ResponseModel<{ subscription_url: string }>>(`/admin/user/${encodeURIComponent(username)}/revoke-subscription`)
+        if (!response.data.success || !response.data.data) throw new Error('Could not confirm revocation; refresh before retrying')
+        return response.data.data.subscription_url
+    },
     createUser: async (email: string, totalGb: number, expiryDatetime?: string | number | null): Promise<ClientsOutput> => {
         const submitData = {
             email,
