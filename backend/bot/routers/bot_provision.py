@@ -388,15 +388,9 @@ async def _push_plain_panel(
             panel_url=panel_url,
             name=panel_name or mitseller.VIP_PANEL_NAME,
         )
-        bound = await mitseller.bind_products_to_panel(
-            bot_url=url, owner_key=owner_key, panel_name=panel_name or mitseller.VIP_PANEL_NAME
-        )
-        out = texts.BOT_PLAIN_PANEL_ADDED.format(
+        return texts.BOT_PLAIN_PANEL_ADDED.format(
             name=panel_name or mitseller.VIP_PANEL_NAME, username=admin.username
         )
-        if bound:
-            out += "\n" + texts.BOT_PRODUCTS_BOUND.format(count=bound)
-        return out
     except mitseller.MitSellerError as exc:
         logger.warning(f"VIP panel not pushed to {url}: {exc}")
         return texts.BOT_PANEL_FAILED.format(error=exc)
@@ -404,7 +398,7 @@ async def _push_plain_panel(
 
 async def _push_owned_panels(
     *, url: str, owner_key: str, admins: list, panel_rows: dict, mit_base: str,
-    first_panel_cred: dict,
+    first_panel_cred: dict | None,
 ) -> str:
     """Install every panel belonging to the selected Telegram account.
 
@@ -415,6 +409,7 @@ async def _push_owned_panels(
     ordered = list(admins)
     notes: list[str] = []
     first_name = mitseller.MIT_PANEL_NAME
+    successful_index = 0
     for index, owned_admin in enumerate(ordered, start=1):
         panel = panel_rows.get(owned_admin.panel)
         if panel is None or not owned_admin.marzban_password:
@@ -424,15 +419,20 @@ async def _push_owned_panels(
                 )
             )
             continue
-        panel_name = first_name if index == 1 else f"{first_name} {index}"
+        successful_index += 1
+        panel_name = (
+            first_name if successful_index == 1 else f"{first_name} {successful_index}"
+        )
         target_panel_name = (
             panel_name
             if mit_base
-            else mitseller.VIP_PANEL_NAME if index == 1 else f"{mitseller.VIP_PANEL_NAME} {index}"
+            else mitseller.VIP_PANEL_NAME
+            if successful_index == 1
+            else f"{mitseller.VIP_PANEL_NAME} {successful_index}"
         )
         credential = (
             first_panel_cred
-            if owned_admin.id == ordered[0].id and first_panel_cred
+            if successful_index == 1 and first_panel_cred
             else {"user": owned_admin.username, "pass": owned_admin.marzban_password}
         )
         try:
@@ -468,26 +468,31 @@ async def _push_owned_panels(
                     )
                 )
             )
-            if index == 1:
-                bound = await mitseller.bind_products_to_panel(
-                    bot_url=url, owner_key=owner_key, panel_name=target_panel_name
-                )
-                if bound:
-                    notes.append(texts.BOT_PRODUCTS_BOUND.format(count=bound))
         except mitseller.MitSellerError as exc:
             logger.warning(
                 "mit panel %s not pushed to %s: %s", panel_name, url, exc
             )
             fallback_name = (
                 mitseller.VIP_PANEL_NAME
-                if index == 1
-                else f"{mitseller.VIP_PANEL_NAME} {index}"
+                if successful_index == 1
+                else f"{mitseller.VIP_PANEL_NAME} {successful_index}"
             )
             notes.append(
                 await _push_plain_panel(
                     url, owner_key, owned_admin, panel.url, panel_name=fallback_name
                 )
             )
+            target_panel_name = fallback_name
+        if successful_index == 1:
+            try:
+                bound = await mitseller.bind_products_to_panel(
+                    bot_url=url, owner_key=owner_key, panel_name=target_panel_name
+                )
+                if bound:
+                    notes.append(texts.BOT_PRODUCTS_BOUND.format(count=bound))
+            except Exception as exc:
+                logger.warning("Could not bind default products to %s: %s", target_panel_name, exc)
+                notes.append(texts.BOT_PRODUCTS_BIND_FAILED.format(name=target_panel_name))
     return "\n".join(note for note in notes if note)
 
 
@@ -574,11 +579,17 @@ async def _install(
             logger.warning(f"admin {for_admin_id} not added to {url}: {exc}")
 
     panel_note = ""
-    if admin is not None and panel_url and admin.marzban_password:
+    if admin is not None and any(
+        row.marzban_password and panel_rows.get(row.panel) for row in owned_admins
+    ):
         # The bot's own panel list gets the reseller's mit-panel — their panel
         # and the Marzban behind it — so that after the install there is
         # nothing left to add by hand.
-        cred = panel_cred or {"user": admin.username, "pass": admin.marzban_password}
+        cred = panel_cred or (
+            {"user": admin.username, "pass": admin.marzban_password}
+            if admin.marzban_password
+            else None
+        )
         mit_base = _mit_panel_base()
         panel_note = await _push_owned_panels(
             url=url,

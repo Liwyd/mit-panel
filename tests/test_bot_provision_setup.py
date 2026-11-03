@@ -113,8 +113,10 @@ def _patch(monkeypatch, *, verify=True, mit_fails=False):
     return seen
 
 
-def _install(monkeypatch, admin, **kwargs):
+def _install(monkeypatch, admin, *, mit_base=None, **kwargs):
     seen = _patch(monkeypatch, **kwargs.pop("_patch", {}))
+    if mit_base is not None:
+        monkeypatch.setattr(bot_provision, "_mit_panel_base", lambda: mit_base)
     _run(
         bot_provision._install(
             FakeMessage(SUPERADMIN),
@@ -185,6 +187,69 @@ def test_the_bots_panel_list_gets_the_resellers_own_panel(
     assert seen["vip"] == []
     # And the bot's shop items are sold from it.
     assert seen["bound"] == ["پنل VIP مولتی لوکیشن"]
+
+
+def test_plain_marzban_fallback_also_receives_every_owned_panel(
+    db_session, monkeypatch, marzban_panel
+):
+    first = _add_admin(
+        db_session, "seller-one", panel=marzban_panel.name, marzban_password="pass-one"
+    )
+    second_panel = type(marzban_panel)(
+        panel_type="marzban", name="panel-two", url="https://second.example",
+        username="sudo-two", password="sudo-pass-two",
+    )
+    db_session.add(second_panel)
+    db_session.commit()
+    _add_admin(db_session, "seller-two", panel=second_panel.name, marzban_password="pass-two")
+
+    seen = _install(monkeypatch, first, mit_base="")
+
+    assert [row["name"] for row in seen["vip"]] == [mitseller.VIP_PANEL_NAME, f"{mitseller.VIP_PANEL_NAME} 2"]
+    assert [row["username"] for row in seen["vip"]] == ["seller-one", "seller-two"]
+    assert seen["bound"] == [mitseller.VIP_PANEL_NAME]
+
+
+def test_incomplete_legacy_panel_does_not_shift_numbering_or_binding(
+    db_session, monkeypatch, marzban_panel
+):
+    incomplete = _add_admin(db_session, "seller-incomplete", panel=marzban_panel.name)
+    first = _add_admin(
+        db_session, "seller-valid", panel=marzban_panel.name, marzban_password="pass-valid"
+    )
+    seen = _install(monkeypatch, incomplete)
+
+    assert [row["name"] for row in seen["mit"]] == [mitseller.MIT_PANEL_NAME]
+    assert seen["mit"][0]["marzban_user"] == "seller-valid"
+    assert seen["bound"] == [mitseller.MIT_PANEL_NAME]
+
+
+def test_default_product_binding_failure_does_not_skip_later_panels(
+    db_session, monkeypatch, marzban_panel
+):
+    first = _add_admin(
+        db_session, "seller-one", panel=marzban_panel.name, marzban_password="pass-one"
+    )
+    second = _add_admin(
+        db_session, "seller-two", panel=marzban_panel.name, marzban_password="pass-two"
+    )
+    seen = _patch(monkeypatch)
+
+    async def fail_binding(**kwargs):
+        raise mitseller.MitSellerError("temporary API failure")
+
+    monkeypatch.setattr(mitseller, "bind_products_to_panel", fail_binding)
+    _run(
+        bot_provision._install(
+            FakeMessage(SUPERADMIN),
+            FakeBot(),
+            domain="new.example.com",
+            token="123:AAH",
+            admin_id=first.id,
+        )
+    )
+
+    assert [row["marzban_user"] for row in seen["mit"]] == ["seller-one", "seller-two"]
 
 
 def test_bot_receives_each_panel_owned_by_the_selected_telegram_account(
