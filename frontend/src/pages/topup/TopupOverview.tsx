@@ -5,6 +5,7 @@ import { ErrorBox, Loading, Notice, Stat, money, num, useAction, useLoad } from 
 export function TopupOverview({ api }: { api: BotAPI }) {
     const { data: s, loading, error } = useLoad(() => api.get<TopupStats>('stats'), [api])
     const info = useLoad(() => api.get<{ configured: boolean; running: boolean; enabled: boolean }>('info'), [api])
+    const botInfo = info.data
     const act = useAction()
     const lifecycle = async (operation: 'enable' | 'disable') => {
         const text = operation === 'disable' ? 'ربات متوقف شود؟ تا فعال‌سازی دوباره، هیچ پیام یا پردازشی انجام نمی‌دهد.' : 'ربات فعال شود؟'
@@ -22,8 +23,8 @@ export function TopupOverview({ api }: { api: BotAPI }) {
                         <span className={s.running ? 'text-brand-green' : s.configured ? 'text-amber-600' : 'text-destructive'}>
                             {s.running ? '● ربات در حال اجرا است' : s.configured ? '● توکن تنظیم شده، اما ربات در این پردازش اجرا نیست' : '● توکن ربات هنوز تنظیم نشده است'}
                         </span>
-                        {info.data && <Button className="mr-3" size="sm" variant={info.data.running ? 'destructive' : 'default'} disabled={act.busy || (!info.data.running && !info.data.configured)} onClick={() => lifecycle(info.data.running ? 'disable' : 'enable')}>
-                            {info.data.running ? 'توقف ربات' : 'فعال‌سازی ربات'}
+                        {botInfo && <Button className="mr-3" size="sm" variant={botInfo.running ? 'destructive' : 'default'} disabled={act.busy || (!botInfo.running && !botInfo.configured)} onClick={() => lifecycle(botInfo.running ? 'disable' : 'enable')}>
+                            {botInfo.running ? 'توقف ربات' : 'فعال‌سازی ربات'}
                         </Button>}
                     </div>
                     <ErrorBox error={act.error || info.error} /><Notice text={act.notice} />
