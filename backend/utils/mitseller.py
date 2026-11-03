@@ -190,7 +190,7 @@ async def push_vip_panel(
             )
             if res.status_code == 200:
                 for row in (res.json().get("data") or []):
-                    if row.get("name_panel", row.get("name")) == name:
+                    if (row.get("name_panel") or row.get("name")) == name:
                         found = row
                         break
             if found is not None:
@@ -198,7 +198,7 @@ async def push_vip_panel(
                     f"{bot_url}/api/v1/panels/{found.get('id')}",
                     headers={"Authorization": f"Bearer {owner_key}"},
                     json={
-                    "url_panel": panel_url,
+                        "url_panel": panel_url,
                         "username_panel": username,
                         "password_panel": password or "",
                     },
@@ -364,7 +364,7 @@ async def push_mit_panel(
             found: dict | None = None
             if res.status_code == 200:
                 for row in (res.json().get("data") or []):
-                    if row.get("name_panel", row.get("name")) == name:
+                    if (row.get("name_panel") or row.get("name")) == name:
                         found = row
                         break
             if found is not None:

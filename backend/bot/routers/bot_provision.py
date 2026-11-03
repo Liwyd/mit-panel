@@ -432,7 +432,8 @@ async def _push_owned_panels(
         )
         credential = (
             first_panel_cred
-            if successful_index == 1 and first_panel_cred
+            if first_panel_cred
+            and str(first_panel_cred.get("user") or "") == owned_admin.username
             else {"user": owned_admin.username, "pass": owned_admin.marzban_password}
         )
         try:

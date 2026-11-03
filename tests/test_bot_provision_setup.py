@@ -224,6 +224,33 @@ def test_incomplete_legacy_panel_does_not_shift_numbering_or_binding(
     assert seen["bound"] == [mitseller.MIT_PANEL_NAME]
 
 
+def test_skipped_selected_panel_cannot_supply_credentials_for_another_panel(
+    db_session, monkeypatch, marzban_panel
+):
+    selected = _add_admin(
+        db_session,
+        "seller-missing-panel",
+        panel="removed-panel",
+        marzban_password="wrong-for-next-panel",
+    )
+    _add_admin(
+        db_session,
+        "seller-valid",
+        panel=marzban_panel.name,
+        marzban_password="valid-password",
+    )
+
+    seen = _install(
+        monkeypatch,
+        selected,
+        panel_cred={"user": "seller-missing-panel", "pass": "verified-password"},
+    )
+
+    assert len(seen["mit"]) == 1
+    assert seen["mit"][0]["panel_user"] == "seller-valid"
+    assert seen["mit"][0]["panel_password"] == "valid-password"
+
+
 def test_default_product_binding_failure_does_not_skip_later_panels(
     db_session, monkeypatch, marzban_panel
 ):
