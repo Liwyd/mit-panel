@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClipboardCheck, LayoutDashboard, Settings2, Type, Zap } from 'lucide-react'
+import { ClipboardCheck, LayoutDashboard, Settings2, Type, Zap, Keyboard } from 'lucide-react'
 import { topupBotAPI } from '@/lib/bots-api'
 import { cn } from '@/lib/utils'
 import { PageLayout } from '@/components/PageLayout'
@@ -7,11 +7,13 @@ import { TopupOverview } from './topup/TopupOverview'
 import { TopupSettings } from './topup/TopupSettings'
 import { TopupTexts } from './topup/TopupTexts'
 import { TopupRequests } from './topup/TopupRequests'
+import { TopupButtons } from './topup/TopupButtons'
 
 const TABS = [
     { key: 'overview', label: 'خلاصه', icon: LayoutDashboard },
     { key: 'settings', label: 'تنظیمات', icon: Settings2 },
     { key: 'texts', label: 'متن‌ها', icon: Type },
+    { key: 'buttons', label: 'دکمه‌ها', icon: Keyboard },
     { key: 'requests', label: 'رسیدها', icon: ClipboardCheck },
 ] as const
 
@@ -75,6 +77,7 @@ export function TopupBotPage() {
                     {tab === 'overview' && <TopupOverview api={topupBotAPI} />}
                     {tab === 'settings' && <TopupSettings api={topupBotAPI} />}
                     {tab === 'texts' && <TopupTexts api={topupBotAPI} />}
+                    {tab === 'buttons' && <TopupButtons api={topupBotAPI} />}
                     {tab === 'requests' && <TopupRequests api={topupBotAPI} />}
                 </div>
             </div>

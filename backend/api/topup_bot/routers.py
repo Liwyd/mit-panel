@@ -18,8 +18,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from backend.auth.auth import get_current_admin
 from backend.bot import auto_approve, db
 from backend.bot.config import bot_config
-from backend.bot.content import DEFAULT_TEXTS, apply_text_overrides, configured_overrides, fields
-from backend.bot.service import is_running
+from backend.bot import texts
+from backend.bot.content import (BUTTON_ACTIONS, BUTTON_TEXTS, BUTTON_CONFIG_KEY, DEFAULT_TEXTS,
+                                apply_text_overrides, button_config, configured_overrides, fields)
+from backend.bot.service import is_running, start_bot, stop_bot
 from backend.schema.output import ResponseModel
 from backend.utils.settings_store import get_settings, update_settings
 
@@ -77,6 +79,11 @@ def _request_payload(req) -> dict:
     }
 
 
+def _audit(user: dict, action: str, target: str | None = None, detail: str | None = None) -> None:
+    db.init_db()
+    db.record_audit(str(user.get("username") or "superadmin"), action, target, detail)
+
+
 async def _review_with_bot(action):
     """Use a short-lived API client so dashboard reviews notify customers too."""
     token = bot_config.bot_token
@@ -111,7 +118,36 @@ async def api_info(user: dict = Depends(get_current_admin)):
         return denied
     return ResponseModel(success=True, message="ok", data={
         "kind": "topup", "bot_name": "MIT TOPUP-bot", "configured": bool(bot_config.bot_token), "running": is_running(),
+        "enabled": bool(get_settings().get("topup_bot_enabled", True)),
     })
+
+
+@router.post("/api/lifecycle/{operation}", description="Safely enable or disable the built-in bot")
+async def api_lifecycle(operation: str, user: dict = Depends(get_current_admin)):
+    if denied := _superadmin_only(user):
+        return denied
+    if operation == "enable":
+        if not bot_config.bot_token:
+            return _fail("The Telegram bot token is not configured.")
+        update_settings({"topup_bot_enabled": True})
+        if not start_bot():
+            update_settings({"topup_bot_enabled": False})
+            return _fail("The bot could not be started.")
+    elif operation == "disable":
+        update_settings({"topup_bot_enabled": False})
+        await stop_bot()
+    else:
+        return _fail("Unsupported lifecycle operation.")
+    _audit(user, f"lifecycle.{operation}")
+    return await api_info(user)
+
+
+@router.get("/api/audit", description="Recent built-in bot dashboard actions")
+async def api_audit(user: dict = Depends(get_current_admin)):
+    if denied := _superadmin_only(user):
+        return denied
+    db.init_db()
+    return ResponseModel(success=True, message="ok", data=db.list_audit())
 
 
 @router.get("/api/stats", description="Live top-up bot statistics")
@@ -207,6 +243,7 @@ async def api_update_settings(body: dict, user: dict = Depends(get_current_admin
             update_settings(store_patch)
     except (TypeError, ValueError):
         return _fail("Enter a valid positive numeric value.")
+    _audit(user, "settings.update", detail=", ".join(sorted(body)))
     return await api_settings(user)
 
 
@@ -239,7 +276,84 @@ async def api_update_texts(body: dict, user: dict = Depends(get_current_admin)):
             overrides[name] = value
     update_settings({"topup_text_overrides": overrides})
     apply_text_overrides()
+    _audit(user, "texts.update", detail=", ".join(sorted(body)))
     return await api_texts(user)
+
+
+@router.get("/api/buttons", description="Read built-in bot menu layouts and styles")
+async def api_buttons(user: dict = Depends(get_current_admin)):
+    if denied := _superadmin_only(user):
+        return denied
+    configured = button_config()
+    data = {}
+    for menu, actions in BUTTON_ACTIONS.items():
+        current = configured.get(menu, {})
+        data[menu] = {
+            "layout": current.get("layout", [list(actions[i:i + 2]) for i in range(0, len(actions), 2)]),
+            "labels": current.get("labels", {}),
+            "buttons": current.get("buttons", {}),
+            "actions": [{"id": action, "label": getattr(texts, BUTTON_TEXTS[action])} for action in actions],
+        }
+    return ResponseModel(success=True, message="ok", data=data)
+
+
+@router.put("/api/buttons", description="Update built-in bot menu layouts and styles")
+async def api_update_buttons(body: dict, user: dict = Depends(get_current_admin)):
+    if denied := _superadmin_only(user):
+        return denied
+    if not isinstance(body, dict):
+        return _fail("Button configuration must be an object.")
+    try:
+        normalized = {}
+        all_labels: dict[str, str] = {}
+        for menu, config in body.items():
+            actions = BUTTON_ACTIONS.get(menu)
+            if not actions or not isinstance(config, dict):
+                return _fail(f"Unknown menu: {menu}")
+            rows, labels, styles = config.get("layout"), config.get("labels", {}), config.get("buttons", {})
+            if not isinstance(rows, list) or any(not isinstance(row, list) or not 1 <= len(row) <= 3 for row in rows):
+                return _fail(f"Invalid row layout for {menu}.")
+            flat = [item for row in rows for item in row]
+            if len(flat) != len(set(flat)) or set(flat) != set(actions):
+                return _fail(f"Every action in {menu} must appear exactly once.")
+            if not isinstance(labels, dict) or set(labels) - set(actions):
+                return _fail(f"Invalid labels for {menu}.")
+            for action, value in labels.items():
+                if not isinstance(value, str) or not value.strip() or len(value.strip()) > 48:
+                    return _fail(f"Invalid label for {action}.")
+                label = value.strip()
+                if label in all_labels and all_labels[label] != action:
+                    return _fail("Button labels must be unique across menus.")
+                all_labels[label] = action
+            if not isinstance(styles, dict) or set(styles) - set(actions):
+                return _fail(f"Invalid button styles for {menu}.")
+            clean_styles = {}
+            for action, style in styles.items():
+                if not isinstance(style, dict) or set(style) - {"style", "icon_custom_emoji_id"}:
+                    return _fail(f"Invalid style for {action}.")
+                color = style.get("style")
+                emoji = style.get("icon_custom_emoji_id")
+                if color not in (None, "", "primary", "success", "danger"):
+                    return _fail(f"Invalid color for {action}.")
+                if emoji is not None and (not isinstance(emoji, str) or not emoji.isdigit()):
+                    return _fail(f"Invalid emoji id for {action}.")
+                clean_styles[action] = {k: v for k, v in style.items() if v}
+            normalized[menu] = {"layout": rows, "labels": {k: v.strip() for k, v in labels.items()}, "buttons": clean_styles}
+        # Include unchanged defaults in collision checks.  A reply keyboard only
+        # sends text, so two different actions must never accept the same label.
+        for menu, actions in BUTTON_ACTIONS.items():
+            selected = normalized.get(menu, {}).get("labels", {})
+            for action in actions:
+                label = selected.get(action, getattr(texts, BUTTON_TEXTS[action]))
+                previous = all_labels.get(label)
+                if previous is not None and previous != action:
+                    return _fail("Button labels must be unique across menus.")
+                all_labels[label] = action
+        update_settings({BUTTON_CONFIG_KEY: normalized})
+        _audit(user, "buttons.update", detail=", ".join(sorted(normalized)))
+        return await api_buttons(user)
+    except (AttributeError, TypeError, ValueError):
+        return _fail("Button configuration is invalid.")
 
 
 @router.get("/api/requests", description="Pending receipt-review queue")
@@ -269,6 +383,7 @@ async def api_approve_request(request_id: int, user: dict = Depends(get_current_
         return _fail(error)
     if not outcome.ok:
         return _fail(outcome.message)
+    _audit(user, "request.approve", str(request_id))
     return ResponseModel(success=True, message=outcome.message, data={"id": request_id})
 
 
@@ -287,4 +402,5 @@ async def api_reject_request(request_id: int, body: dict, user: dict = Depends(g
         return _fail(error)
     if not outcome.ok:
         return _fail(outcome.message)
+    _audit(user, "request.reject", str(request_id))
     return ResponseModel(success=True, message=outcome.message, data={"id": request_id})
