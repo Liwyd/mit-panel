@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from backend.bot import auto_approve, keyboards, texts
-from backend.bot.approvals import approve_request
+from backend.bot.approvals import approve_request, reject_request
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, forget_section, superadmin_kb
 from backend.bot.states import MessageUser, RejectReason
@@ -93,35 +93,14 @@ async def finish_reject(message: Message, state: FSMContext, bot: Bot) -> None:
     raw_reason = (message.text or "").strip()
     reason = None if raw_reason == "-" else raw_reason
 
-    rejected = db.mark_reviewed(
-        request_id, status="rejected", reviewed_by=message.from_user.id, reason=reason
-    )
-    # Released only once the status is written, so there is no gap in which the
-    # automatic approver could slip in ahead of the rejection.
+    outcome = await reject_request(bot, request_id, message.from_user.id, reason)
+    # Released only after the atomic transition attempt, so the automatic
+    # approver cannot slip in while a superadmin is writing a rejection.
     auto_approve.release(request_id)
-    if not rejected:
+    if not outcome.ok:
         await message.answer(texts.ALREADY_HANDLED, reply_markup=superadmin_kb(message.from_user.id))
         return
-
-    # Clean up receipt file after rejection
-    req = db.get_request(request_id)
-    if req and req.receipt_path:
-        try:
-            os.unlink(req.receipt_path)
-        except OSError:
-            pass
-
-    try:
-        text = (
-            texts.REQUEST_REJECTED_ADMIN_WITH_REASON.format(reason=reason)
-            if reason
-            else texts.REQUEST_REJECTED_ADMIN
-        )
-        await bot.send_message(req.admin_telegram_id, text)
-    except Exception:
-        pass
-
-    await message.answer(texts.REJECTED_TOAST, reply_markup=superadmin_kb(message.from_user.id))
+    await message.answer(outcome.message, reply_markup=superadmin_kb(message.from_user.id))
     try:
         await bot.edit_message_reply_markup(
             chat_id=data["origin_chat_id"],

@@ -23,6 +23,11 @@ _bot_task: asyncio.Task | None = None
 SUPERVISOR_RESTART_DELAY = 5.0
 
 
+def is_running() -> bool:
+    """Whether this process currently has an active bot supervisor task."""
+    return _bot_task is not None and not _bot_task.done()
+
+
 async def _supervised(name: str, runner) -> None:
     """Run a background loop, restarting it if it ever exits unexpectedly."""
     while True:
@@ -46,7 +51,6 @@ async def _run_bot() -> None:
     from backend.bot import db
     from backend.bot import access_lock
     from backend.bot.middlewares import ForceJoinMiddleware
-    from backend.bot.routers import all_routers
     from backend.bot.digest import run_digest_scheduler
     from backend.bot.forecast import run_forecast_scheduler
     from backend.bot.warnings import run_warning_scanner
@@ -59,6 +63,14 @@ async def _run_bot() -> None:
 
     logger.info("Starting Telegram top-up bot...")
     db.init_db()
+
+    # Apply dashboard-managed copy before importing routers.  Reply-keyboard
+    # filters are compiled during router registration, so this order matters.
+    from backend.bot.content import apply_text_overrides
+
+    apply_text_overrides()
+
+    from backend.bot.routers import all_routers
 
     bot = Bot(
         token=bot_config.bot_token,

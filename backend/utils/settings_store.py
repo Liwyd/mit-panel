@@ -32,6 +32,10 @@ DEFAULTS = {
     "bot_media_dir": "data/bot_media",
     "bot_min_gb": 200.0,
     "bot_max_gb": 10000.0,
+    # Copy overrides for the built-in top-up bot.  They are applied directly to
+    # backend.bot.texts at startup and after a dashboard save; keeping them in
+    # the panel settings store avoids a second, disconnected configuration file.
+    "topup_text_overrides": {},
     # The Mit panel the reseller bots call over its API. This has to be an
     # address the bot *servers* can reach directly: wunli.draking.ir sits
     # behind a tunnel meant for end users in Iran, and the tunnel drops the

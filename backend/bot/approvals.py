@@ -202,3 +202,33 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         ),
     )
     return Outcome(True, texts.APPROVED_TOAST, finished=True)
+
+
+async def reject_request(
+    bot: Bot, request_id: int, reviewer_id: int, reason: str | None = None
+) -> Outcome:
+    """Reject a pending receipt using the same atomic guard as Telegram.
+
+    The dashboard and Telegram are two review surfaces for one queue.  Keeping
+    the status transition here prevents either surface from winning twice when
+    two reviewers act at nearly the same time.
+    """
+    req = db.get_request(request_id)
+    if req is None:
+        return Outcome(False, texts.NOT_FOUND, alert=True)
+    if not db.mark_reviewed(request_id, status="rejected", reviewed_by=reviewer_id, reason=reason):
+        return Outcome(False, texts.ALREADY_HANDLED, alert=True)
+
+    if req.receipt_path:
+        try:
+            os.unlink(req.receipt_path)
+        except OSError:
+            pass
+
+    text = (
+        texts.REQUEST_REJECTED_ADMIN_WITH_REASON.format(reason=reason)
+        if reason
+        else texts.REQUEST_REJECTED_ADMIN
+    )
+    await _tell(bot, req.admin_telegram_id, text)
+    return Outcome(True, texts.REJECTED_TOAST, finished=True)
