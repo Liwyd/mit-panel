@@ -187,6 +187,12 @@ SETTLEMENT_APPROVED_WITH_CREDIT = (
 )
 
 # --- consumption mode ---
+CONSUMPTION_LEDGER_DESCRIPTION = (
+    "فاکتور هفتگی پنل {username} ({stamp})\n"
+    "حجم تخصیص‌یافته: {allocated:.2f} گیگابایت\n"
+    "اعتبار اعمال‌شده: {discount:.2f} گیگابایت\n"
+    "حجم قابل پرداخت: {payable:.2f} گیگابایت"
+)
 CONSUMPTION_INVOICE_HEADER = (
     "📊 فاکتور مصرف هفتگی پنل «{username}»\n\n"
     "📊 مصرف این هفته: {consumed_gb:.2f} گیگابایت\n"

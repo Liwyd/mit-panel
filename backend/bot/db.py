@@ -317,6 +317,59 @@ def init_db() -> None:
         _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
         # Payment mode: 'delayed' (buy now pay later) or 'consumption' (pay for actual usage)
         _ensure_column(conn, "weekly_payment", "mode", "TEXT NOT NULL DEFAULT 'delayed'")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS consumption_accounts (
+                admin_id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                panel TEXT NOT NULL,
+                available_bytes INTEGER NOT NULL DEFAULT 0 CHECK (available_bytes >= 0),
+                revision INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS consumption_users (
+                admin_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                generation TEXT NOT NULL,
+                limit_bytes INTEGER NOT NULL,
+                used_bytes INTEGER NOT NULL,
+                PRIMARY KEY (admin_id, username)
+            );
+            CREATE TABLE IF NOT EXISTS consumption_allocations (
+                admin_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL,
+                portion INTEGER NOT NULL DEFAULT 0,
+                username TEXT NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('ordinary', 'open', 'invoiced', 'credit')),
+                active_bytes INTEGER NOT NULL CHECK (active_bytes >= 0),
+                billable_bytes INTEGER NOT NULL DEFAULT 0 CHECK (billable_bytes >= 0),
+                invoice_id INTEGER,
+                PRIMARY KEY (admin_id, sequence, portion)
+            );
+            CREATE TABLE IF NOT EXISTS consumption_returns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                invoice_id INTEGER,
+                available_bytes INTEGER NOT NULL CHECK (available_bytes >= 0)
+            );
+            CREATE TABLE IF NOT EXISTS consumption_settlements (
+                admin_id INTEGER NOT NULL,
+                week_stamp TEXT NOT NULL,
+                cutoff TEXT NOT NULL,
+                allocated_bytes INTEGER NOT NULL,
+                discount_bytes INTEGER NOT NULL,
+                invoice_id INTEGER,
+                PRIMARY KEY (admin_id, week_stamp)
+            );
+            CREATE TABLE IF NOT EXISTS consumption_mutations (
+                admin_id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                before_state TEXT,
+                expected_limit INTEGER,
+                started_at TEXT NOT NULL
+            );
+            """
+        )
         # Which panel owes this invoice, and how much GB paying it buys back.
         # Populated by the usage sync; older invoices carry neither.
         _ensure_column(conn, "invoices", "admin_username", "TEXT")
@@ -1012,18 +1065,36 @@ def create_invoice(
     traffic_gb: float = 0.0,
     week_stamp: str | None = None,
 ) -> int:
-    now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
-        cur = conn.execute(
-            """
-            INSERT INTO invoices
-                (telegram_id, amount, description, due_at, status, created_at,
-                 admin_username, traffic_gb, week_stamp)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
-            """,
-            (telegram_id, amount, description, due_at, now, admin_username, traffic_gb, week_stamp),
+        return insert_invoice(
+            conn, telegram_id=telegram_id, amount=amount, description=description,
+            due_at=due_at, admin_username=admin_username, traffic_gb=traffic_gb,
+            week_stamp=week_stamp,
         )
-        return cur.lastrowid
+
+
+def insert_invoice(
+    conn: sqlite3.Connection,
+    *,
+    telegram_id: int,
+    amount: int,
+    description: str | None,
+    due_at: str | None,
+    admin_username: str | None = None,
+    traffic_gb: float = 0.0,
+    week_stamp: str | None = None,
+) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        """
+        INSERT INTO invoices
+            (telegram_id, amount, description, due_at, status, created_at,
+             admin_username, traffic_gb, week_stamp)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+        """,
+        (telegram_id, amount, description, due_at, now, admin_username, traffic_gb, week_stamp),
+    )
+    return cur.lastrowid
 
 
 def get_invoice(invoice_id: int) -> Invoice | None:
