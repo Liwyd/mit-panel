@@ -4,6 +4,7 @@ import asyncio
 import requests
 from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 
 from backend.schema._input import ClientInput, ClientUpdateInput
 
@@ -29,7 +30,7 @@ class APIService:
     _token_ttl = 300
     # Lock serialises concurrent logins for the *same* (url, username) to
     # avoid flooding the panel with parallel token requests.
-    _login_locks: dict[str, asyncio.Lock] = {}
+    _login_locks: dict[str, Lock] = {}
 
     def __init__(
         self, url: str, username: str, password: str, inbounds: dict | str | None = None
@@ -50,11 +51,6 @@ class APIService:
         else:
             self.inbounds = inbounds or {}
 
-    def _get_lock(self) -> asyncio.Lock:
-        if self._cache_key not in APIService._login_locks:
-            APIService._login_locks[self._cache_key] = asyncio.Lock()
-        return APIService._login_locks[self._cache_key]
-
     async def _login(self):
         now = time.time()
         cached = APIService._token_cache.get(self._cache_key)
@@ -64,11 +60,15 @@ class APIService:
             self.headers = {"Authorization": f"Bearer {self.token}"}
             return
 
-        lock = self._get_lock()
-        async with lock:
+        await asyncio.to_thread(self._login_uncached)
+
+    def _login_uncached(self):
+        # Dashboard calls and reconciliation workers use different event loops.
+        lock = APIService._login_locks.setdefault(self._cache_key, Lock())
+        with lock:
             # Double-check after acquiring the lock
             cached = APIService._token_cache.get(self._cache_key)
-            if cached and now - cached[1] < APIService._token_ttl:
+            if cached and time.time() - cached[1] < APIService._token_ttl:
                 self.token = cached[0]
                 self.headers = {"Authorization": f"Bearer {self.token}"}
                 return
@@ -126,7 +126,9 @@ class APIService:
         response = self.session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
         return response.json()
 
-    async def get_users_page(self, offset: int = 0, limit: int = 500) -> tuple[list[dict], int | None]:
+    async def get_users_page(
+        self, offset: int = 0, limit: int = 500, owners: list[str] | None = None,
+    ) -> tuple[list[dict], int | None]:
         """One page of /api/users, returning (users, total).
 
         `total` is Marzban's own count for the query and is what makes an
@@ -134,10 +136,13 @@ class APIService:
         or a short page would look like every user having been deleted.
         """
         await self._login()
+        params = {"offset": offset, "limit": limit}
+        if owners and len(owners) <= 50:
+            params["admin"] = owners
         response = self.session.get(
             f"{self.url}api/users",
             headers=self.headers,
-            params={"offset": offset, "limit": limit},
+            params=params,
             timeout=REQUEST_TIMEOUT,
         )
         if response.status_code != 200:
@@ -154,7 +159,8 @@ class APIService:
         return users, int(total) if isinstance(total, int) else None
 
     async def get_all_users_paginated(
-        self, page_size: int = 500, page_delay: float = 0.0
+        self, page_size: int = 500, page_delay: float = 0.0,
+        *, owners: list[str] | None = None,
     ) -> list[dict]:
         """Every user on the panel. Aborts rather than returning a partial read.
 
@@ -165,9 +171,20 @@ class APIService:
         offset = 0
         total: int | None = None
         seen_first: str | None = None
+        seen_users: set[str] = set()
 
         while True:
-            page, page_total = await self.get_users_page(offset, page_size)
+            if owners is None:
+                page, page_total = await self.get_users_page(offset, page_size)
+            else:
+                page, page_total = await self.get_users_page(offset, page_size, owners=owners)
+                if page_total is None or (total is not None and page_total != total):
+                    raise MarzbanAPIError("Could not verify the billing user count")
+                for user in page:
+                    username = user.get("username") if isinstance(user, dict) else None
+                    if not username or username in seen_users or "admin" not in user:
+                        raise MarzbanAPIError("Incomplete or shifting billing user listing")
+                    seen_users.add(username)
             if page_total is not None:
                 total = page_total
             if not page:
@@ -196,7 +213,24 @@ class APIService:
             raise MarzbanAPIError(
                 f"Incomplete user read: got {len(collected)} of {total}"
             )
+        if owners is not None and len(collected) != total:
+            raise MarzbanAPIError("Unexpected billing user count")
         return collected
+
+    async def get_billing_user(self, username: str) -> dict | None:
+        await self._login()
+        response = self.session.get(
+            f"{self.url}api/user/{quote(username, safe='')}",
+            headers=self.headers, timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            raise MarzbanAPIError(f"Could not verify user (HTTP {response.status_code})")
+        user = response.json()
+        if not isinstance(user, dict) or user.get("username") != username or "admin" not in user:
+            raise MarzbanAPIError("Invalid billing user response")
+        return user
 
     async def get_user(self, username: str) -> dict | bool:
         await self._login()

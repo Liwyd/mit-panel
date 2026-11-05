@@ -216,12 +216,7 @@ def init_db() -> None:
             """
         )
 
-        # Last settlement's live created-volume figure per reseller. The weekly
-        # consumption invoice is the growth of the panel's own figure (sum of
-        # the owner's live users' data_limit) since the previous settlement,
-        # so this baseline is both the starting point and the per-owner
-        # "already settled this week" marker: re-running a settlement skips
-        # any owner whose baseline already carries the current week stamp.
+        # Retain the previous consumption meter's historical rows.
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS created_volume_baselines (
@@ -370,6 +365,10 @@ def init_db() -> None:
             );
             """
         )
+        _ensure_column(conn, "consumption_users", "earlier_usage", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "consumption_settlements", "notified_at", "TEXT")
+        _ensure_column(conn, "consumption_settlements", "notify_after", "TEXT")
+        _ensure_column(conn, "consumption_accounts", "unbilled_deficit_bytes", "INTEGER NOT NULL DEFAULT 0")
         # Which panel owes this invoice, and how much GB paying it buys back.
         # Populated by the usage sync; older invoices carry neither.
         _ensure_column(conn, "invoices", "admin_username", "TEXT")
@@ -1127,39 +1126,6 @@ def consumption_invoice_exists(admin_username: str, week_stamp: str) -> bool:
             (admin_username, week_stamp),
         ).fetchone()
     return row is not None
-
-
-def get_created_volume_baseline(owner: str) -> dict | None:
-    """The panel figure recorded when `owner` was last settled, if ever."""
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT owner, week_stamp, total_bytes, updated_at "
-            "FROM created_volume_baselines WHERE owner = ?",
-            (owner,),
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def set_created_volume_baseline(owner: str, week_stamp: str, total_bytes: int) -> None:
-    """Store this week's live figure as the next week's starting point.
-
-    Written after the invoice for `week_stamp` (if any) so a crash between the
-    two leaves the owner unsettled and the re-run re-computes the same delta;
-    the unique invoice index rejects the duplicate.
-    """
-    now = datetime.now(timezone.utc).isoformat()
-    with _connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO created_volume_baselines (owner, week_stamp, total_bytes, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(owner) DO UPDATE SET
-                week_stamp = excluded.week_stamp,
-                total_bytes = excluded.total_bytes,
-                updated_at = excluded.updated_at
-            """,
-            (owner, week_stamp, total_bytes, now),
-        )
 
 
 def revert_invoice_to_pending(invoice_id: int) -> bool:

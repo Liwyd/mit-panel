@@ -1,5 +1,6 @@
 from datetime import datetime
 from secrets import token_hex
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.db.model import (
@@ -74,6 +75,16 @@ def update_admin_values(
         else admin.hashed_password
     )
     if admin:
+        from backend.bot.consumption import enrollment
+        from backend.bot.consumption_ledger import BillingDeferred
+
+        tracked = enrollment(db, admin_id, lock=True)
+        if tracked and (
+            admin_input.panel != admin.panel
+            or admin_input.username != admin.username
+            or (int(admin_input.traffic) != admin.traffic and int(admin_input.traffic) < tracked["available_bytes"])
+        ):
+            raise BillingDeferred("This edit conflicts with the reseller's consumption quota")
         admin.username = admin_input.username
         admin.hashed_password = new_password
         admin.is_active = admin_input.is_active
@@ -104,6 +115,9 @@ def update_admin_values(
 def remove_admin(db: Session, admin_id: int) -> bool:
     admin = db.query(Admins).filter(Admins.id == admin_id).first()
     if admin:
+        from backend.bot.consumption import remove_closed_account
+
+        remove_closed_account(db, admin_id)
         # SQLite doesn't enforce the FK's ON DELETE here; unassign by hand so
         # the bot stays (superadmin-only) instead of pointing at a dead id.
         db.query(TelegramBots).filter(TelegramBots.admin_id == admin_id).update({TelegramBots.admin_id: None})
@@ -166,8 +180,13 @@ def grant_admin_traffic(db: Session, admin: Admins, added_traffic) -> None:
     also raises initial_traffic, since the admin's total granted quota actually
     went up and the panel's Remaining/Initial display should reflect that.
     """
-    admin.traffic += added_traffic
-    admin.initial_traffic += added_traffic
+    db.query(Admins).filter(Admins.id == admin.id).update(
+        {
+            Admins.traffic: func.coalesce(Admins.traffic, 0) + added_traffic,
+            Admins.initial_traffic: func.coalesce(Admins.initial_traffic, 0) + added_traffic,
+        },
+        synchronize_session=False,
+    )
     db.commit()
 
 

@@ -434,3 +434,21 @@ def test_a_password_change_drops_that_admins_cached_token():
     assert status == 200
     assert stale_key not in APIService._token_cache
     assert session.calls[1]["method"] == "PUT"
+
+
+def test_billing_listing_filters_by_owner_and_rejects_shifting_counts():
+    user = {"username": "alice", "admin": {"username": "reseller"}}
+    svc, session = service([
+        FakeResponse(payload={"users": [user], "total": 2}),
+        FakeResponse(payload={"users": [], "total": 1}),
+    ])
+    with pytest.raises(MarzbanAPIError, match="billing user count"):
+        asyncio.run(svc.get_all_users_paginated(page_size=1, owners=["reseller"]))
+    assert session.calls[0]["params"]["admin"] == ["reseller"]
+
+
+def test_billing_lookup_distinguishes_deletion_from_panel_failure():
+    svc, _ = service([FakeResponse(status_code=404), FakeResponse(status_code=403)])
+    assert asyncio.run(svc.get_billing_user("alice")) is None
+    with pytest.raises(MarzbanAPIError, match="HTTP 403"):
+        asyncio.run(svc.get_billing_user("alice"))

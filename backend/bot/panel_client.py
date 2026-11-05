@@ -508,7 +508,12 @@ async def delete_admin_by_username(username: str) -> dict:
             raise PanelClientError("No admin with that username")
         telegram_id = admin.telegram_id
         panel_name = admin.panel
-        crud.remove_admin(db, admin.id)
+        from backend.bot.consumption_ledger import BillingDeferred
+
+        try:
+            crud.remove_admin(db, admin.id)
+        except BillingDeferred as exc:
+            raise PanelClientError(str(exc)) from exc
         return {
             "username": username,
             "telegram_id": telegram_id,

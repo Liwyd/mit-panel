@@ -124,3 +124,220 @@ def test_rollback_reverts_invoice_and_allocation_state(billing_db):
             raise RuntimeError("simulated interruption")
     assert billing_db.get_invoice(1) is None
     assert settle().amount == 10_000
+
+
+class FakeMarzban:
+    def __init__(self):
+        self.users = {}
+        self.listed = None
+        self.reads = 0
+        self.failure = None
+
+    async def get_all_users_paginated(self, **kwargs):
+        self.reads += 1
+        if self.failure:
+            raise self.failure
+        return list(self.users.values()) if self.listed is None else self.listed
+
+    async def get_billing_user(self, username):
+        return self.users.get(username)
+
+
+def upstream_user(name, limit, used=0, owner="reseller", generation="2026-11-01T00:00:00"):
+    return {
+        "username": name, "data_limit": limit * GB, "used_traffic": used * GB,
+        "admin": {"username": owner}, "created_at": generation,
+    }
+
+
+@pytest.fixture
+def upstream(billing_db, monkeypatch):
+    from backend.bot import consumption
+    with meter.transaction() as conn:
+        conn.execute(
+            """INSERT INTO panels (name, panel_type, url, username, password, is_active)
+               VALUES ('marzban', 'marzban', 'https://marzban.test', 'sudo', 'test', 1)"""
+        )
+    billing_db.set_setting("price_per_gb", "100")
+    api = FakeMarzban()
+    monkeypatch.setattr(consumption, "APIService", lambda *args: api)
+    return api
+
+
+def cycle(now, stamp=None):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from backend.bot import consumption
+
+    bot = AsyncMock()
+    asyncio.run(consumption.run_cycle(bot, now, stamp, [999]))
+    return bot
+
+
+def test_hourly_direct_changes_and_confirmed_delete(upstream, billing_db):
+    upstream.users["first"] = upstream_user("first", 100, 50)
+    cycle(NOW - timedelta(hours=2))
+    cycle(NOW - timedelta(hours=2, minutes=-15))
+    assert upstream.reads == 1
+    upstream.listed = []  # A listing omitted it, but the strict lookup finds it.
+    cycle(NOW - timedelta(hours=1))
+    with meter.transaction() as conn:
+        assert meter.user_state(conn, 1, "first").used == 50 * GB
+    upstream.users.clear()
+    bot = cycle(NOW, NOW.strftime("%G-%V"))
+    invoice = billing_db.list_pending_invoices()[0]
+    assert invoice.amount == 5_000
+    assert invoice.traffic_gb == 0
+    assert any(call.args[0] == 123 for call in bot.send_message.await_args_list)
+    assert any("آخرین مصرف ثبت‌شده" in call.args[1] for call in bot.send_message.await_args_list)
+
+
+def test_friday_failure_retries_and_after_cutoff_allocations_wait(upstream, billing_db):
+    from backend.services.marzban.api import MarzbanAPIError
+
+    upstream.users["first"] = upstream_user("first", 100)
+    upstream.failure = MarzbanAPIError("Incomplete panel read")
+    stamp = NOW.strftime("%G-%V")
+    cycle(NOW, stamp)
+    assert not billing_db.list_pending_invoices()
+    upstream.failure = None
+    cycle(NOW + timedelta(minutes=10), stamp)
+    assert billing_db.list_pending_invoices()[0].amount == 10_000
+    upstream.users["second"] = upstream_user("second", 40)
+    cycle(NOW + timedelta(hours=1), stamp)
+    assert len(billing_db.list_pending_invoices()) == 1
+    next_friday = NOW + timedelta(weeks=1)
+    cycle(next_friday, next_friday.strftime("%G-%V"))
+    assert sorted(i.amount for i in billing_db.list_pending_invoices()) == [4_000, 10_000]
+
+
+def test_first_grant_preserves_ordinary_funding_and_disabling_keeps_settling(upstream, billing_db):
+    import asyncio
+    from backend.bot import consumption
+
+    with meter.transaction() as conn:
+        conn.execute(
+            """INSERT INTO admins (id, username, panel, hashed_password, traffic, initial_traffic,
+                                  telegram_id, is_active)
+               VALUES (2, 'new', 'marzban', 'test', ?, ?, 456, 1)""",
+            (100 * GB, 100 * GB),
+        )
+    upstream.users["old"] = upstream_user("old", 100, owner="new")
+    billing_db.set_weekly_mode("new", "consumption")
+    assert asyncio.run(consumption.grant(456, "new", 1_000)) == 1_100 * GB
+    billing_db.set_weekly_enabled("new", False)
+    with pytest.raises(meter.BillingDeferred):
+        asyncio.run(consumption.grant(456, "new", 1_000))
+    upstream.users["mixed"] = upstream_user("mixed", 200, owner="new")
+    cycle(NOW, NOW.strftime("%G-%V"))
+    invoice = billing_db.list_pending_invoices()[0]
+    assert (invoice.telegram_id, invoice.amount) == (456, 10_000)
+
+
+def test_recovery_after_a_timed_out_create_never_replays_upstream(upstream, billing_db, monkeypatch):
+    import asyncio
+    from requests import Timeout
+    from backend.bot import consumption
+
+    calls = []
+
+    async def create(_):
+        calls.append("create")
+        upstream.users["user"] = upstream_user("user", 100)
+        raise Timeout("the response was lost")
+
+    with pytest.raises(Timeout):
+        asyncio.run(consumption.mutate(1, "reseller", upstream, "user", "create", create, 100 * GB))
+    with meter.transaction() as conn:
+        assert consumption._pending(conn, 1) is not None
+        assert meter.user_state(conn, 1, "user") is None
+
+    monkeypatch.setattr(consumption, "INTENT_TIMEOUT", timedelta(0))
+    code, _ = asyncio.run(consumption.mutate(1, "reseller", upstream, "user", "create", create, 100 * GB))
+    assert code == 200
+    assert calls == ["create"]
+    assert settle().amount == 10_000
+
+
+def test_observer_is_skipped_and_unmark_resumes_accounting(upstream, billing_db):
+    upstream.users["user"] = upstream_user("user", 100)
+    billing_db.mark_observer_admin("reseller", marked_by=1)
+    cycle(NOW, NOW.strftime("%G-%V"))
+    assert upstream.reads == 0
+    assert not billing_db.list_pending_invoices()
+    billing_db.unmark_observer_admin("reseller")
+    cycle(NOW + timedelta(minutes=10), NOW.strftime("%G-%V"))
+    assert billing_db.list_pending_invoices()[0].amount == 10_000
+
+
+def test_dashboard_create_and_delete_use_journal_and_latest_usage(upstream, billing_db, monkeypatch):
+    import asyncio
+    from sqlalchemy.orm import Session
+    from backend.schema._input import ClientInput
+    from backend.services import task_handler
+    from backend.services.marzban.api import APIService
+
+    async def create(_self, payload):
+        upstream.users[payload.email] = upstream_user(payload.email, 100)
+        return 200
+
+    async def delete(_self, username):
+        upstream.users.pop(username)
+        return 200
+
+    async def get(_self, username):
+        return await upstream.get_billing_user(username)
+
+    monkeypatch.setattr(APIService, "create_user", create)
+    monkeypatch.setattr(APIService, "delete_user", delete)
+    monkeypatch.setattr(APIService, "get_billing_user", get)
+    engine = create_engine(f"sqlite:///{billing_db.bot_config.sqlite_path}")
+    with meter.transaction() as conn:
+        conn.execute("UPDATE admins SET is_active = 1 WHERE id = 1")
+    with Session(engine) as session:
+        user_input = ClientInput(email="user", id="uuid", sub_id="sub", total=100 * GB, expiry_time=0)
+        result = asyncio.run(task_handler.add_new_user("reseller", user_input, session))
+        assert result.success
+        upstream.users["user"]["used_traffic"] = 50 * GB
+        result = asyncio.run(task_handler.delete_a_user("reseller", "user", session))
+        assert result.success
+    engine.dispose()
+    assert settle().amount == 5_000
+
+
+def test_reset_after_limit_dropped_below_usage_keeps_prior_consumption(billing_db):
+    observe("user", 100, 50)
+    observe("user", 20, 50)
+    observe("user", 20, 0)
+    assert settle().amount == 7_000
+
+
+def test_direct_overdraft_keeps_its_own_ordinary_invoice(upstream, billing_db):
+    upstream.users["over"] = upstream_user("over", 1_050)
+    cycle(NOW - timedelta(hours=1))
+    cycle(NOW, NOW.strftime("%G-%V"))
+    invoices = billing_db.list_pending_invoices()
+    assert sorted((i.amount, i.traffic_gb) for i in invoices) == [(5_000, 50), (100_000, 0)]
+
+
+def test_concurrent_settlement_creates_one_invoice(billing_db):
+    from concurrent.futures import ThreadPoolExecutor
+
+    observe("user", 100)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(lambda _: settle(), range(2)))
+    assert sum(result is not None for result in results) == 1
+    assert len(billing_db.list_pending_invoices()) == 1
+
+
+def test_admin_deletion_cannot_discard_live_consumption_quota(billing_db):
+    from sqlalchemy.orm import Session
+    from backend.db import crud
+
+    engine = create_engine(f"sqlite:///{billing_db.bot_config.sqlite_path}")
+    with Session(engine) as session:
+        with pytest.raises(meter.BillingDeferred):
+            crud.remove_admin(session, 1)
+    engine.dispose()
+    with meter.transaction() as conn:
+        assert meter.account(conn, 1)["available_bytes"] == 1_000 * GB

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from backend.bot import db, texts
+from backend.bot import consumption, db, texts
 from backend.bot.invoices import due_at_for
 from backend.bot.units import bytes_to_gb
 from backend.db import crud
@@ -218,6 +218,11 @@ def _sweep() -> list[str]:
     so panels are never fetched concurrently and the server never sees more
     than a single panel being read at once.
     """
+    with consumption.legacy_sweep_lock:
+        return _sweep_legacy_panels()
+
+
+def _sweep_legacy_panels() -> list[str]:
     report: list[str] = []
     # `db` is the module imported at the top of this file, and it stays the
     # module for as long as nothing in the function binds that name — reading
@@ -256,6 +261,8 @@ def _sync_panel(session, panel, ledger_all, observers: set[str]) -> list[str]:
             continue
         admin = crud.get_admin_by_username(session, owner)
         if admin is None:
+            continue
+        if consumption.enrollment(session, admin.id):
             continue
         if owner in observers:
             # Frozen: no ledger churn, no traffic drawdown, no invoice. The

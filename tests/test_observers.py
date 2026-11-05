@@ -3,27 +3,21 @@
 Marking one must record the exemption, void what they already owe, and leave
 no path — Friday settlement, the usage sync, the wallet drawdown or any
 reminder — able to invoice or chase them again. The freeze must be a freeze,
-not a soft limit: the weekly baseline and the sync ledger are deliberately left
+not a soft limit: the consumption ledger and the sync ledger are deliberately left
 stale so un-marking bills the whole gap in one catch-up instead of quietly
 losing it.
 """
 
 import asyncio
-from datetime import datetime
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
 
 import pytest
 
 from backend.bot import billing, db, texts, usage_sync, weekly
 from backend.db import crud
-from backend.db.model import Admins, MarzbanUsers, Panels
+from backend.db.model import Admins, MarzbanUsers
 
-TEHRAN = ZoneInfo("Asia/Tehran")
 GB = 1024**3
-NOW = datetime(2026, 10, 16, 8, 0, tzinfo=TEHRAN)
-STAMP = "2026-42"
-WEEK_START = datetime(2026, 10, 10, 0, 0, tzinfo=TEHRAN)
 # Long past: any clock agrees it is overdue.
 PAST_DUE = "2000-01-01T00:00:00+00:00"
 
@@ -175,75 +169,6 @@ def test_friday_settlement_leaves_observer_debts_untouched(ledger):
     # observer's and not the whole phase silently not running.
     assert db.get_debt("other") == 3000
     assert 222 in {chat for chat, _ in bot.messages}
-
-
-# --- weekly consumption settlement --------------------------------------------
-
-def test_settlement_freezes_observer_then_catches_up_after_unmark(
-    ledger, priced, admin, db_session, monkeypatch
-):
-    db_session.add(
-        Panels(
-            panel_type="marzban",
-            name="touch",
-            url="http://marzban.test:8000",
-            username="sudo",
-            password="x",
-        )
-    )
-    db_session.commit()
-    admin(panel="touch")  # fuad, consumption, observed
-    admin(username="other", telegram_id=999, panel="touch")  # consumption
-    ledger.set_weekly_mode("fuad", "consumption")
-    ledger.set_weekly_mode("other", "consumption")
-    ledger.set_created_volume_baseline("fuad", "2026-41", 100 * GB)
-    ledger.set_created_volume_baseline("other", "2026-41", 10 * GB)
-    ledger.mark_observer_admin("fuad", marked_by=1)
-
-    async def fake_read(panel):
-        return [
-            {"username": "u1", "data_limit": 250 * GB, "admin": {"username": "fuad"}},
-            {"username": "u2", "data_limit": 50 * GB, "admin": {"username": "fuad"}},
-            {"username": "u3", "data_limit": 40 * GB, "admin": {"username": "other"}},
-        ]
-
-    monkeypatch.setattr(weekly, "_read_panel_with_retry", fake_read)
-    bot = FakeBot()
-
-    invoice_lines, warning_lines = asyncio.run(
-        weekly._settle_consumption(bot, NOW, STAMP)
-    )
-
-    assert not ledger.consumption_invoice_exists("fuad", STAMP)
-    assert ledger.consumption_invoice_exists("other", STAMP)
-    assert warning_lines == []
-    # Frozen meter: old stamp, old figure — nothing of the gap is written off.
-    baseline = ledger.get_created_volume_baseline("fuad")
-    assert baseline["week_stamp"] == "2026-41"
-    assert baseline["total_bytes"] == 100 * GB
-    assert any("fuad" in line and "ناظر" in line for line in invoice_lines)
-
-    # Un-mark: the whole frozen gap (350 - 100 GB) is billed in one invoice.
-    ledger.unmark_observer_admin("fuad")
-    now_two = datetime(2026, 10, 23, 8, 0, tzinfo=TEHRAN)
-
-    async def bigger_read(panel):
-        return [
-            {"username": "u1", "data_limit": 300 * GB, "admin": {"username": "fuad"}},
-            {"username": "u2", "data_limit": 50 * GB, "admin": {"username": "fuad"}},
-            {"username": "u3", "data_limit": 40 * GB, "admin": {"username": "other"}},
-        ]
-
-    monkeypatch.setattr(weekly, "_read_panel_with_retry", bigger_read)
-    asyncio.run(weekly._settle_consumption(bot, now_two, "2026-43"))
-
-    assert ledger.consumption_invoice_exists("fuad", "2026-43")
-    fuad_invoices = [
-        i for i in (db.get_invoice(n) for n in range(1, 10))
-        if i and i.admin_username == "fuad"
-    ]
-    assert len(fuad_invoices) == 1
-    assert fuad_invoices[0].amount == round(250 * 2900)
 
 
 # --- wallet drawdown ----------------------------------------------------------

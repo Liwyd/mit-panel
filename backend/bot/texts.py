@@ -193,21 +193,26 @@ CONSUMPTION_LEDGER_DESCRIPTION = (
     "اعتبار اعمال‌شده: {discount:.2f} گیگابایت\n"
     "حجم قابل پرداخت: {payable:.2f} گیگابایت"
 )
-CONSUMPTION_INVOICE_HEADER = (
-    "📊 فاکتور مصرف هفتگی پنل «{username}»\n\n"
-    "📊 مصرف این هفته: {consumed_gb:.2f} گیگابایت\n"
-    "💰 مبلغ قابل پرداخت: {amount:,} تومان\n"
+CONSUMPTION_LEDGER_NOTICE = (
+    "📊 <b>فاکتور پرداخت مصرفی هفتگی</b>\n\n"
+    "{description}\n"
+    "💰 مبلغ قابل پرداخت: <b>{amount:,} تومان</b>\n"
     "⏳ مهلت پرداخت: {due}\n\n"
     "برای پرداخت، از منوی «🧾 فاکتورهای من» اقدام نمایید."
 )
+CONSUMPTION_SYNC_DEFERRED = "⚠️ همگام‌سازی یا صدور فاکتور مصرفی پنل <b>{username}</b> به تعویق افتاد."
+CONSUMPTION_ESTIMATED_RETURNS = (
+    "ℹ️ پنل <b>{username}</b> — حجم بازگشتی {count} کاربر از آخرین مصرف ثبت‌شده محاسبه شد."
+)
+CONSUMPTION_GRANT_DEFERRED = "⚠️ ثبت شارژ مصرفی ممکن نشد. کمی بعد دوباره تلاش کنید."
+CONSUMPTION_ORDINARY_DEFICIT = "▫️ پنل <b>{username}</b> — فاکتور کسری موجودی #{id} صادر شد."
 CONSUMPTION_INVOICE_SUPERADMIN = (
     "📊 فاکتور مصرف هفتگی صادر شد\n\n"
     "▪️ پنل: {username}\n"
     "👤 آیدی عددی: {telegram_id}\n"
-    "📊 مصرف: {consumed_gb:.2f} گیگابایت\n"
+    "📊 حجم قابل پرداخت: {consumed_gb:.2f} گیگابایت\n"
     "💰 مبلغ: {amount:,} تومان"
 )
-CONSUMPTION_NO_USAGE = "📊 پنل «{username}»: مصرفی در این هفته ثبت نشده است."
 
 BTN_TOGGLE_DELAYED = "🗓 فعال/غیرفعال‌کردن پرداخت با تاخیر"
 BTN_TOGGLE_CONSUMPTION = "📊 فعال/غیرفعال‌کردن پرداخت مصرفی"
@@ -225,8 +230,8 @@ CONSUMPTION_PAY_NOT_ENABLED = "🚫 پرداخت مصرفی هفتگی برای 
 CONSUMPTION_TOPUP_SUCCESS = (
     "✅ {added_gb:g} گیگابایت به پنل «{username}» اضافه شد.\n"
     "📊 موجودی جدید: {new_gb:.2f} گیگابایت\n\n"
-    "📊 در پایان هفته، فقط مجموع حجم‌هایی که در این هفته ساختید محاسبه شده "
-    "و فاکتور آن صادر می‌شود."
+    "📊 ابتدا حجم عادی پنل مصرف می‌شود. جمعه، فقط حجم تخصیص‌یافته از اعتبار مصرفی "
+    "پس از کسر حجم‌های برگشتی واجد شرایط محاسبه می‌شود."
 )
 CONSUMPTION_TOPUP_NOTIFY_SUPERADMIN = (
     "📊 شارژ حجم (پرداخت مصرفی هفتگی)\n\n"
@@ -247,18 +252,6 @@ WEEKLY_SETTLEMENT_LIST_HEADER = "🗓 تسویه‌ی هفتگی — وضعیت 
 WEEKLY_SETTLEMENT_LINE = "▫️ <b>{username}</b> — {amount:,} تومان{note}\n"
 WEEKLY_SETTLEMENT_PAID_NOTE = " (از کیف پول تسویه شد ✅)"
 WEEKLY_SETTLEMENT_NONE = "🗓 تسویه‌ی هفتگی: هیچ بدهی‌ای برای این هفته ثبت نشده است."
-SETTLEMENT_WARNINGS_HEADER = "⚠️ تسویه هفتگی — موارد نیاز به توجه:\n\n"
-SETTLEMENT_PANEL_UNREADABLE = (
-    "▫️ پنل «{panel}» خوانده نشد؛ حجم ساخته‌شده مالکان آن در هفته بعد "
-    "به‌صورت خودکار جمع و صورتحساب می‌شود.\n"
-)
-SETTLEMENT_OWNER_UNBILLED = (
-    "▫️ پنل «{username}»: {gb:.1f} گیگ ساخته‌شده به دلیل نبود قیمت یا آیدی تلگرام "
-    "صورتحساب نشد و به هفته بعد منتقل شد.\n"
-)
-SETTLEMENT_OBSERVER_SKIPPED = (
-    "▫️ پنل «{username}»: ناظر است؛ بدون فاکتور رها شد.\n"
-)
 WEEKLY_WALLET_SETTLED = (
     "✅ بدهی هفتگی پنل «{username}» به مبلغ {paid:,} تومان از کیف پول شما تسویه شد.\n"
     "💼 موجودی کیف پول: {balance:,} تومان"

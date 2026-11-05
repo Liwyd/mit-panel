@@ -29,6 +29,7 @@ from backend.auth.auth import get_current_superadmin
 from backend.utils.system import get_system_info
 from backend.utils.marzban_overview import PERIODS, build_marzban_overview
 from backend.utils.settings_store import get_settings, update_settings, save_logo
+from backend.bot.consumption_ledger import BillingDeferred
 from backend.utils.banners import save_banner, delete_banner, get_banner_path
 from backend.utils.telegram import send_backup_to_telegram
 from backend.utils.servers import server_status
@@ -101,7 +102,10 @@ async def update_admin(
     was_locked = bot_db.get_admin_lock(target.username) is not None
     password_changed = bool(admin_input.password)
 
-    update_admin = crud.update_admin_values(db, admin_id, admin_input)
+    try:
+        update_admin = crud.update_admin_values(db, admin_id, admin_input)
+    except BillingDeferred as exc:
+        return JSONResponse(status_code=409, content={"success": False, "message": str(exc)})
     if update_admin:
         if was_locked and password_changed:
             bot_db.delete_admin_lock(target.username)
@@ -120,7 +124,10 @@ async def delete_admin(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_current_superadmin),
 ):
-    remove_admin = crud.remove_admin(db, admin_id)
+    try:
+        remove_admin = crud.remove_admin(db, admin_id)
+    except BillingDeferred as exc:
+        return JSONResponse(status_code=409, content={"success": False, "message": str(exc)})
     if not remove_admin:
         logger.warning(f"Attempt to delete non-existent admin with id: {admin_id}")
         return JSONResponse(

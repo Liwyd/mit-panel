@@ -13,12 +13,15 @@ import uuid
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from requests import RequestException
 
 from backend.bot import auto_approve, keyboards, texts
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.panels import choose_panel, owned_panel
 from backend.bot.states import TopUp
-from backend.bot import db
+from backend.bot import consumption, db
+from backend.bot.consumption_ledger import BillingDeferred
+from backend.services.marzban.api import MarzbanAPIError
 from backend.bot.config import bot_config as settings
 from backend.bot.panel_client import PanelClientError
 from backend.bot import panel_client
@@ -247,9 +250,7 @@ async def pay_weekly_credit(call: CallbackQuery, state: FSMContext, bot: Bot) ->
 
 @router.callback_query(F.data == "pay_method:consumption", TopUp.awaiting_payment)
 async def pay_consumption_credit(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    """Consumption-mode credit: the volume lands now, and Friday settlement
-    invoices only the volumes created during this week (weekly.run_settlement,
-    fed by the traffic_history snapshots) — no receipt, no debt entry here."""
+    """Grant capacity now and invoice allocations from that capacity on Friday."""
     telegram_id = call.from_user.id
     if telegram_id in _in_flight_payments:
         await call.answer(texts.PAYMENT_PROCESSING, show_alert=True)
@@ -264,17 +265,17 @@ async def pay_consumption_credit(call: CallbackQuery, state: FSMContext, bot: Bo
             return
 
         try:
-            result = await panel_client.topup(telegram_id, gb, username=username)
-        except PanelClientError as exc:
+            balance = await consumption.grant(telegram_id, username, gb)
+        except (BillingDeferred, MarzbanAPIError, RequestException, ValueError):
             await call.answer()
             await call.message.answer(
-                texts.WEEKLY_TOPUP_FAILED.format(error=exc), reply_markup=keyboards.main_menu_kb()
+                texts.CONSUMPTION_GRANT_DEFERRED, reply_markup=keyboards.main_menu_kb()
             )
             return
 
         await state.clear()
         db.clear_warning_bucket(username)
-        new_gb = bytes_to_gb(result.get("new_traffic_bytes"))
+        new_gb = bytes_to_gb(balance)
 
         await call.answer()
         await call.message.answer(

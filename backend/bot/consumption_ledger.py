@@ -18,6 +18,7 @@ class UserState:
     generation: str
     limit: int
     used: int
+    earlier_usage: int = 0
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,7 @@ def _change_available(conn: sqlite3.Connection, admin_id: int, amount: int) -> N
 
 def user_state(conn: sqlite3.Connection, admin_id: int, username: str) -> UserState | None:
     row = conn.execute(
-        "SELECT generation, limit_bytes, used_bytes FROM consumption_users "
+        "SELECT generation, limit_bytes, used_bytes, earlier_usage FROM consumption_users "
         "WHERE admin_id = ? AND username = ?",
         (admin_id, username),
     ).fetchone()
@@ -113,10 +114,11 @@ def _save_user(
     conn: sqlite3.Connection, admin_id: int, username: str, state: UserState,
 ) -> None:
     conn.execute(
-        """INSERT INTO consumption_users VALUES (?, ?, ?, ?, ?)
+        """INSERT INTO consumption_users VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(admin_id, username) DO UPDATE SET generation = excluded.generation,
-             limit_bytes = excluded.limit_bytes, used_bytes = excluded.used_bytes""",
-        (admin_id, username, state.generation, state.limit, state.used),
+             limit_bytes = excluded.limit_bytes, used_bytes = excluded.used_bytes,
+             earlier_usage = excluded.earlier_usage""",
+        (admin_id, username, state.generation, state.limit, state.used, state.earlier_usage),
     )
 
 
@@ -148,6 +150,12 @@ def _allocate(
     _add_allocation(conn, admin_id, username, "ordinary", amount - weekly)
     _add_allocation(conn, admin_id, username, "open", weekly)
     _change_available(conn, admin_id, -weekly)
+    deficit = amount - ordinary - weekly
+    if deficit:
+        conn.execute(
+            "UPDATE consumption_accounts SET unbilled_deficit_bytes = unbilled_deficit_bytes + ? "
+            "WHERE admin_id = ?", (deficit, admin_id),
+        )
     conn.execute(
         "UPDATE admins SET traffic = COALESCE(traffic, 0) - ? WHERE id = ?", (amount, admin_id)
     )
@@ -209,10 +217,20 @@ def _release(
 
 def observe(
     conn: sqlite3.Connection, admin_id: int, username: str, current: UserState | None,
+    *, force_reset: bool = False, ordinary_returns: bool = True,
 ) -> None:
     """Apply a verified observation. The caller commits the transaction."""
     previous = user_state(conn, admin_id, username)
-    if previous == current:
+    if previous == current and not force_reset:
+        return
+    if (
+        previous and current and not force_reset
+        and (previous.generation, previous.limit, previous.earlier_usage)
+        == (current.generation, current.limit, current.earlier_usage)
+        and current.used >= previous.used
+    ):
+        _save_user(conn, admin_id, username, current)
+        bump_revision(conn, admin_id)
         return
     admin = _admin(conn, admin_id)
     if previous is not None and (
@@ -222,7 +240,7 @@ def observe(
         active = sum(row["active_bytes"] for row in lots)
         unused = max(0, min(active, previous.limit) - previous.used)
         _release(conn, admin_id, reversed(lots), unused, unused=True,
-                 return_ordinary=bool(admin["delete_return_traffic"]))
+                 return_ordinary=ordinary_returns and bool(admin["delete_return_traffic"]))
         conn.execute(
             "UPDATE consumption_allocations SET active_bytes = 0 "
             "WHERE admin_id = ? AND username = ? AND active_bytes > 0",
@@ -235,16 +253,19 @@ def observe(
         previous = None
 
     if current is not None:
-        reset = previous is not None and current.used < previous.used
+        reset = previous is not None and (
+            force_reset or current.used < previous.used or current.earlier_usage > previous.earlier_usage
+        )
         if reset:
+            reset_bytes = max(previous.used, current.earlier_usage - previous.earlier_usage)
             _release(conn, admin_id, iter(_live_allocations(conn, admin_id, username)),
-                     min(previous.used, previous.limit), unused=False)
+                     reset_bytes, unused=False)
         lots = _live_allocations(conn, admin_id, username)
         active = sum(row["active_bytes"] for row in lots)
         unused = max(0, active - max(current.limit, current.used))
         if unused:
             _release(conn, admin_id, reversed(lots), unused, unused=True,
-                     return_ordinary=bool(admin["update_return_traffic"]))
+                     return_ordinary=ordinary_returns and bool(admin["update_return_traffic"]))
         if previous is not None and not reset and current.limit > previous.limit:
             # An already-used overage is not a fresh quota purchase.
             overage = max(0, min(current.limit, previous.used) - active)
@@ -363,7 +384,9 @@ def settle(
         (admin_id,),
     )
     conn.execute(
-        "INSERT INTO consumption_settlements VALUES (?, ?, ?, ?, ?, ?)",
+        """INSERT INTO consumption_settlements
+           (admin_id, week_stamp, cutoff, allocated_bytes, discount_bytes, invoice_id)
+           VALUES (?, ?, ?, ?, ?, ?)""",
         (admin_id, stamp, now.isoformat(), allocated, discount, invoice_id),
     )
     return Settlement(allocated, discount, invoice_id, amount, admin["telegram_id"], due_at)

@@ -1,4 +1,7 @@
+import asyncio
 import json
+import sqlite3
+from requests import RequestException
 from sqlalchemy.orm import Session
 from fastapi import status
 from fastapi.responses import JSONResponse
@@ -15,6 +18,9 @@ from backend.services.tx_ui import APIService as txui_APIService
 from backend.services.marzban import APIService as marzban_APIService
 from backend.services.guard import APIService as guard_APIService
 from backend.db import crud
+from backend.bot import consumption
+from backend.bot.consumption_ledger import BillingDeferred
+from backend.services.marzban.api import MarzbanAPIError
 from backend.utils.logger import logger
 
 
@@ -374,6 +380,21 @@ async def get_all_users_from_panel(
         )
 
 
+async def _consumption_change(admin, task, username, operation, request, limit=None):
+    admin_id, owner = admin.id, admin.username
+    try:
+        code, message = await asyncio.to_thread(lambda: asyncio.run(consumption.mutate(
+            admin_id, owner, task.api_service_for_main_tasks, username, operation, request, limit,
+        )))
+    except (BillingDeferred, MarzbanAPIError, RequestException, sqlite3.Error, ValueError):
+        logger.warning("Could not verify %s for %s/%s", operation, owner, username, exc_info=True)
+        code, message = 503, "Could not confirm the Marzban change. Refresh before retrying."
+    if code != 200:
+        return JSONResponse(status_code=code, content={"success": False, "message": message})
+    return ResponseModel(success=True, message=message)
+
+
+@consumption.serialize_user_change
 async def add_new_user(
     admin_username: str, user_input: ClientInput, db: Session
 ) -> JSONResponse:
@@ -491,6 +512,7 @@ async def add_new_user(
         )
 
     if panel.panel_type == "marzban":
+        tracked = consumption.enrollment(db, _admin.id)
         if not admin_check.admin_is_active():
             logger.warning(f"Inactive admin attempted to add user: {admin_username}")
             return JSONResponse(
@@ -500,7 +522,7 @@ async def add_new_user(
                     "message": "Your admin account is inactive. Contact support.",
                 },
             )
-        elif not admin_check.check_traffic_limit(user_input.total):
+        elif not tracked and not admin_check.check_traffic_limit(user_input.total):
             logger.warning(
                 f"Admin {admin_username} exceeded traffic limit when adding user: {user_input.email}"
             )
@@ -528,6 +550,11 @@ async def add_new_user(
                     f"Failed to resolve all-inbounds for admin {admin_username}: {e}"
                 )
 
+        if tracked:
+            return await _consumption_change(
+                _admin, admin_task, user_input.email, "create",
+                lambda _: admin_task.api_service.create_user(user_input), int(user_input.total),
+            )
         existing_user = await admin_task.get_user_by_username(user_input.email)
         if isinstance(existing_user, dict) and existing_user.get("username"):
             logger.warning(
@@ -620,6 +647,7 @@ async def add_new_user(
         )
 
 
+@consumption.serialize_user_change
 async def update_a_user(
     admin_username: str, uuid: str, user_input: ClientUpdateInput, db: Session
 ) -> JSONResponse:
@@ -775,6 +803,16 @@ async def update_a_user(
             )
 
         admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
+        if consumption.enrollment(db, _admin.id):
+            def update_tracked(raw):
+                payload = user_input
+                if not payload.enable and str(raw.get("status") or "").lower() in ("limited", "expired"):
+                    payload = payload.model_copy(update={"enable": True})
+                return admin_task.api_service.update_user(payload.email, payload)
+
+            return await _consumption_change(
+                _admin, admin_task, user_input.email, "update", update_tracked, int(user_input.total),
+            )
         user_info = await admin_task.get_user_by_username(user_input.email)
 
         if not isinstance(user_info, dict) or not user_info.get("username"):
@@ -897,6 +935,7 @@ async def update_a_user(
         )
 
 
+@consumption.serialize_user_change
 async def reset_a_user_usage(
     admin_username: str, email: str, db: Session
 ) -> JSONResponse:
@@ -1045,6 +1084,10 @@ async def reset_a_user_usage(
             )
 
         admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
+        if consumption.enrollment(db, _admin.id):
+            return await _consumption_change(
+                _admin, admin_task, email, "reset", lambda _: admin_task.api_service.reset_user_traffic(email),
+            )
         user_info = await admin_task.get_user_by_username(email)
         if not user_info:
             return JSONResponse(
@@ -1136,6 +1179,7 @@ async def reset_a_user_usage(
         )
 
 
+@consumption.serialize_user_change
 async def delete_a_user(admin_username: str, uuid: str, db: Session) -> bool:
     """This function deletes a user from the panel associated with the given admin."""
 
@@ -1285,6 +1329,10 @@ async def delete_a_user(admin_username: str, uuid: str, db: Session) -> bool:
             )
 
         admin_task = MarzbanAdminTaskService(admin_username=admin_username, db=db)
+        if consumption.enrollment(db, _admin.id):
+            return await _consumption_change(
+                _admin, admin_task, username, "delete", lambda _: admin_task.api_service.delete_user(username),
+            )
         user_info = await admin_task.get_user_by_username(username)
 
         if not user_info:
