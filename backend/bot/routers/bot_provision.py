@@ -720,13 +720,22 @@ async def open_bot_request(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer(texts.NO_BOT_REQUEST, show_alert=True)
         return
     await call.answer()
-    # A buyer is not a panel admin, so the bot is built for their own Telegram
-    # id. They have no reseller panel, so there is nothing to push into it.
+    # The person asking is not always a plain buyer: a sub-admin of this panel
+    # can ask for a bot too, and theirs has to come out the way one built from
+    # their own row does — with their panel pushed into it and their row
+    # recorded as its owner. `bot_admin_id` is this panel's *row* id; put a
+    # Telegram id there and it resolves to no row at all, so the install finds
+    # no admin and silently builds a bot with an empty panel list and nobody
+    # as its owner. A buyer has no row: their bot is built for their own
+    # Telegram id, and there is nothing to push into it.
+    telegram_id = int(req["telegram_id"])
+    with sessionLocal() as session:
+        requester = crud.get_admin_by_telegram_id(session, telegram_id)
     await ask_token(
         call.message,
         state,
-        int(req["telegram_id"]),
-        req.get("username") or "",
-        admin_telegram_id=int(req["telegram_id"]),
+        requester.id if requester is not None else 0,
+        requester.username if requester is not None else (req.get("username") or ""),
+        admin_telegram_id=telegram_id,
         request_id=request_id,
     )
