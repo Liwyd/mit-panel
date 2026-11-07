@@ -440,8 +440,9 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
         await bot.send_message(
             req["telegram_id"],
             creds_text,
-            reply_markup=keyboards.main_menu_kb(),
+            reply_markup=keyboards.panel_login_kb(),
         )
+        await bot.send_message(req["telegram_id"], texts.PANEL_MENU_PROMPT, reply_markup=keyboards.main_menu_kb())
     except Exception:
         logger.error(f"Failed to send credentials to buyer {req['telegram_id']}")
 
@@ -449,7 +450,8 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
     await call.message.answer(
         texts.PANEL_NUMBER_LABEL.format(panel_number=panel_number or "—")
         + "\n"
-        + texts.PANEL_LINK_INFO.format(url=panel_url, username=username, password=password)
+        + texts.PANEL_LINK_INFO.format(url=panel_url, username=username, password=password),
+        reply_markup=keyboards.panel_login_kb(),
     )
 
     # Referral bonus

@@ -844,14 +844,16 @@ async def create_admin_finish(message: Message, state: FSMContext, bot: Bot) -> 
     )
     await message.answer(
         success_text,
-        reply_markup=superadmin_kb(message.from_user.id),
+        reply_markup=keyboards.panel_login_kb(),
     )
+
+    await message.answer(texts.PANEL_MENU_PROMPT, reply_markup=superadmin_kb(message.from_user.id))
 
     if target_id:
         db.ensure_user(target_id)
         db.set_user_linked(target_id, True)
         try:
-            await bot.send_message(target_id, success_text)
+            await bot.send_message(target_id, success_text, reply_markup=keyboards.panel_login_kb())
         except Exception:
             pass
 

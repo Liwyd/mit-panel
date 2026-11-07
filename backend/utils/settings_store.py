@@ -43,6 +43,8 @@ DEFAULTS = {
     # dwunli.draking.ir points straight at the main server instead.
     "bot_panel_link_url": "https://dwunli.draking.ir:4000/panpan/",
     # Tehran hour the nightly digest goes out (0-23).
+    "bot_panel_login_vpn_url": "https://dwunli.draking.ir:4000/panpan/",
+    "bot_panel_login_direct_url": "https://wunli.draking.ir:4000/panpan/",
     "bot_digest_hour": 22,
     # Where monitoring agents send their heartbeats, used in the install
     # command. Empty means "whichever domain the panel is open on", which is

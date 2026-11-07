@@ -544,3 +544,17 @@ def referral_request_approval_kb(request_id: int) -> InlineKeyboardMarkup:
     kb.button(text=texts.BTN_REJECT_REFERRAL, callback_data=f"ref_req_reject:{request_id}")
     kb.adjust(2)
     return kb.as_markup()
+
+
+def panel_login_kb() -> InlineKeyboardMarkup:
+    from backend.utils.settings_store import DEFAULTS, get_settings
+
+    settings = get_settings()
+    kb = InlineKeyboardBuilder()
+    for label, key in (
+        (texts.BTN_PANEL_LOGIN_VPN, "bot_panel_login_vpn_url"),
+        (texts.BTN_PANEL_LOGIN_DIRECT, "bot_panel_login_direct_url"),
+    ):
+        kb.button(text=label, url=settings.get(key) or DEFAULTS[key])
+    kb.adjust(1)
+    return kb.as_markup()

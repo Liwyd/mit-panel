@@ -570,7 +570,6 @@ CREATING_ADMIN = "⏳ در حال ساخت پنل..."
 NO_MARZBAN_PANELS = "⚠️ هیچ پنل مرزبانی در سیستم ثبت نشده است."
 CREATE_ADMIN_SUCCESS = (
     "✅ پنل جدید با موفقیت ساخته شد.\n\n"
-    "🔗 لینک پنل: {url}\n"
     "👤 نام کاربری: <code>{username}</code>\n"
     "🔑 رمز عبور: <code>{password}</code>\n"
     "📊 حجم اولیه: {traffic_gb:g} گیگابایت\n"
@@ -999,7 +998,6 @@ SHOP_RECEIPT_WARNING = "\n\n⚠️ لطفاً رسید پرداخت را مجد�
 RECEIPT_WARNING = "\n\n⚠️ لطفاً رسید پرداخت را مجدداً ارسال نکنید. درخواست شما ثبت شده و در حال بررسی است."
 SHOP_REQUEST_APPROVED = (
     "🎉 پنل شماره {panel_number} شما آماده است!\n\n"
-    "🔗 لینک پنل: {url}\n"
     "👤 نام کاربری: <code>{username}</code>\n"
     "🔑 رمز عبور: <code>{password}</code>\n\n"
     "برای مدیریت پنل خود از منوی زیر استفاده کنید."
@@ -1036,7 +1034,6 @@ REFERRAL_CREATED = "✅ کد رفرال ایجاد شد."
 
 # --- panel link ---
 PANEL_LINK_INFO = (
-    "🔗 لینک پنل: {url}\n"
     "👤 نام کاربری: <code>{username}</code>\n"
     "🔑 رمز عبور: <code>{password}</code>"
 )
@@ -1146,3 +1143,7 @@ USAGE_SYNC_INVOICE = (
 )
 USAGE_SYNC_REPORT = "گزارش همگام‌سازی کاربران پنل‌ها\n\n{body}"
 USAGE_SYNC_PAID_CUSTOMER = "بدهی با موفقیت پرداخت شد اکنون باید پنل خود را برای ادامه فرایند شارژ کنید"
+
+BTN_PANEL_LOGIN_VPN = "ورود به پنل با VPN"
+BTN_PANEL_LOGIN_DIRECT = "ورود به پنل بدون VPN"
+PANEL_MENU_PROMPT = "برای ادامه از منوی زیر استفاده کنید."
