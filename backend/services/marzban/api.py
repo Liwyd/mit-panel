@@ -8,9 +8,10 @@ from threading import Lock
 
 from backend.schema._input import ClientInput, ClientUpdateInput
 
-# Every call below is synchronous code running inside an async handler, so an
-# unbounded wait would freeze the whole event loop (bot and dashboard alike)
-# for as long as the panel stays unreachable.
+# Every upstream call runs to completion on a worker thread (APIService._call)
+# so the event loop keeps answering while the Marzban host is slow; this bound
+# keeps any single wait short. A raw call here used to freeze the loop (bot
+# logins and dashboards alike) for the whole read.
 REQUEST_TIMEOUT = 10
 
 
@@ -93,6 +94,17 @@ class APIService:
             self.token = token
             self.headers = {"Authorization": f"Bearer {token}"}
 
+    async def _call(self, fn, /, *args, **kwargs):
+        """Run one blocking requests call on a worker thread.
+
+        Sync requests called straight from an async handler hold the whole
+        event loop for as long as the read takes, so one slow upstream read
+        stalled bot logins, dashboards and reconciliation together. `fn` runs
+        on the default executor, bounded by the same REQUEST_TIMEOUT; the
+        loop only waits until the thread pool takes over.
+        """
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
     async def test_connection(self) -> bool:
         try:
             await self._login()
@@ -110,7 +122,8 @@ class APIService:
         a password-specific message must use this one and let the raise
         through, so their "could not reach the panel" branch can fire.
         """
-        response = requests.post(
+        response = await self._call(
+            requests.post,
             f"{self.url}api/admin/token",
             data={"username": self.username, "password": self.password},
             timeout=REQUEST_TIMEOUT,
@@ -123,7 +136,9 @@ class APIService:
     async def get_users(self):
         await self._login()
         url = f"{self.url}api/users"
-        response = self.session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+        response = await self._call(
+            self.session.get, url, headers=self.headers, timeout=REQUEST_TIMEOUT
+        )
         return response.json()
 
     async def get_users_page(
@@ -139,7 +154,8 @@ class APIService:
         params = {"offset": offset, "limit": limit}
         if owners and len(owners) <= 50:
             params["admin"] = owners
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/users",
             headers=self.headers,
             params=params,
@@ -219,7 +235,8 @@ class APIService:
 
     async def get_billing_user(self, username: str) -> dict | None:
         await self._login()
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/user/{quote(username, safe='')}",
             headers=self.headers, timeout=REQUEST_TIMEOUT,
         )
@@ -235,12 +252,13 @@ class APIService:
     async def get_user(self, username: str) -> dict | bool:
         await self._login()
 
-        user = requests.get(
+        response = await self._call(
+            requests.get,
             f"{self.url}api/user/{username}",
             headers={"Authorization": f"Bearer {self.token}"},
             timeout=REQUEST_TIMEOUT,
-        ).json()
-        return user
+        )
+        return response.json()
 
     async def get_inbounds(self, retries: int = 3) -> dict:
         """Protocol -> tags, exactly what Marzban accepts as a user's inbounds.
@@ -255,7 +273,8 @@ class APIService:
 
         for attempt in range(max(1, retries)):
             try:
-                response = self.session.get(
+                response = await self._call(
+                    self.session.get,
                     url,
                     headers={"Authorization": f"Bearer {self.token}"},
                     timeout=REQUEST_TIMEOUT,
@@ -306,7 +325,8 @@ class APIService:
             "on_hold_timeout": None,
         }
 
-        response = self.session.post(
+        response = await self._call(
+            self.session.post,
             f"{self.url}api/user",
             headers=self.headers,
             json=data,
@@ -329,7 +349,8 @@ class APIService:
             "note": "",
         }
 
-        response = self.session.put(
+        response = await self._call(
+            self.session.put,
             f"{self.url}api/user/{username}",
             headers=self.headers,
             json=update_data,
@@ -339,7 +360,8 @@ class APIService:
 
     async def reset_user_traffic(self, username: str) -> int:
         await self._login()
-        response = self.session.post(
+        response = await self._call(
+            self.session.post,
             f"{self.url}api/user/{username}/reset",
             headers=self.headers,
             timeout=REQUEST_TIMEOUT,
@@ -348,7 +370,8 @@ class APIService:
 
     async def revoke_subscription(self, username: str) -> dict:
         await self._login()
-        response = self.session.post(
+        response = await self._call(
+            self.session.post,
             f"{self.url}api/user/{quote(username, safe='')}/revoke_sub",
             headers=self.headers, timeout=REQUEST_TIMEOUT,
         )
@@ -371,7 +394,8 @@ class APIService:
 
     async def delete_user(self, username: str) -> int:
         await self._login()
-        response = self.session.delete(
+        response = await self._call(
+            self.session.delete,
             f"{self.url}api/user/{username}",
             headers=self.headers,
             timeout=REQUEST_TIMEOUT,
@@ -389,7 +413,8 @@ class APIService:
         """
         await self._login()
         for params in ({"username": username}, None):
-            response = self.session.get(
+            response = await self._call(
+                self.session.get,
                 f"{self.url}api/admins",
                 headers=self.headers,
                 params=params,
@@ -426,7 +451,8 @@ class APIService:
             if current.get(field) is not None:
                 payload[field] = current[field]
 
-        response = self.session.put(
+        response = await self._call(
+            self.session.put,
             f"{self.url}api/admin/{admin_username}",
             headers=self.headers,
             json=payload,
@@ -443,7 +469,8 @@ class APIService:
         """Marzban's own /api/system snapshot: user counts, lifetime bandwidth
         and the CPU/RAM of the host Marzban itself runs on."""
         await self._login()
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/system", headers=self.headers, timeout=REQUEST_TIMEOUT
         )
         if response.status_code != 200:
@@ -453,7 +480,8 @@ class APIService:
     async def get_nodes_usage(self, start: str, end: str) -> list[dict]:
         """Per-node traffic for a window. Marzban wants naive ISO timestamps."""
         await self._login()
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/nodes/usage",
             headers=self.headers,
             params={"start": start, "end": end},
@@ -472,7 +500,8 @@ class APIService:
         rather than failing the whole dashboard payload.
         """
         await self._login()
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/nodes",
             headers=self.headers,
             timeout=REQUEST_TIMEOUT,
@@ -539,7 +568,8 @@ class APIService:
             if sorted_by_seen:
                 params["sort"] = "-online_at"
 
-            response = self.session.get(
+            response = await self._call(
+                self.session.get,
                 f"{self.url}api/users",
                 headers=self.headers,
                 params=params,
@@ -599,7 +629,8 @@ class APIService:
         """List every admin as Marzban itself has them recorded (username,
         telegram_id, is_sudo, ...). Requires sudo credentials."""
         await self._login()
-        response = self.session.get(
+        response = await self._call(
+            self.session.get,
             f"{self.url}api/admins", headers=self.headers, timeout=REQUEST_TIMEOUT
         )
         if response.status_code != 200:
@@ -619,7 +650,8 @@ class APIService:
         if telegram_id:
             payload["telegram_id"] = telegram_id
 
-        response = self.session.post(
+        response = await self._call(
+            self.session.post,
             f"{self.url}api/admin",
             headers=self.headers,
             json=payload,
