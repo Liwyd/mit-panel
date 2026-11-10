@@ -133,6 +133,24 @@ def _install(monkeypatch, admin, *, mit_base=None, **kwargs):
 # ------------------------------------------------------------------ the code
 
 
+def _run_install_for_admin(admin, monkeypatch, *, mit_secret: str):
+    """Run the install with a real FakeBot so the DM to the admin is caught."""
+    _patch(monkeypatch)
+    bot = FakeBot()
+    message = FakeMessage(SUPERADMIN)
+    _run(
+        bot_provision._install(
+            message,
+            bot,
+            domain="new.example.com",
+            token="123:AAH",
+            admin_id=admin.id,
+            mit_secret=mit_secret,
+        )
+    )
+    return message, bot
+
+
 def test_the_code_the_superadmin_chose_is_the_one_the_bot_gets(db_session, monkeypatch):
     admin = _add_admin(db_session, "seller")
 
@@ -159,6 +177,22 @@ def test_a_good_code_is_kept_and_the_domain_comes_next(db_session):
 
     assert _run(state.get_state()) == CreateBot.domain.state
     assert _run(state.get_data())["bot_mit_secret"] == "MyCode123"
+
+
+def test_the_sub_admin_is_dm_the_bot_and_never_the_code(db_session, monkeypatch):
+    """The code opens the bot's panel section — it is the superadmin's, so the
+    DM to the person the bot was built for carries the bot and nothing else.
+    The one sent in 2026-11 let a reseller re-point their bot's panels."""
+    admin = _add_admin(db_session, "seller")
+
+    message, bot = _run_install_for_admin(admin, monkeypatch, mit_secret="MyCode123")
+
+    dms = [text for chat_id, text in bot.sent if chat_id == admin.telegram_id]
+    assert len(dms) == 1
+    assert "t.me/newbot" in dms[0]
+    assert "MyCode123" not in dms[0]
+    # The code only ever goes to the superadmin, who hands it over themselves.
+    assert any("MyCode123" in text for text in message.answers)
 
 
 # ----------------------------------------------------------------- the panel

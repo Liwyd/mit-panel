@@ -663,12 +663,14 @@ BOT_DONE_SUPERADMIN = (
     "• manager: <code>{manager_key}</code>\n\n"
     "📦 پنل و ربات جداگانه تحویل داده شد."
 )
+# No management code here, deliberately: the code opens the bot's panel
+# section and belongs to the superadmin — they hand it over themselves, the
+# panel never does (production leak, 2026-11).
 BOT_DONE_ADMIN = (
     "🤖 ربات تلگرامی شما آماده شد.\n\n"
     "🔗 لینک ربات: {bot_link}\n"
-    "👤 نام کاربری: <code>{bot_username}</code>\n"
-    "🔑 کد مدیریت پنل ربات: <code>{mit_secret}</code>\n\n"
-    "برای ورود به بخش مدیریت ربات، این کد را در ربات وارد کنید."
+    "👤 نام کاربری: <code>{bot_username}</code>\n\n"
+    "وارد ربات شوید و /start را بزنید."
 )
 BOT_REGISTER_FAILED = (
     "⚠️ ربات ساخته شد اما به این پنل وصل نشد. "

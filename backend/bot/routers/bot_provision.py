@@ -631,7 +631,11 @@ async def _install(
             reply_markup=superadmin_kb(message.from_user.id),
         )
 
-    # The reseller gets the bot separately from the panel, which is the point.
+    # The reseller gets the bot separately from the panel — and never the
+    # management code. The code opens the bot's panel section and belongs to
+    # the superadmin: they hand it over how they normally do. A code here
+    # would let the reseller re-point their bot's panels (the leak of
+    # 2026-11), so the DM carries only the bot and how to open it.
     if admin is not None and admin.telegram_id:
         try:
             await bot.send_message(
@@ -639,7 +643,6 @@ async def _install(
                 texts.BOT_DONE_ADMIN.format(
                     bot_link=bot_link,
                     bot_username=bot_username or "—",
-                    mit_secret=mit_secret,
                 ),
             )
         except Exception:
