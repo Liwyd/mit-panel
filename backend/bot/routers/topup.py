@@ -15,7 +15,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from requests import RequestException
 
-from backend.bot import auto_approve, keyboards, texts
+from backend.bot import auto_approve, keyboards, notify, texts
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.panels import choose_panel, owned_panel
 from backend.bot.states import TopUp
@@ -355,13 +355,11 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
         f"📊 حجم درخواستی: {data['amount_gb']:g} گیگابایت\n"
         f"💰 مبلغ: {data['total_price']:,} تومان"
     ) + auto_approve.caption_note()
-    for superadmin_id in settings.superadmin_id_list:
-        try:
-            await bot.send_photo(
-                superadmin_id,
-                photo=FSInputFile(receipt_path),
-                caption=caption,
-                reply_markup=keyboards.approval_kb(request_id, message.from_user.id),
-            )
-        except Exception:
-            continue
+    await notify.send_receipt_to_superadmins(
+        bot,
+        photo=FSInputFile(receipt_path),
+        caption=caption,
+        reply_markup=keyboards.approval_kb(request_id, message.from_user.id),
+        request_id=request_id,
+        kind="topup",
+    )

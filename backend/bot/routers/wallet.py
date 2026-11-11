@@ -17,7 +17,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import auto_approve, keyboards, texts
+from backend.bot import auto_approve, keyboards, notify, texts
 from backend.bot.bills import open_bills, render_for_customer, urgency
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.states import DebtPayment, InvoicePayment, WalletTopUp
@@ -39,18 +39,17 @@ async def _save_receipt(message: Message, bot: Bot) -> str:
     return path
 
 
-async def _send_to_superadmins(bot: Bot, path: str, caption: str, request_id: int, user_id: int) -> None:
-    caption += auto_approve.caption_note()
-    for superadmin_id in settings.superadmin_id_list:
-        try:
-            await bot.send_photo(
-                superadmin_id,
-                photo=FSInputFile(path),
-                caption=caption,
-                reply_markup=keyboards.approval_kb(request_id, user_id),
-            )
-        except Exception:
-            continue
+async def _send_to_superadmins(
+    bot: Bot, path: str, caption: str, request_id: int, user_id: int, kind: str
+) -> None:
+    await notify.send_receipt_to_superadmins(
+        bot,
+        photo=FSInputFile(path),
+        caption=caption + auto_approve.caption_note(),
+        reply_markup=keyboards.approval_kb(request_id, user_id),
+        request_id=request_id,
+        kind=kind,
+    )
 
 
 async def _has_access(message: Message, user_id: int) -> bool:
@@ -156,6 +155,7 @@ async def get_wallet_receipt(message: Message, state: FSMContext, bot: Bot) -> N
         f"💰 مبلغ: {amount:,} تومان",
         request_id,
         message.from_user.id,
+        kind="wallet",
     )
 
 
@@ -242,6 +242,7 @@ async def get_invoice_receipt(message: Message, state: FSMContext, bot: Bot) -> 
         f"💰 مبلغ: {amount:,} تومان",
         request_id,
         message.from_user.id,
+        kind="invoice",
     )
 
 
@@ -306,4 +307,5 @@ async def get_debt_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
         f"💰 مبلغ: {amount:,} تومان",
         request_id,
         message.from_user.id,
+        kind="settlement",
     )
