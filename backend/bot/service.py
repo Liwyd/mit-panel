@@ -37,7 +37,9 @@ async def _supervised(name: str, runner) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("background task %s crashed: %s", name, exc)
+            logger.error(
+                "background task %s crashed: %s", name, exc, exc_info=True
+            )
         await asyncio.sleep(SUPERVISOR_RESTART_DELAY)
 
 
@@ -115,7 +117,11 @@ def start_bot() -> None:
     if not bot_config.bot_token:
         logger.info("BOT_TOKEN not set — top-up bot disabled")
         return
-    _bot_task = asyncio.create_task(_run_bot())
+    # The main bot task is supervised like every background loop. An unsupervised
+    # task that dies is held alive by this module's reference, so asyncio never
+    # reports "exception was never retrieved" — the bot would be gone with zero
+    # log lines, and receipts would silently stop reaching the superadmins.
+    _bot_task = asyncio.create_task(_supervised("telegram_bot", _run_bot))
     logger.info("Top-up bot task created")
 
 
