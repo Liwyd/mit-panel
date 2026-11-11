@@ -1588,6 +1588,17 @@ def ensure_panel_metadata(telegram_id: int, usernames: list[str]) -> dict[str, d
         return {row["admin_username"]: dict(row) for row in rows}
 
 
+def list_panel_metadata(telegram_id: int) -> dict[str, dict]:
+    """The owner's metadata rows as they stand, allocating nothing."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT admin_username, telegram_id, panel_number, admin_note "
+            "FROM panel_metadata WHERE telegram_id = ?",
+            (telegram_id,),
+        ).fetchall()
+        return {row["admin_username"]: dict(row) for row in rows}
+
+
 def get_panel_metadata(admin_username: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute(

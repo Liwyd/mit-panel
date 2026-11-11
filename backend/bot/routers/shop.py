@@ -16,7 +16,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import db, keyboards, texts, validation
+from backend.bot import db, keyboards, notify, texts, validation
 from backend.bot import panel_client
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
@@ -337,39 +337,56 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
             reply_markup=await menu_kb_for(message.from_user.id),
         )
 
-        # Notify superadmins — send the receipt photo with approval buttons
+        # Notify superadmins — the receipt photo with approval buttons. This
+        # is the only way a shop request reaches review, so nothing between
+        # the stored request and the send may raise: a crash here once ate
+        # every request's notice (name 'current_admins' is not defined) while
+        # customers were told their request was submitted.
         price_per_gb = _resolve_price(panel_name, referral_code_id)
         total = int(gb * price_per_gb)
         username = message.from_user.username or ""
-        metadata = db.ensure_panel_metadata(
-            message.from_user.id,
-            [admin["username"] for admin in current_admins],
-        )
+        try:
+            owned_admins = await panel_client.get_admins(message.from_user.id)
+        except Exception as exc:
+            logger.warning(
+                "Could not verify existing panels for %s: %s", message.from_user.id, exc
+            )
+            owned_admins = None
+        if owned_admins is None:
+            # Degraded: keep the last known panel numbers rather than guessing.
+            metadata = db.list_panel_metadata(message.from_user.id)
+        else:
+            metadata = db.ensure_panel_metadata(
+                message.from_user.id, [admin["username"] for admin in owned_admins]
+            )
         next_panel_number = max(
             (row["panel_number"] for row in metadata.values()), default=0
         ) + 1
-        caption = (
-            texts.PANEL_REQUEST_HEADER.format(
-                username=username, telegram_id=message.from_user.id
+        try:
+            caption = (
+                texts.PANEL_REQUEST_HEADER.format(
+                    username=username, telegram_id=message.from_user.id
+                )
+                + "\n\n"
+                + texts.PANEL_NUMBER_LABEL.format(panel_number=next_panel_number)
+                + "\n"
+                + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
             )
-            + "\n\n"
-            + texts.PANEL_NUMBER_LABEL.format(panel_number=next_panel_number)
-            + "\n"
-            + texts.PANEL_REQUEST_INFO.format(panel=panel_name, gb=gb, price=total)
+        except Exception:
+            logger.exception("could not build the shop request caption for #%s", request_id)
+            caption = (
+                f"🛒 درخواست پنل جدید از @{username} "
+                f"(ID: <code>{message.from_user.id}</code>)\n\n"
+                f"🧾 رسید درخواست #{request_id} — پنل {panel_name}، {gb:g} گیگابایت"
+            )
+        await notify.send_receipt_to_superadmins(
+            bot,
+            photo=photo.file_id,
+            caption=caption,
+            reply_markup=keyboards.panel_request_approval_kb(request_id),
+            request_id=request_id,
+            kind="panel",
         )
-        for sid in settings.superadmin_id_list:
-            try:
-                await bot.send_photo(
-                    sid,
-                    photo=photo.file_id,
-                    caption=caption,
-                    reply_markup=keyboards.panel_request_approval_kb(request_id),
-                )
-            except Exception as exc:
-                logger.error(
-                    "Failed to notify superadmin %s of shop request: %s",
-                    sid, exc,
-                )
     except Exception as exc:
         logger.error("shop_get_receipt crashed: %s", exc, exc_info=True)
         try:
