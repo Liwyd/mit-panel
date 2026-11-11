@@ -433,3 +433,36 @@ export interface TopupButtons {
 }
 
 export const topupBotAPI = managementAPI('/topup-bot/api', 'topup')
+
+
+export interface MaintenanceBot {
+    bot_id: number
+    bot_name: string
+    admin_username: string | null
+    enabled: boolean
+    eligible: boolean
+    next_due_at: string | null
+    latest_invoice: {
+        invoice_id: number
+        status: string
+        amount: number
+        due_at: string | null
+        notified_at: string | null
+        last_error: string | null
+    } | null
+}
+
+export interface MaintenanceOverview {
+    eur_price: string
+    running: boolean
+    bots: MaintenanceBot[]
+}
+
+export const maintenanceAPI = {
+    get: async (): Promise<MaintenanceOverview> => unwrap(await api.get<ResponseModel<MaintenanceOverview>>('/sales-bots/maintenance')),
+    setPrice: async (eur_price: string): Promise<{ eur_price: string }> =>
+        unwrap(await api.put<ResponseModel<{ eur_price: string }>>('/sales-bots/maintenance/price', { eur_price })),
+    setEnabled: async (id: number, enabled: boolean): Promise<void> => {
+        unwrap(await api.put<ResponseModel<null>>(`/sales-bots/maintenance/${id}`, { enabled }))
+    },
+}

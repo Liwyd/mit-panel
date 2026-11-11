@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { PageLayout } from '@/components/PageLayout'
 import { BotName, ErrorBox, Loading, errorText, sameAsUsername } from './bots/common'
 import { ManageBots } from './bots/ManageBots'
+import { MaintenanceBilling } from './bots/MaintenanceBilling'
 import { OverviewTab } from './bots/OverviewTab'
 import { ProductsTab } from './bots/ProductsTab'
 import { DiscountsTab } from './bots/DiscountsTab'
@@ -138,6 +139,7 @@ export function BotsPage() {
             <ErrorBox error={error} />
 
             {superadmin && <ManageBots bots={bots} onChange={load} />}
+            {superadmin && <MaintenanceBilling revision={bots} />}
             {superadmin && <EmojiPacksCard bots={bots} />}
 
             {!visibleBots.length ? (
