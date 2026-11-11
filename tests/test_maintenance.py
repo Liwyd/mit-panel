@@ -116,19 +116,20 @@ def test_invoice_freezes_rate_and_price_without_granting_traffic(shared_db):
     ledger, _ = shared_db
     invoice_id = enroll_and_issue(ledger)
     invoice = ledger.get_invoice(invoice_id)
-    assert invoice.amount == 290761  # half a toman rounds up, never float truncation
+    assert invoice.amount == 291000  # euro rate rounds up to the next 1000 tomans
     assert invoice.admin_username == "buyer"
     assert invoice.traffic_gb == 0
     assert invoice.due_at is None
     period = sql(ledger, "SELECT * FROM maintenance_periods")[0]
     assert period["source"] == "PriceDB / TGJU"
     assert period["rate_irr"] == "2907605"
+    assert period["rate_toman"] == 291000
     assert hosting.parse(period["period_end"]).astimezone(hosting.TEHRAN).day == 28
     hosting.set_price("2.50")
-    assert ledger.get_invoice(invoice_id).amount == 290761
+    assert ledger.get_invoice(invoice_id).amount == 291000
     next_time = hosting.anniversary(NOW, 1)
     second = hosting.issue(1, quote(next_time), next_time)
-    assert ledger.get_invoice(second).amount == 726901
+    assert ledger.get_invoice(second).amount == 727500
     assert hosting.list_billing()["bots"][0]["latest_invoice"]["invoice_id"] == second
 
 
@@ -656,3 +657,64 @@ def test_telegram_superadmin_can_manage_enrollment_and_price(shared_db, monkeypa
     call.data = "maint_set:1:0"
     asyncio.run(router.toggle(call))
     assert not hosting.list_billing()["bots"][0]["enabled"]
+
+
+
+@pytest.mark.parametrize(
+    "rate_irr, expected",
+    [
+        ("3657600", 366000),
+        ("3660000", 366000),
+        ("3660001", 367000),
+        ("3650000", 365000),
+        ("3659999", 366000),
+    ],
+)
+def test_euro_rate_rounds_up_to_thousand_tomans(shared_db, rate_irr, expected):
+    ledger, _ = shared_db
+    hosting.set_enabled(1, True, NOW)
+    invoice_id = hosting.issue(1, hosting.Quote(Decimal(rate_irr), NOW), NOW)
+    assert ledger.get_invoice(invoice_id).amount == expected
+    period = sql(ledger, "SELECT * FROM maintenance_periods")[0]
+    assert period["rate_irr"] == rate_irr
+    assert period["rate_toman"] == expected
+
+
+def test_round_euro_rate_before_multiplying_by_monthly_fee(shared_db):
+    ledger, _ = shared_db
+    hosting.set_price("1.25")
+    hosting.set_enabled(1, True, NOW)
+    invoice_id = hosting.issue(1, hosting.Quote(Decimal("3657600"), NOW), NOW)
+    assert ledger.get_invoice(invoice_id).amount == 457500  # 366000 * 1.25
+    assert sql(ledger, "SELECT rate_toman FROM maintenance_periods")[0]["rate_toman"] == 366000
+
+
+def test_customer_invoice_omits_rate_source_and_conversion_details(shared_db):
+    ledger, _ = shared_db
+    invoice_id = enroll_and_issue(ledger)
+    bot = FakeBot()
+    asyncio.run(hosting.deliver(bot, NOW))
+    message = next(text for chat_id, text, _ in bot.sent if chat_id == 123)
+    assert f"#{invoice_id}" in message
+    assert "&lt;My Bot&gt;" in message
+    assert "291,000" in message
+    assert "دوره:" in message
+    assert "مهلت پرداخت:" in message
+    for detail in ("PriceDB", "TGJU", "منبع", "یورو", "ریال", "زمان نرخ"):
+        assert detail not in message
+        assert detail not in ledger.get_invoice(invoice_id).description
+
+
+def test_rate_snapshot_upgrade_keeps_old_invoice_amounts(shared_db):
+    ledger, _ = shared_db
+    invoice_id = enroll_and_issue(ledger)
+    # Simulate the previous release, which has no applied-rate snapshot column.
+    sql(ledger, "ALTER TABLE maintenance_periods DROP COLUMN rate_toman")
+    sql(ledger, "UPDATE invoices SET amount = 290761 WHERE id = ?", (invoice_id,))
+    ledger.init_db()
+    ledger.init_db()
+    assert ledger.get_invoice(invoice_id).amount == 290761
+    assert sql(ledger, "SELECT rate_toman FROM maintenance_periods")[0]["rate_toman"] is None
+    hosting.set_enabled(1, False, NOW + timedelta(days=1))
+    hosting.set_enabled(1, True, NOW + timedelta(days=2))
+    assert hosting.issue(1, quote(), NOW + timedelta(days=2)) is None

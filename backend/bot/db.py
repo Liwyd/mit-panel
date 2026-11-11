@@ -481,6 +481,9 @@ def init_db() -> None:
             """
         )
 
+        # Older periods keep their original unrounded amounts and a NULL rate.
+        _ensure_column(conn, "maintenance_periods", "rate_toman", "INTEGER")
+
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()
 
