@@ -102,6 +102,14 @@ The backup is the panel database (`mitpanel.db`), sent as a document to your Tel
 
 ---
 
+## Monthly bot maintenance
+
+Optional EUR-denominated hosting invoices are managed per bot from the
+superadmin dashboard and Telegram finance menu. Billing starts disabled.
+See [billing behavior, manual update and rollback](docs/bot-maintenance.md).
+
+---
+
 ## Tests
 
 ```bash
