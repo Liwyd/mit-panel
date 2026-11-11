@@ -9,7 +9,10 @@ from .shop import router as shop_router
 from .approval import router as approval_router
 from .bot_provision import router as bot_provision_router
 
+from .maintenance import router as maintenance_router
+
 all_routers = [
+    maintenance_router,
     start_router,
     topup_router,
     change_password_router,

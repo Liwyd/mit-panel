@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
+from html import escape
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -105,7 +106,7 @@ async def send_invoice_reminders(bot: Bot) -> int:
                 texts.INVOICE_REMINDER.format(
                     id=invoice.id,
                     amount=invoice.amount,
-                    description=invoice.description or "—",
+                    description=escape(invoice.description or "—"),
                     due=describe_due(invoice.due_at),
                 ),
                 reply_markup=keyboards.pay_invoice_kb(invoice.id),

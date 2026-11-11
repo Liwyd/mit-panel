@@ -21,6 +21,7 @@ _settings_cache_time: float = 0
 _SETTINGS_CACHE_TTL = 10  # seconds
 
 DEFAULTS = {
+    "bot_maintenance_eur": "1.00",
     "login_title": "MIT Panel",
     "telegram_bot_token": "",
     "telegram_chat_id": "",

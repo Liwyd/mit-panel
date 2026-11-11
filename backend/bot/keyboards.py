@@ -104,6 +104,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
 
 def finance_section_kb() -> ReplyKeyboardMarkup:
     return _reply_kb(
+        texts.BTN_BOT_MAINTENANCE,
         texts.BTN_INVOICES,
         texts.BTN_NEW_INVOICE,
         texts.BTN_SALES_REPORT,

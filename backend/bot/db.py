@@ -419,6 +419,68 @@ def init_db() -> None:
             """
         )
 
+        # Optional bot hosting subscriptions live alongside invoices, not in the
+        # ORM's bot/traffic schema. Upgrades are additive and safe to repeat.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS maintenance_subscriptions (
+                bot_id INTEGER PRIMARY KEY,
+                bot_created_at TEXT NOT NULL,
+                bot_url TEXT NOT NULL,
+                admin_id INTEGER NOT NULL,
+                admin_username TEXT NOT NULL,
+                telegram_id INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                anchor_at TEXT NOT NULL,
+                next_due_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_maintenance_due
+                ON maintenance_subscriptions(enabled, next_due_at);
+            CREATE TABLE IF NOT EXISTS maintenance_periods (
+                invoice_id INTEGER PRIMARY KEY,
+                bot_id INTEGER NOT NULL,
+                anchor_at TEXT NOT NULL,
+                period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                bot_name TEXT NOT NULL,
+                euro_price TEXT NOT NULL,
+                rate_irr TEXT NOT NULL,
+                quote_at TEXT NOT NULL,
+                source TEXT NOT NULL,
+                skipped_periods INTEGER NOT NULL DEFAULT 0,
+                notified_at TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT NOT NULL,
+                claim_token TEXT,
+                claim_until TEXT,
+                last_error TEXT,
+                UNIQUE(bot_id, anchor_at, period_start)
+            );
+            CREATE INDEX IF NOT EXISTS ix_maintenance_bot_invoice
+                ON maintenance_periods(bot_id, invoice_id);
+            CREATE INDEX IF NOT EXISTS ix_maintenance_delivery
+                ON maintenance_periods(notified_at, next_attempt_at);
+            CREATE TABLE IF NOT EXISTS maintenance_notices (
+                notice_key TEXT NOT NULL,
+                chat_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                sent_at TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT NOT NULL,
+                claim_token TEXT,
+                claim_until TEXT,
+                PRIMARY KEY(notice_key, chat_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_maintenance_notice_delivery
+                ON maintenance_notices(sent_at, next_attempt_at);
+            CREATE TABLE IF NOT EXISTS maintenance_rate_retry (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                failures INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT NOT NULL
+            );
+            """
+        )
+
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()
 

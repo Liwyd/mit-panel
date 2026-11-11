@@ -52,6 +52,7 @@ async def _run_bot() -> None:
     from backend.bot.consumption import run_scheduler as run_consumption_scheduler
     from backend.bot import access_lock
     from backend.bot.middlewares import ForceJoinMiddleware
+    from backend.bot.maintenance import run_scheduler as run_maintenance_scheduler
     from backend.bot.digest import run_digest_scheduler
     from backend.bot.forecast import run_forecast_scheduler
     from backend.bot.warnings import run_warning_scanner
@@ -89,6 +90,7 @@ async def _run_bot() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
 
     background = [
+        asyncio.create_task(_supervised("maintenance_scheduler", partial(run_maintenance_scheduler, bot))),
         asyncio.create_task(_supervised("warning_scanner", partial(run_warning_scanner, bot))),
         asyncio.create_task(_supervised("weekly_scheduler", partial(run_weekly_scheduler, bot))),
         asyncio.create_task(_supervised("consumption_scheduler", partial(run_consumption_scheduler, bot))),

@@ -17,6 +17,7 @@ from backend.bot import db
 from backend.bot.config import bot_config as settings
 
 ALL_MENU_TEXTS = {
+    texts.BTN_BOT_MAINTENANCE,
     texts.BTN_CANCEL,
     texts.BTN_TOPUP,
     texts.BTN_BALANCE,

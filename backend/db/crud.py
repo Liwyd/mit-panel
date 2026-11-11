@@ -1,6 +1,6 @@
 from datetime import datetime
 from secrets import token_hex
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from backend.db.model import (
@@ -14,6 +14,23 @@ from backend.db.model import (
 )
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
+
+
+def _disable_maintenance(
+    db: Session, *, bot_id: int | None = None, admin_id: int | None = None
+) -> None:
+    # The optional ledger may not exist when the Telegram bot has never run.
+    # Use this very ORM transaction so assignment and billing cannot diverge.
+    exists = db.execute(text(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'maintenance_subscriptions'"
+    )).first()
+    if exists:
+        field, value = ("bot_id", bot_id) if bot_id is not None else ("admin_id", admin_id)
+        db.execute(
+            text(f"UPDATE maintenance_subscriptions SET enabled = 0 WHERE {field} = :value"),
+            {"value": value},
+        )
 
 
 def get_all_admins(db: Session):
@@ -85,6 +102,8 @@ def update_admin_values(
             or (int(admin_input.traffic) != admin.traffic and int(admin_input.traffic) < tracked["available_bytes"])
         ):
             raise BillingDeferred("This edit conflicts with the reseller's consumption quota")
+        if admin.username != admin_input.username or admin.telegram_id != admin_input.telegram_id:
+            _disable_maintenance(db, admin_id=admin_id)
         admin.username = admin_input.username
         admin.hashed_password = new_password
         admin.is_active = admin_input.is_active
@@ -118,6 +137,7 @@ def remove_admin(db: Session, admin_id: int) -> bool:
         from backend.bot.consumption import remove_closed_account
 
         remove_closed_account(db, admin_id)
+        _disable_maintenance(db, admin_id=admin_id)
         # SQLite doesn't enforce the FK's ON DELETE here; unassign by hand so
         # the bot stays (superadmin-only) instead of pointing at a dead id.
         db.query(TelegramBots).filter(TelegramBots.admin_id == admin_id).update({TelegramBots.admin_id: None})
@@ -473,6 +493,8 @@ def add_bot(db: Session, **values) -> TelegramBots:
 
 
 def update_bot(db: Session, bot: TelegramBots, **values) -> TelegramBots:
+    if any(key in values and values[key] != getattr(bot, key) for key in ("admin_id", "url")):
+        _disable_maintenance(db, bot_id=bot.id)
     for key, value in values.items():
         setattr(bot, key, value)
     db.commit()
@@ -484,6 +506,7 @@ def remove_bot(db: Session, bot_id: int) -> bool:
     bot = get_bot_by_id(db, bot_id)
     if not bot:
         return False
+    _disable_maintenance(db, bot_id=bot_id)
     db.delete(bot)
     db.commit()
     return True

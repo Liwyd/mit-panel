@@ -6,7 +6,10 @@ from .agent.routers import router as agent_routers
 from .bots.routers import router as bots_routers
 from .topup_bot.routers import router as topup_bot_routers
 
+from .bots.maintenance import router as maintenance_router
+
 roter_list = [
+    maintenance_router,
     superadmin_routers,
     admin_routers,
     public_routers,

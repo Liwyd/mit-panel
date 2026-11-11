@@ -183,3 +183,7 @@ class DeleteAdmin(StatesGroup):
 
 class PanelHistory(StatesGroup):
     username = State()
+
+
+class MaintenancePrice(StatesGroup):
+    value = State()
