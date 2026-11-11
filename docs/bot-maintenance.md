@@ -39,7 +39,13 @@ invoicing with persisted exponential retry (one minute to one hour); the
 superadmin receives at most one rate-failure notice per Tehran day.
 
 Each invoice freezes the fee, IRR/EUR quote, source time, service period, and
-recipient. Tomans = EUR fee × IRR quote ÷ 10, rounded half-up to an integer.
+recipient. Convert the raw IRR quote to tomans, then round the **per-euro rate up
+to the next 1,000 tomans** before multiplying by the fee. For example, 365,760
+becomes 366,000; an exact 366,000 stays unchanged. The final amount is rounded
+half-up to an integer toman if needed. Both raw and applied rates are stored
+internally. Earlier periods keep their original amounts and have a NULL
+applied-rate snapshot. Customer invoices show only the bot, service period,
+amount and payment deadline, without exchange-rate/source/conversion details.
 Price edits affect future invoices only. Fees accept 0.01–10000 EUR with at most
 two decimal places. Maintenance payments never buy or credit traffic.
 

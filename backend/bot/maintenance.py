@@ -15,7 +15,7 @@ import threading
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 from html import escape
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -350,9 +350,12 @@ def issue(bot_id: int, quote: Quote, now: datetime) -> int | None:
         ):
             return None
         price = price_value(get_settings()["bot_maintenance_eur"])
-        amount = int(
-            (price * quote.rate_irr / 10).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        # Round the per-euro rate before multiplying by the monthly fee.
+        # Keep both raw and applied rates for historical reconciliation.
+        rate_toman = int(
+            (quote.rate_irr / 10000).to_integral_value(rounding=ROUND_CEILING) * 1000
         )
+        amount = int((price * rate_toman).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         if amount <= 0:
             raise ValueError("Maintenance amount rounds to zero")
         anchor = parse(state["anchor_at"])
@@ -374,9 +377,6 @@ def issue(bot_id: int, quote: Quote, now: datetime) -> int | None:
             bot=bot["name"],
             start=start.astimezone(TEHRAN).strftime("%Y-%m-%d"),
             end=end.astimezone(TEHRAN).strftime("%Y-%m-%d"),
-            euro=price,
-            rate=quote.rate_irr,
-            quote_at=quote.time.astimezone(TEHRAN).strftime("%Y-%m-%d %H:%M"),
         )
         invoice_id = db.insert_invoice(
             conn,
@@ -390,8 +390,8 @@ def issue(bot_id: int, quote: Quote, now: datetime) -> int | None:
             """
             INSERT INTO maintenance_periods
                 (invoice_id, bot_id, anchor_at, period_start, period_end, bot_name,
-                 euro_price, rate_irr, quote_at, source, skipped_periods, next_attempt_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 euro_price, rate_irr, rate_toman, quote_at, source, skipped_periods, next_attempt_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 invoice_id,
@@ -402,6 +402,7 @@ def issue(bot_id: int, quote: Quote, now: datetime) -> int | None:
                 bot["name"],
                 str(price),
                 str(quote.rate_irr),
+                rate_toman,
                 stamp(quote.time),
                 SOURCE,
                 skipped,
