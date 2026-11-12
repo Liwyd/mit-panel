@@ -4,6 +4,7 @@ Each of these branches is money: getting them wrong either bills someone for
 users they already had or lets out-of-band users go unpaid.
 """
 
+import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -137,3 +138,31 @@ def test_the_sweep_reaches_the_panels(marzban_panel, monkeypatch, ledger):
 
     assert usage_sync._sweep() == []
     assert read == ["panel-one"]
+
+
+def test_the_report_reaches_every_superadmin(monkeypatch):
+    """The reconciliation report is the one thing the superadmin must see.
+
+    It never arrived: the notification loop asked the database module for a
+    list of superadmin ids that module has never had, so every sweep ended in
+    "usage sync tick failed" and the report was dropped (57 times, since
+    2026-10-13).
+    """
+    from backend.bot import usage_sync
+
+    sent = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, **kwargs):
+            sent.append((int(chat_id), text))
+
+    monkeypatch.setattr(
+        usage_sync.bot_config.__class__,
+        "superadmin_id_list",
+        property(lambda self: [111, 222]),
+    )
+
+    asyncio.run(usage_sync._report(FakeBot(), ["one line", "another line"]))
+
+    assert [chat_id for chat_id, _ in sent] == [111, 222]
+    assert "one line" in sent[0][1]

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from backend.bot import consumption, db, texts
+from backend.bot.config import bot_config
 from backend.bot.invoices import due_at_for
 from backend.bot.units import bytes_to_gb
 from backend.db import crud
@@ -423,7 +424,7 @@ async def _report(bot: Bot, lines: list[str]) -> None:
     if not lines:
         return
     text = texts.USAGE_SYNC_REPORT.format(body="\n".join(lines))
-    for admin_id in db.superadmin_id_list:
+    for admin_id in bot_config.superadmin_id_list:
         try:
             await bot.send_message(admin_id, text)
         except Exception as exc:
