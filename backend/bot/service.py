@@ -43,6 +43,24 @@ async def _supervised(name: str, runner) -> None:
         await asyncio.sleep(SUPERVISOR_RESTART_DELAY)
 
 
+def _attach_routers(dp, routers) -> None:
+    """Attach the bot's routers to a dispatcher, restart-safe.
+
+    The routers are module-level singletons, so they outlive the dispatcher of
+    a dead attempt and keep pointing at it — and aiogram refuses to attach a
+    router twice. Without detaching, every supervised restart would die here
+    and the bot would stay dark for good, which is the one failure the
+    supervisor exists to prevent (seen in production: 'Router is already
+    attached' on every container restart since the supervisor was added).
+    aiogram's public setter forbids None, so the detach has to clear the
+    private pointer; the pin in pyproject.toml keeps this honest.
+    """
+    for router in routers:
+        if router.parent_router is not None:
+            router._parent_router = None
+        dp.include_router(router)
+
+
 async def _run_bot() -> None:
     """Entry point for the bot background task."""
     from aiogram import Bot, Dispatcher
@@ -85,8 +103,7 @@ async def _run_bot() -> None:
     force_join = ForceJoinMiddleware()
     dp.message.outer_middleware(force_join)
     dp.callback_query.outer_middleware(force_join)
-    for router in all_routers:
-        dp.include_router(router)
+    _attach_routers(dp, all_routers)
 
     logger.info("Bot polling starting")
     await bot.delete_webhook(drop_pending_updates=True)

@@ -80,3 +80,37 @@ def test_stop_bot_cancels_whatever_is_running():
 
     assert asyncio.run(scenario()) is False
     assert service._bot_task is None
+
+
+def test_routers_survive_a_restart_after_their_dispatcher_died():
+    """A restarted bot task must be able to re-attach the module routers.
+
+    The routers are module-level singletons, so after any attempt dies they
+    still point at its dispatcher — and aiogram refuses a second attach. This
+    is exactly what production logged ('Router is already attached') on every
+    container restart: the supervisor restarted the task and the restart died
+    on attach, leaving the bot dark. Detach-then-attach must let the routers
+    live through any number of restarts.
+    """
+    from aiogram import Dispatcher
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    from backend.bot.routers import all_routers
+
+    try:
+        dp_one = Dispatcher(storage=MemoryStorage())
+        service._attach_routers(dp_one, all_routers)
+        assert all_routers[0].parent_router is dp_one
+
+        dp_two = Dispatcher(storage=MemoryStorage())
+        service._attach_routers(dp_two, all_routers)
+        assert all_routers[0].parent_router is dp_two
+
+        dp_three = Dispatcher(storage=MemoryStorage())
+        service._attach_routers(dp_three, all_routers)
+        assert all_routers[0].parent_router is dp_three
+        assert all_routers[-1].parent_router is dp_three
+    finally:
+        # Leave the module state pristine for every other test.
+        for router in all_routers:
+            router._parent_router = None
