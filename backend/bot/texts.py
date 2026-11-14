@@ -550,6 +550,18 @@ INVOICE_PAYMENT_INSTRUCTIONS = (
     "پس از واریز، تصویر رسید را ارسال نمایید."
 )
 INVOICE_RECEIPT_SUBMITTED = "⏳ رسید فاکتور ثبت شد. پس از بررسی، فاکتور تسویه خواهد شد."
+# The superadmin receipt caption for a paid invoice. The payer's @username and
+# the panel the invoice bills sit next to the numeric ID so the reviewer knows
+# at a glance whose money settles which sub-admin account. Both parts are
+# optional: a Telegram account need not have a username, and hand-raised and
+# maintenance invoices name no panel.
+INVOICE_RECEIPT_CAPTION = (
+    "🧾 رسید فاکتور #{invoice_id} (درخواست #{request_id})\n"
+    "👤 آیدی عددی: {telegram_id}{username_part}{panel_part}\n"
+    "💰 مبلغ: {amount:,} تومان"
+)
+INVOICE_RECEIPT_USERNAME_PART = " (@{username})"
+INVOICE_RECEIPT_PANEL_PART = " — برای پنل {panel}"
 INVOICE_PAID_CUSTOMER = "✅ فاکتور #{id} تسویه شد. سپاس از پرداخت شما."
 INVOICE_ALREADY_PAID = "ℹ️ این فاکتور قبلاً تسویه شده است."
 INVOICE_NOT_FOUND = "⚠️ فاکتور یافت نشد."

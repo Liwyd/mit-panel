@@ -10,6 +10,8 @@ it the card number — appears once they own a panel or have been billed.
 
 from __future__ import annotations
 
+import html
+import logging
 import os
 import uuid
 
@@ -26,6 +28,8 @@ from backend.bot.config import bot_config as settings
 
 router = Router(name="wallet")
 
+logger = logging.getLogger(__name__)
+
 
 def _parse_toman(raw: str | None) -> int | None:
     cleaned = (raw or "").strip().replace(",", "").replace("٬", "")
@@ -37,6 +41,47 @@ async def _save_receipt(message: Message, bot: Bot) -> str:
     path = os.path.join(settings.media_dir, f"receipt_{uuid.uuid4().hex}.jpg")
     await bot.download(message.photo[-1], destination=path)
     return path
+
+
+def _invoice_caption(invoice_id: int, request_id: int, amount: int, user) -> str:
+    """The superadmin caption for a paid invoice, naming who and what.
+
+    The reviewer must see at a glance which sub-admin panel the money settles,
+    so the payer's @username and the invoice's panel sit next to the numeric
+    ID. Each lookup degrades on its own — a caption must never eat the
+    notification the way the shop crash once did — and the caller falls back
+    to the plain caption if even the template fails.
+    """
+    username = getattr(user, "username", None)
+    if not username:
+        try:
+            known = db.get_user(user.id)
+        except Exception:
+            logger.warning("could not look up the payer of invoice #%s", invoice_id)
+            known = None
+        username = known.get("username") if known else None
+    username_part = ""
+    if username:
+        username_part = texts.INVOICE_RECEIPT_USERNAME_PART.format(username=html.escape(username))
+    panel = None
+    try:
+        invoice = db.get_invoice(invoice_id)
+    except Exception:
+        logger.warning("could not read invoice #%s for the receipt caption", invoice_id)
+        invoice = None
+    if invoice is not None:
+        panel = invoice.admin_username
+    panel_part = ""
+    if panel:
+        panel_part = texts.INVOICE_RECEIPT_PANEL_PART.format(panel=html.escape(panel))
+    return texts.INVOICE_RECEIPT_CAPTION.format(
+        invoice_id=invoice_id,
+        request_id=request_id,
+        telegram_id=user.id,
+        username_part=username_part,
+        panel_part=panel_part,
+        amount=amount,
+    )
 
 
 async def _send_to_superadmins(
@@ -234,12 +279,19 @@ async def get_invoice_receipt(message: Message, state: FSMContext, bot: Bot) -> 
     await message.answer(
         texts.INVOICE_RECEIPT_SUBMITTED + texts.RECEIPT_WARNING, reply_markup=await menu_kb_for(message.from_user.id)
     )
+    try:
+        caption = _invoice_caption(invoice_id, request_id, amount, message.from_user)
+    except Exception:
+        logger.exception("could not build the invoice receipt caption for request #%s", request_id)
+        caption = (
+            f"🧾 رسید فاکتور #{invoice_id} (درخواست #{request_id})\n"
+            f"👤 آیدی عددی: {message.from_user.id}\n"
+            f"💰 مبلغ: {amount:,} تومان"
+        )
     await _send_to_superadmins(
         bot,
         path,
-        f"🧾 رسید فاکتور #{invoice_id} (درخواست #{request_id})\n"
-        f"👤 آیدی عددی: {message.from_user.id}\n"
-        f"💰 مبلغ: {amount:,} تومان",
+        caption,
         request_id,
         message.from_user.id,
         kind="invoice",
