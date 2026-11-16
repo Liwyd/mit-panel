@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -15,6 +16,49 @@ from backend.utils.logger import logger
 
 router = APIRouter(tags=["Login"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/login")
+
+# References to in-flight background maintenance tasks; without them asyncio
+# may garbage-collect a fire-and-forget task before it finishes.
+_bg_tasks: set[asyncio.Task] = set()
+
+
+async def _refresh_all_inbounds(admin_username: str) -> None:
+    """Re-sync an admin's stored inbound list from its Marzban panel.
+
+    Side maintenance, deliberately outside the login response: the Marzban
+    read retries three times at its full request timeout, and while it was
+    awaited inside the login every all-inbounds admin could sit ~30s whenever
+    the upstream panel was slow — past the seller bots' 8s deadline, which
+    turned Marzban slowness into failed deliveries for paying customers
+    (production, 2026-11-16). The login answers with the token immediately;
+    this runs afterwards on its own session and never raises — the usage-sync
+    scheduler refreshes these lists periodically anyway.
+    """
+    try:
+        from backend.db import engin
+
+        db = engin.sessionLocal()
+        try:
+            admin = crud.get_admin_by_username(db, admin_username)
+            if not admin or not admin.marzban_all_inbounds:
+                return
+            panel = crud.get_panel_by_name(db, name=admin.panel)
+            if not panel or panel.panel_type != "marzban":
+                return
+            from backend.services.marzban import APIService
+
+            svc = APIService(
+                url=panel.url,
+                username=panel.username,
+                password=panel.password,
+            )
+            live_inbounds = await svc.get_inbounds()
+            admin.marzban_inbounds = json.dumps(live_inbounds)
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to refresh all-inbounds for admin {admin_username}: {e}")
 
 
 def create_access_token(data: dict):
@@ -127,26 +171,15 @@ async def login_for_access_token(
         )
 
     # If this admin is set to use ALL inbounds of its Marzban panel, re-sync the
-    # stored inbound list from the master panel on every login. This keeps the
-    # "all inbounds" selection current when inbounds are added/removed upstream.
+    # stored inbound list from the master panel — but never inline. The Marzban
+    # read retries 3x at its full timeout, and while it was awaited inside this
+    # response a slow upstream panel delayed every all-inbounds login by ~30s,
+    # past the seller bots' 8s deadline: paid customers got "context deadline
+    # exceeded" instead of their panel. Schedule it and answer now.
     if admin.marzban_all_inbounds:
-        try:
-            from backend.services.marzban import APIService
-
-            panel = crud.get_panel_by_name(db, name=admin.panel)
-            if panel and panel.panel_type == "marzban":
-                svc = APIService(
-                    url=panel.url,
-                    username=panel.username,
-                    password=panel.password,
-                )
-                live_inbounds = await svc.get_inbounds()
-                admin.marzban_inbounds = json.dumps(live_inbounds)
-                db.commit()
-        except Exception as e:
-            logger.error(
-                f"Failed to refresh all-inbounds for admin {admin.username}: {e}"
-            )
+        task = asyncio.create_task(_refresh_all_inbounds(admin.username))
+        _bg_tasks.add(task)
+        task.add_done_callback(_bg_tasks.discard)
 
     logger.info(f"Admin login successful: {admin.username}")
     access_token = create_access_token(
