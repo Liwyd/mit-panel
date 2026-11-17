@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { botsAPI } from '@/lib/bots-api'
 import {
     BarChart3,
+    LineChart,
     Users,
     Settings,
     LogOut,
@@ -34,6 +35,12 @@ const navigationItems = [
         href: '/',
         icon: BarChart3,
         roles: ['admin', 'superadmin'],
+    },
+    {
+        label: 'Analytics',
+        href: '/analytics',
+        icon: LineChart,
+        roles: ['admin'],
     },
     {
         label: 'Admins',

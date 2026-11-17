@@ -39,6 +39,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { PageLayout } from '@/components/PageLayout'
+import { NodeNamesCard } from './components/NodeNamesCard'
 
 interface NewsItem {
     id: number
@@ -756,6 +757,9 @@ export function SettingsPage() {
                     {savingSettings ? 'Saving...' : 'Save Settings'}
                 </Button>
             </div>
+
+            {/* Custom names for the nodes admins see on their Analytics page. */}
+            <NodeNamesCard />
 
             {/* Logs Modal */}
             <Dialog open={showLogsModal} onOpenChange={setShowLogsModal}>

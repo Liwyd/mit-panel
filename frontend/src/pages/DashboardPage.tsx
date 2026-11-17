@@ -923,18 +923,41 @@ export function DashboardPage() {
                         across the silent overview polls. */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Marzban-only Admins</CardTitle>
+                            <CardTitle className="text-sm font-medium">MIT vs Marzban Admins</CardTitle>
                             <UserCog className="h-4 w-4 text-amber-500" />
                         </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">
-                                {marzban?.admins ? marzban.admins.marzban_only.toLocaleString() : '—'}
+                        <CardContent className="flex items-center gap-4">
+                            <Donut
+                                size={72}
+                                thickness={10}
+                                segments={[
+                                    { label: 'MIT Panel', value: marzban?.admins?.mit ?? 0, color: 'hsl(var(--brand-blue))' },
+                                    {
+                                        label: 'Marzban only',
+                                        value: marzban?.admins?.marzban_only ?? 0,
+                                        color: 'hsl(var(--muted-foreground) / 0.25)',
+                                    },
+                                ]}
+                            />
+                            <div className="min-w-0">
+                                <div className="text-2xl font-bold tabular leading-tight">
+                                    {marzban?.admins ? (
+                                        <>
+                                            {marzban.admins.mit.toLocaleString()}
+                                            <span className="text-base font-bold text-muted-foreground">
+                                                {' / '}{marzban.admins.marzban_only.toLocaleString()}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="text-muted-foreground">—</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    {marzban?.admins
+                                        ? 'MIT Panel / Marzban-only'
+                                        : 'Requires an active Marzban panel'}
+                                </p>
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                                {marzban?.admins
-                                    ? `${marzban.admins.mit.toLocaleString()} linked to a panel account`
-                                    : 'Requires an active Marzban panel'}
-                            </p>
                         </CardContent>
                     </Card>
                 </div>

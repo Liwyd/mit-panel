@@ -12,6 +12,9 @@ import {
     MarzbanOverview,
     ServerOutput,
     ServerCreatedOutput,
+    AdminAnalytics,
+    AnalyticsNodePeriod,
+    NodeNamesPanel,
 } from '@/types'
 
 
@@ -510,6 +513,34 @@ export const settingsAPI = {
     getVersion: async (): Promise<{ version: string }> => {
         const response = await api.get<ResponseModel<{ version: string }>>(`/dashboard/version`)
         return response.data.data || { version: 'unknown' }
+    },
+
+    getNodeNames: async (): Promise<NodeNamesPanel[]> => {
+        const response = await api.get<ResponseModel<NodeNamesPanel[]>>(`/superadmin/node-names`)
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to fetch node names')
+        }
+        return response.data.data || []
+    },
+
+    saveNodeNames: async (panelId: number, names: Record<string, string>): Promise<void> => {
+        const response = await api.put<ResponseModel<Record<string, string>>>(`/superadmin/node-names/${panelId}`, { names })
+        if (!response.data.success) {
+            throw new Error(response.data.message || 'Failed to save node names')
+        }
+    },
+}
+
+// Analytics API (admin only; the endpoint enforces the role itself)
+export const analyticsAPI = {
+    get: async (period: AnalyticsNodePeriod = '1d'): Promise<AdminAnalytics> => {
+        const response = await api.get<ResponseModel<AdminAnalytics>>(`/admin/analytics`, { params: { period } })
+
+        if (!response.data.success || !response.data.data) {
+            throw new Error(response.data.message || 'Failed to fetch analytics')
+        }
+
+        return response.data.data
     },
 }
 

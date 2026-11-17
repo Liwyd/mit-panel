@@ -139,6 +139,8 @@ export interface AdminOutput {
     delete_return_traffic: boolean | false
     expiry_date: string | null
     telegram_id?: number | null
+    /** Why the bot locked this admin's login; null/absent when not locked. */
+    suspended_reason?: string | null
 }
 
 // Panel Form
@@ -362,4 +364,54 @@ export interface DashboardData {
     admins?: AdminOutput[]
     panels?: PanelOutput[]
     system?: SystemInfo
+}
+
+/** The node-ranking window the Analytics page offers. */
+export type AnalyticsNodePeriod = '1d' | '7d' | '30d'
+
+/** What GET /admin/analytics returns (backend/utils/analytics.py). */
+export interface AdminAnalytics {
+    generated_at: string
+    utc_offset_minutes: number
+    remaining: number
+    initial: number
+    usage: {
+        today: number
+        yesterday: number
+        /** Last 24 local hours, oldest first; `label` is the local "HH:00". */
+        hourly: { start: string; label: string; used: number }[]
+        /** Last 7 local days, oldest first, today last. */
+        daily: { start: string; date: string; used: number }[]
+        /** When usage started being recorded, null before the first reading. */
+        since: string | null
+    }
+    sales: {
+        daily: { start: string; date: string; sold: number }[]
+        window_days: number
+        window_total: number
+        per_day: number
+        /** Sales of the last `tomorrow_window_hours`, as tomorrow's forecast. */
+        tomorrow: number
+        tomorrow_window_hours: number
+        /** null when nothing was sold lately (the balance isn't running down). */
+        days_left: number | null
+        runs_out_at: string | null
+        days_covered: number
+    }
+    nodes: {
+        period: AnalyticsNodePeriod
+        /** null when Marzban couldn't be read. */
+        items: { id: number | null; name: string; used: number }[] | null
+        total: number
+    }
+}
+
+/** One Marzban panel's nodes and the custom names set for them. */
+export interface NodeNamesPanel {
+    panel_id: number
+    panel_name: string
+    /** false when the node list couldn't be read from Marzban. */
+    reachable: boolean
+    /** key is Marzban's node id, or "master"; name is '' when not renamed. */
+    nodes: { key: string; marzban_name: string; name: string }[]
 }

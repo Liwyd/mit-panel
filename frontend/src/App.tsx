@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Sidebar } from '@/components/Sidebar'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { AdminsPage } from '@/pages/AdminsPage'
 import { PanelsPage } from '@/pages/PanelsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -33,6 +34,17 @@ function App() {
                         <ProtectedRoute>
                             <Layout>
                                 <DashboardPage />
+                            </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/analytics"
+                    element={
+                        <ProtectedRoute>
+                            <Layout>
+                                <AnalyticsPage />
                             </Layout>
                         </ProtectedRoute>
                     }

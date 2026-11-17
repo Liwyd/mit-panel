@@ -38,6 +38,11 @@ const EXACT: Record<string, string> = {
     'Incorrect username or password': 'نام کاربری یا رمز عبور اشتباه است',
     'No users found': 'کاربری یافت نشد',
     'Your admin account is inactive. Contact support.': 'حساب ادمین شما غیرفعال است. با پشتیبانی تماس بگیرید.',
+    'Your panel is suspended because an invoice is overdue. Pay it in the bot to restore access.':
+        'پنل شما به علت معوق ماندن فاکتور مسدود شده است. برای بازگشت دسترسی، فاکتور را از طریق ربات پرداخت کنید.',
+    'Your panel is suspended because your weekly balance is unpaid. Top up in the bot to restore access.':
+        'پنل شما به علت پرداخت نشدن موجودی هفتگی مسدود شده است. برای بازگشت دسترسی، از طریق ربات حسابتان را شارژ کنید.',
+    'Your panel has been suspended. Contact support.': 'پنل شما مسدود شده است. با پشتیبانی تماس بگیرید.',
     'This email is reserved by another admins': 'این ایمیل قبلاً توسط ادمین دیگری گرفته شده است',
     'This username already exists on the panel': 'این نام کاربری از قبل روی پنل وجود دارد',
     'Failed to create the user on the panel. Check the username and panel connection.':

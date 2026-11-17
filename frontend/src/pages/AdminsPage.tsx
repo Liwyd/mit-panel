@@ -40,6 +40,13 @@ interface ExpandedRow {
     [key: string]: boolean
 }
 
+/** Badge text for an admin whose login the bot locked (see access_lock.py). */
+function suspendedLabel(reason: string): string {
+    if (reason === 'unpaid_invoice') return 'Suspended · unpaid invoice'
+    if (reason === 'unpaid_debt') return 'Suspended · unpaid debt'
+    return 'Suspended'
+}
+
 export function AdminsPage() {
     const [admins, setAdmins] = useState<AdminOutput[]>([])
     const [loading, setLoading] = useState(true)
@@ -342,6 +349,11 @@ function AdminDetailsRow({
                     <Badge variant={admin.is_active ? 'default' : 'destructive'}>
                         {admin.is_active ? 'Active' : 'Inactive'}
                     </Badge>
+                    {admin.suspended_reason && (
+                        <Badge className="ml-2" variant="destructive">
+                            {suspendedLabel(admin.suspended_reason)}
+                        </Badge>
+                    )}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                     <Button size="sm" variant="ghost" onClick={onToggleStatus}>
@@ -420,6 +432,11 @@ function MobileAdminCard({
                     <Badge variant={admin.is_active ? 'default' : 'destructive'} className="text-xs">
                         {admin.is_active ? 'Active' : 'Inactive'}
                     </Badge>
+                    {admin.suspended_reason && (
+                        <Badge variant="destructive" className="text-xs">
+                            {suspendedLabel(admin.suspended_reason)}
+                        </Badge>
+                    )}
                     <ChevronDown
                         className={cn(
                             'h-4 w-4 text-muted-foreground transition-transform',
