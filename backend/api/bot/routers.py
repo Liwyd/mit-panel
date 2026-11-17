@@ -13,6 +13,7 @@ from backend.schema._input import (
     BotChangePasswordInput,
     BotGrantInput,
     BotCreateAdminInput,
+    BotSuspensionInput,
 )
 from backend.db import crud
 from backend.db.engin import get_db
@@ -458,4 +459,32 @@ async def create_admin(
             "inbounds": inbounds,
             "expiry_date": expiry_date.isoformat() if expiry_date else None,
         },
+    )
+
+
+@router.post(
+    "/admin/suspension",
+    description="Record (or clear) why this admin's panel login is locked, so login can say so",
+)
+async def set_admin_suspension(
+    payload: BotSuspensionInput,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_bot_api_key),
+):
+    """Informational only: the hash swap in backend/bot/access_lock.py is what
+    keeps an admin out, and login only shows a reason while that lock is still
+    in place. Setting a reason alone therefore never locks anyone out."""
+    admin, error = _resolve_target(db, payload.telegram_id, payload.username)
+    if error:
+        return error
+
+    crud.set_suspended_reason(db, admin, payload.reason)
+    if payload.reason:
+        logger.info(f"Bot recorded suspension reason for {admin.username} ({payload.reason})")
+    else:
+        logger.info(f"Bot cleared the suspension reason of {admin.username}")
+    return ResponseModel(
+        success=True,
+        message="Suspension updated",
+        data={"username": admin.username, "reason": admin.suspended_reason},
     )

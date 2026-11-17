@@ -185,6 +185,21 @@ async def lock_admin(
         return False
 
     logger.info("locked admin %s (reason: %s)", admin_username, reason)
+    # The reason is what login shows in place of "incorrect password", and the
+    # badge the Admins page reads. Written after the hash swap and on its own
+    # transaction: the swap is what actually keeps this admin out, so a failure
+    # here only costs the nicer message — never the lock itself.
+    try:
+        with sessionLocal() as session:
+            admin = crud.get_admin_by_username(session, admin_username)
+            if admin is not None:
+                admin.suspended_reason = reason
+                session.commit()
+    except Exception:
+        logger.warning(
+            "could not record the suspension reason of %s", admin_username,
+            exc_info=True,
+        )
     await _notify_superadmins(
         bot,
         texts.ACCESS_LOCKED_SUPERADMIN.format(
@@ -217,6 +232,22 @@ async def release_admin(bot: Bot, admin_username: str) -> bool:
         admin.hashed_password = row["original_hashed_password"]
         session.commit()
     db.delete_admin_lock(admin_username)
+
+    # Clearing the reason rides after the restore, for the same reason the
+    # lock sets it after the swap. A failure here can only leave a stale
+    # reason behind, and login only ever shows a reason while the lock row is
+    # still there — so it can never keep an unlocked admin out.
+    try:
+        with sessionLocal() as session:
+            admin = crud.get_admin_by_username(session, admin_username)
+            if admin is not None and admin.suspended_reason:
+                admin.suspended_reason = None
+                session.commit()
+    except Exception:
+        logger.warning(
+            "could not clear the suspension reason of %s", admin_username,
+            exc_info=True,
+        )
 
     logger.info("released admin %s", admin_username)
     await _notify_superadmins(

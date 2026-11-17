@@ -155,6 +155,18 @@ class TelegramBotInput(BaseModel):
     is_active: bool = True
 
 
+class NodeNamesInput(BaseModel):
+    # Node key ("master" or Marzban's node id) -> name; blank restores Marzban's.
+    names: dict[str, str] = {}
+
+
+class BotSuspensionInput(BaseModel):
+    telegram_id: int
+    username: Optional[str] = None
+    # Why the panel is locked; None lifts the lock.
+    reason: Optional[str] = None
+
+
 class TelegramBotUpdateInput(BaseModel):
     """Every field optional; a key left empty keeps the stored one."""
 

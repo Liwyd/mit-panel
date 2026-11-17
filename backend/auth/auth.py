@@ -70,7 +70,22 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
-def get_current_admin(token: str = Depends(oauth2_scheme)):
+# Why a locked admin can't get in, keyed by the reason the lock recorded.
+# English like every other API message; the frontend translates them.
+SUSPENDED_MESSAGES = {
+    "unpaid_invoice": "Your panel is suspended because an invoice is overdue. Pay it in the bot to restore access.",
+    "unpaid_debt": "Your panel is suspended because your weekly balance is unpaid. Top up in the bot to restore access.",
+}
+SUSPENDED_DEFAULT_MESSAGE = "Your panel has been suspended. Contact support."
+
+
+def suspended_message(reason: str) -> str:
+    return SUSPENDED_MESSAGES.get(reason, SUSPENDED_DEFAULT_MESSAGE)
+
+
+def get_current_admin(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+):
     credentials_exception = JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
         content={"success": False, "message": "Could not validate credentials"},
@@ -86,10 +101,20 @@ def get_current_admin(token: str = Depends(oauth2_scheme)):
         # any expired session and lands on the login screen, where the lock
         # itself is explained.
         if payload.get("role") == "admin" and bot_db.is_locked_admin(username):
+            # The lock is the enforcement; the reason is what the login page
+            # shows instead of a bare refusal. Only looked up on this branch,
+            # so an unlocked admin's request still costs no extra query.
+            detail = "Could not validate credentials"
+            try:
+                locked_admin = crud.get_admin_by_username(db, username)
+                if locked_admin and locked_admin.suspended_reason:
+                    detail = suspended_message(locked_admin.suspended_reason)
+            except Exception:
+                pass  # reason is a nicety; the 401 below is what matters
             logger.info(f"Rejected request from locked admin: {username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
+                detail=detail,
             )
 
         return {
@@ -150,6 +175,23 @@ async def login_for_access_token(
 
     # Check for regular admin credentials
     admin = crud.get_admin_by_username(db, form_data.username)
+    # Shown before the password check: the lock swapped the hash, so a locked
+    # admin is typing the old one and "incorrect password" would leave them
+    # guessing. Guarded by the lock itself — a reason whose lock was already
+    # released can never keep anyone out.
+    if (
+        admin
+        and admin.suspended_reason
+        and bot_db.is_locked_admin(admin.username)
+    ):
+        logger.info(f"Suspended admin login attempt: {admin.username}")
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "success": False,
+                "message": suspended_message(admin.suspended_reason),
+            },
+        )
     if not admin or not verify_password(form_data.password, admin.hashed_password):
         logger.warning(f"Failed login attempt for username: {form_data.username}")
         return JSONResponse(
