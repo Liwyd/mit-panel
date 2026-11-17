@@ -18,6 +18,7 @@ from backend.schema._input import (
     ServerInput,
     ServerReorderInput,
     SettingsInput,
+    NodeNamesInput,
 )
 from backend.db import crud
 from backend.db.engin import get_db
@@ -28,7 +29,13 @@ from backend.utils.backup import restore_database
 from backend.auth.auth import get_current_superadmin
 from backend.utils.system import get_system_info
 from backend.utils.marzban_overview import PERIODS, build_marzban_overview
-from backend.utils.settings_store import get_settings, update_settings, save_logo
+from backend.utils.settings_store import (
+    get_settings,
+    update_settings,
+    save_logo,
+    get_node_names,
+    set_panel_node_names,
+)
 from backend.bot.consumption_ledger import BillingDeferred
 from backend.utils.banners import save_banner, delete_banner, get_banner_path
 from backend.utils.telegram import send_backup_to_telegram
@@ -722,6 +729,60 @@ async def reboot_server(
         success=True,
         message="Reboot queued - it will run on the server's next check-in",
     )
+
+
+def _marzban_panels(db: Session):
+    return [p for p in crud.get_all_panels(db) if p.panel_type == "marzban"]
+
+
+@router.get("/node-names", description="Marzban nodes and the names admins see for them")
+async def get_marzban_node_names(
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    """Every Marzban panel with its nodes (the main server first) and the
+    custom name of each, if any. A panel that can't be read still comes back,
+    with the nodes that have a saved name, so they can still be edited."""
+    saved = get_node_names()
+    result = []
+    for panel in _marzban_panels(db):
+        names = saved.get(str(panel.id), {})
+        nodes = [{"key": "master", "marzban_name": "Master"}]
+        reachable = True
+        if panel.is_active:
+            try:
+                api_service = MarzbanAPI(url=panel.url, username=panel.username, password=panel.password)
+                for node in await api_service.get_nodes_status():
+                    if node.get("id") is not None:
+                        nodes.append({"key": str(node["id"]), "marzban_name": node.get("name") or f"Node {node['id']}"})
+            except Exception as e:
+                reachable = False
+                logger.warning(f"Node names: could not read nodes of {panel.name}: {e}")
+        else:
+            reachable = False
+        known = {n["key"] for n in nodes}
+        nodes += [{"key": key, "marzban_name": f"Node {key}"} for key in names if key not in known]
+        for node in nodes:
+            node["name"] = names.get(node["key"], "")
+        result.append({"panel_id": panel.id, "panel_name": panel.name, "reachable": reachable, "nodes": nodes})
+    return ResponseModel(success=True, message="Node names retrieved successfully", data=result)
+
+
+@router.put("/node-names/{panel_id}", description="Set the names admins see for a panel's nodes")
+async def update_marzban_node_names(
+    panel_id: int,
+    payload: NodeNamesInput,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_superadmin),
+):
+    if not any(p.id == panel_id for p in _marzban_panels(db)):
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"success": False, "message": "Marzban panel not found"},
+        )
+    names = set_panel_node_names(panel_id, payload.names)
+    logger.info(f"Node names updated for panel #{panel_id}")
+    return ResponseModel(success=True, message="Node names saved", data=names)
 
 
 @router.get("/settings", description="Get panel settings")

@@ -16,7 +16,10 @@ from backend.services import (
 from backend.db import crud
 from backend.services.limit_handler import AdminLimiter
 from backend.services.marzban.api import APIService, MarzbanUserUnavailable
+from backend.schema.output import ResponseModel
+from backend.utils import analytics
 from backend.utils.logger import logger
+from backend.utils.settings_store import get_node_names
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -138,3 +141,38 @@ async def delete_user(
         admin_username=current_admin["username"], uuid=uuid, db=db
     )
     return result
+
+
+@router.get("/analytics", description="Usage, sales forecast and node ranking for the Analytics page")
+async def get_analytics(
+    period: str = "1d",
+    db: Session = Depends(get_db),
+    current_admin: dict = Depends(get_current_admin),
+):
+    if current_admin.get("role") != "admin":
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": "Not authorized to access this resource."},
+        )
+    admin = crud.get_admin_by_username(db, current_admin["username"])
+    if admin is None:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Admin not found."})
+    if period not in analytics.NODE_PERIODS:
+        period = "1d"
+
+    data = analytics.build_admin_analytics(db, admin)
+
+    # The node ranking is the one part read from Marzban itself; when it
+    # can't be read, the rest of the page still loads.
+    data["nodes"] = {"period": period, "items": None, "total": 0}
+    panel = crud.get_panel_by_name(db, admin.panel)
+    if panel and panel.panel_type == "marzban" and panel.is_active:
+        try:
+            api_service = APIService(url=panel.url, username=panel.username, password=panel.password)
+            items = await analytics.admin_node_usage(api_service, admin, period)
+            items = analytics.apply_node_names(items, get_node_names().get(str(panel.id), {}))
+            data["nodes"] = {"period": period, "items": items, "total": sum(n["used"] for n in items)}
+        except Exception as e:
+            logger.warning(f"Analytics: could not read node usage of {admin.username}: {e}")
+
+    return ResponseModel(success=True, message="Analytics retrieved successfully", data=data)
