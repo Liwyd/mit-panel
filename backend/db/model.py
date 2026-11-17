@@ -33,6 +33,10 @@ class Admins(Base):
     inbound_flow = Column(String, nullable=True)
     # Not unique: one person can own several reseller panels (see c7b1d4e88a25).
     telegram_id = Column(BigInteger, nullable=True, index=True)
+    # Why the bot locked this admin ("unpaid_invoice"/"unpaid_debt"/anything the
+    # bot API records), or None. Login shows it instead of a bare refusal; the
+    # hash swap in backend/bot/access_lock.py is what actually stops them.
+    suspended_reason = Column(String, nullable=True)
 
 
 class Panels(Base):
@@ -144,3 +148,41 @@ class TelegramBots(Base):
     bot_username = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdminUsageHourly(Base):
+    """How much traffic one admin's Marzban users used in one hour.
+
+    Filled by the usage recorder (backend/services/marzban/usage_recorder.py),
+    which reads every user's used traffic anyway and adds the growth since its
+    last reading to the hour it was seen in — so this costs Marzban no extra
+    requests beyond that read. `hour` is the start of a local hour (see
+    ANALYTICS_UTC_OFFSET_MINUTES), stored as naive UTC like every other
+    timestamp here.
+    """
+
+    __tablename__ = "admin_usage_hourly"
+    __table_args__ = (UniqueConstraint("admin_id", "hour"),)
+
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(Integer, nullable=False, index=True)
+    hour = Column(DateTime, nullable=False, index=True)
+    used = Column(BigInteger, default=0, nullable=False)
+
+
+class AdminTrafficLog(Base):
+    """Every change to an admin's balance made by selling: a charge for a new
+    user, a raised limit or a reset (positive), or a refund for a deleted or
+    lowered user (negative). Grants and top-ups are not sales and stay out.
+    The analytics page averages it into a daily sales rate."""
+
+    __tablename__ = "admin_traffic_log"
+
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(Integer, nullable=False, index=True)
+    amount = Column(BigInteger, nullable=False)
+    # "charge", "refund", or "backfill": sales from before this log existed,
+    # read once from the users' creation dates (see usage_recorder.py). A
+    # "backfill" row of 0 marks that it ran.
+    kind = Column(String, nullable=False, default="charge")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

@@ -30,6 +30,11 @@ class Setting(BaseSettings):
     BOT_WARNING_SCAN_INTERVAL: int = 3600
     BOT_BACKUP_HOUR: int = 0
 
+    # Local time the analytics page counts hours and days in, as minutes ahead
+    # of UTC (210 = Tehran). A default, so a deploy without it in .env still
+    # gets the right day boundaries.
+    ANALYTICS_UTC_OFFSET_MINUTES: int = 210
+
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
 

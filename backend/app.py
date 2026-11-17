@@ -48,10 +48,32 @@ async def serve_frontend(path_name: str = ""):
 
 @app.on_event("startup")
 async def _start_background_tasks():
+    # Create/refresh the bot-owned tables (analytics included) even when no
+    # Telegram bot is configured: the analytics page needs its tables on a
+    # bot-less install too. Idempotent DDL, and synchronous on this thread, so
+    # the bot's own later init_db() runs after it rather than beside it.
+    #
+    # Guarded: a failure here must degrade the analytics page, never refuse to
+    # boot a panel that is already serving people.
+    from backend.bot import db as bot_db
+    from backend.utils.logger import logger
+
+    try:
+        bot_db.init_db()
+    except Exception:
+        logger.exception("init_db failed at startup; some tables may be missing")
+
     # Periodic Telegram backup (configurable from Settings)
     from backend.services.backup_scheduler import backup_scheduler
 
     asyncio.create_task(backup_scheduler())
+
+    # Read-only recorder feeding the Analytics usage charts (never charges).
+    # Supervised like every other background loop, so a crash restarts it.
+    from backend.bot.service import _supervised
+    from backend.services.marzban.usage_recorder import run_usage_recorder
+
+    asyncio.create_task(_supervised("usage_recorder", run_usage_recorder))
 
     # Start top-up bot if BOT_TOKEN is configured
     from backend.bot.service import start_bot

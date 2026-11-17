@@ -34,6 +34,13 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) 
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+    ).fetchone()
+    return row is not None
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.execute(
@@ -483,6 +490,52 @@ def init_db() -> None:
 
         # Older periods keep their original unrounded amounts and a NULL rate.
         _ensure_column(conn, "maintenance_periods", "rate_toman", "INTEGER")
+
+        # ── Analytics (see backend/utils/analytics.py) ─────────────────────
+        # Written here rather than by alembic, like every other table in this
+        # file, so an existing deployment picks them up on restart.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS admin_usage_hourly (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                hour DATETIME NOT NULL,
+                used BIGINT NOT NULL DEFAULT 0,
+                UNIQUE(admin_id, hour)
+            );
+            CREATE INDEX IF NOT EXISTS ix_admin_usage_hourly_admin_id
+                ON admin_usage_hourly(admin_id);
+            CREATE INDEX IF NOT EXISTS ix_admin_usage_hourly_hour
+                ON admin_usage_hourly(hour);
+            CREATE TABLE IF NOT EXISTS admin_traffic_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                amount BIGINT NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'charge',
+                created_at DATETIME NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_admin_traffic_log_admin_id
+                ON admin_traffic_log(admin_id);
+            CREATE INDEX IF NOT EXISTS ix_admin_traffic_log_created_at
+                ON admin_traffic_log(created_at);
+            """
+        )
+
+        # The admins table is alembic's, not this file's: on a database this
+        # module created on its own (a test's temp file) it isn't there, and an
+        # ALTER against a missing table would abort the whole of init_db.
+        if _table_exists(conn, "admins"):
+            # Why an admin's login is locked; NULL for everyone else. Guarded
+            # on purpose: this is the newest column in the file, and failing to
+            # add it must not roll back everything above it or refuse to start
+            # a panel that is already live. Without it the lock still works and
+            # login just falls back to its generic message.
+            try:
+                _ensure_column(conn, "admins", "suspended_reason", "TEXT")
+            except Exception as exc:
+                logging.getLogger(__name__).error(
+                    "could not add admins.suspended_reason: %s", exc
+                )
 
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()

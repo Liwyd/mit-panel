@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from backend.db.model import (
     Admins,
+    AdminTrafficLog,
+    AdminUsageHourly,
     Panels,
     News,
     SanaeiUsers,
@@ -14,6 +16,7 @@ from backend.db.model import (
 )
 from backend.schema._input import AdminInput, AdminUpdateInput, PanelInput
 from backend.auth.hash import hash_password
+from backend.utils.logger import logger
 
 
 def _disable_maintenance(
@@ -131,6 +134,53 @@ def update_admin_values(
     return False
 
 
+def _table_exists(db: Session, name: str) -> bool:
+    """Whether a bot-owned table is present, in this very transaction.
+
+    The analytics tables are created by backend/bot/db.py init_db() rather
+    than alembic (see AGENTS.md), so a deployment whose init_db has not run
+    yet must never have a balance change fail over a missing analytics table.
+    """
+    try:
+        return (
+            db.execute(
+                text(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type = 'table' AND name = :name"
+                ),
+                {"name": name},
+            ).first()
+            is not None
+        )
+    except Exception:
+        # Unknown is treated as absent: analytics may lose a row, billing must
+        # never lose a charge.
+        return False
+
+
+def _log_sale(db: Session, admin_id: int | None, amount, kind: str) -> None:
+    """Add the sales-log row to the same commit as the balance change.
+
+    Only analytics reads it, so a bad value or a not-yet-created table is
+    skipped rather than raised — a charge must not be undone by reporting.
+    """
+    try:
+        amount = int(amount or 0)
+    except (TypeError, ValueError):
+        return
+    if not amount or admin_id is None:
+        return
+    if not _table_exists(db, "admin_traffic_log"):
+        logger.warning(
+            "admin_traffic_log is missing; skipping a %s of %s for admin #%s",
+            kind,
+            amount,
+            admin_id,
+        )
+        return
+    db.add(AdminTrafficLog(admin_id=admin_id, amount=amount, kind=kind))
+
+
 def remove_admin(db: Session, admin_id: int) -> bool:
     admin = db.query(Admins).filter(Admins.id == admin_id).first()
     if admin:
@@ -138,6 +188,16 @@ def remove_admin(db: Session, admin_id: int) -> bool:
 
         remove_closed_account(db, admin_id)
         _disable_maintenance(db, admin_id=admin_id)
+        # Analytics rows follow the admin, so a later audit of the log can't
+        # turn up ids that belong to nobody.
+        if _table_exists(db, "admin_traffic_log"):
+            db.query(AdminTrafficLog).filter(AdminTrafficLog.admin_id == admin_id).delete(
+                synchronize_session=False
+            )
+        if _table_exists(db, "admin_usage_hourly"):
+            db.query(AdminUsageHourly).filter(AdminUsageHourly.admin_id == admin_id).delete(
+                synchronize_session=False
+            )
         # SQLite doesn't enforce the FK's ON DELETE here; unassign by hand so
         # the bot stays (superadmin-only) instead of pointing at a dead id.
         db.query(TelegramBots).filter(TelegramBots.admin_id == admin_id).update({TelegramBots.admin_id: None})
@@ -148,7 +208,11 @@ def remove_admin(db: Session, admin_id: int) -> bool:
 
 
 def reduce_admin_traffic(db: Session, admin: Admins, used_traffic) -> None:
-    admin.traffic = max(admin.traffic - used_traffic, 0)
+    # The drop — not the amount asked for — is what the sales average runs on:
+    # this clamps at zero, so a charge bigger than the balance gave up less.
+    before = int(admin.traffic or 0)
+    admin.traffic = max(before - used_traffic, 0)
+    _log_sale(db, admin.id, before - admin.traffic, "charge")
     db.commit()
 
 
@@ -161,12 +225,19 @@ def reduce_admin_traffic_debt(db: Session, admin: Admins, amount: int) -> None:
     the panel stops selling configs that have not been paid for, and the
     size of the debt is what the invoice asks for.
     """
-    admin.traffic -= amount
+    before = int(admin.traffic or 0)
+    admin.traffic = before - amount
+    # Debt charges are sales too: a real user exists on the panel because of
+    # them, and the analytics page's daily rate would understate the week
+    # without them.
+    _log_sale(db, admin.id, amount, "charge")
     db.commit()
 
 
 def increase_admin_traffic(db: Session, admin: Admins, added_traffic) -> None:
-    admin.traffic += added_traffic
+    before = int(admin.traffic or 0)
+    admin.traffic = before + added_traffic
+    _log_sale(db, admin.id, -added_traffic, "refund")
     db.commit()
 
 
@@ -207,6 +278,17 @@ def grant_admin_traffic(db: Session, admin: Admins, added_traffic) -> None:
         },
         synchronize_session=False,
     )
+    db.commit()
+
+
+def set_suspended_reason(db: Session, admin: Admins, reason: str | None) -> None:
+    """Record (or clear) why this admin's panel login is locked.
+
+    The password swap in backend/bot/access_lock.py is what keeps them out;
+    this is what login says instead of a bare "incorrect password", and what
+    the Admins page shows as a badge.
+    """
+    admin.suspended_reason = reason
     db.commit()
 
 

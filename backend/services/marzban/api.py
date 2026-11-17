@@ -491,6 +491,22 @@ class APIService:
             return []
         return response.json().get("usages", [])
 
+    async def get_users_usage(self, start: str, end: str, admins: list[str]) -> list[dict]:
+        """Per-node traffic of these admins' users for a window, as Marzban
+        keeps it (GET /api/users/usage; the admin filter needs sudo). Raises
+        on failure so an outage isn't shown as no usage — the analytics node
+        ranking degrades at its own caller, this answer is never faked."""
+        await self._login()
+        response = await self._call(
+            self.session.get,
+            f"{self.url}api/users/usage",
+            headers=self.headers,
+            params={"start": start, "end": end, "admin": admins},
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json().get("usages", [])
+
     async def get_nodes_status(self) -> list[dict]:
         """Connection status for every configured remote node.
 
