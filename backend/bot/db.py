@@ -895,11 +895,21 @@ def list_lock_exempt() -> list[str]:
 
 
 def get_effective_price(admin_username: str) -> float:
+    raw = get_setting("price_per_gb")
+    global_price = float(raw) if raw else 0.0
     per_admin = get_admin_price(admin_username)
     if per_admin is not None:
+        # A reseller's special price is a ceiling, not a fixed rate: a global
+        # price set below it (e.g. a holiday sale) reaches them too, while a
+        # reseller whose special price is already lower keeps it. Only the
+        # moment of a new charge is priced, so existing invoices are untouched
+        # and raising the global price back reverts everyone automatically. A
+        # missing/zero global leaves the special price alone, so a price cut is
+        # never a path to a zero bill.
+        if global_price > 0:
+            return min(per_admin, global_price)
         return per_admin
-    raw = get_setting("price_per_gb")
-    return float(raw) if raw else 0.0
+    return global_price
 
 
 @dataclass
