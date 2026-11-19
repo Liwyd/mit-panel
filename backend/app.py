@@ -37,10 +37,37 @@ app.mount(
 )
 index_html_path = frontend_build_path / "index.html"
 
+# Vite copies frontend/public/* (favicon, PWA icons, manifest) to the root of
+# the build, and index.html links them as /{URLPATH}/<name>. Only /assets is
+# mounted above, so without this they fell through to the SPA catch-all and
+# came back as index.html. The allowlist is fixed at startup from the files
+# actually in the build root: a request can only ever name one of those
+# files, never a path, so there is nothing to traverse.
+_PUBLIC_MEDIA_TYPES = {".webmanifest": "application/manifest+json"}
+
+
+def _public_root_files(build_path: Path) -> dict[str, Path]:
+    if not build_path.is_dir():
+        return {}
+    return {
+        p.name: p
+        for p in build_path.iterdir()
+        if p.is_file() and p.name != "index.html"
+    }
+
+
+_public_files = _public_root_files(frontend_build_path)
+
 
 @app.get(f"/{config.URLPATH}")
 @app.get(f"/{config.URLPATH}/{{path_name:path}}")
 async def serve_frontend(path_name: str = ""):
+    public_file = _public_files.get(path_name)
+    if public_file is not None and public_file.is_file():
+        return FileResponse(
+            public_file,
+            media_type=_PUBLIC_MEDIA_TYPES.get(public_file.suffix),
+        )
     if index_html_path.exists():
         return FileResponse(index_html_path)
     return {"error": "Frontend build not found"}
