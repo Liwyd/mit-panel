@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, LoginFormData } from '@/types'
-import { authAPI, settingsAPI, getLogoUrl } from '@/lib/api'
+import { authAPI, settingsAPI } from '@/lib/api'
 import { setToken, getDecodedToken, isTokenValid } from '@/lib/auth'
-import logo from '@/assets/logo.png'
+import logoVideo from '@/assets/login-logo.mp4'
+import logoPoster from '@/assets/login-logo-poster.webp'
 
 const styles = `
 .nx-login-root{
@@ -43,7 +44,9 @@ const styles = `
 .nx-brand{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:hsl(var(--muted-foreground));margin-bottom:22px}
 .nx-dot{width:8px;height:8px;border-radius:50%;background:hsl(var(--brand-blue));box-shadow:0 0 12px 1px hsl(var(--brand-blue) / .5)}
 .nx-logo{display:flex;justify-content:center;margin-bottom:18px}
-.nx-logo img{width:132px;height:auto}
+/* The clip and poster sit on pure white; multiply makes that white take the
+   card's own colour, so no box shows around the logo. The page is light only. */
+.nx-logo img,.nx-logo video{width:152px;height:152px;display:block;object-fit:contain;background:#fff;mix-blend-mode:multiply;pointer-events:none;user-select:none}
 .nx-title{font-weight:900;font-size:28px;letter-spacing:-.02em;line-height:1.3;margin-bottom:8px;color:hsl(var(--foreground))}
 .nx-sub{font-size:14px;color:hsl(var(--muted-foreground));line-height:1.8;margin-bottom:24px}
 .nx-err{border:1px solid hsl(var(--destructive) / .35);color:hsl(var(--destructive));background:hsl(var(--destructive) / .08);border-radius:12px;padding:11px 13px;font-size:13px;margin-bottom:16px;line-height:1.6}
@@ -61,6 +64,67 @@ const styles = `
 .nx-foot{margin-top:24px;padding-top:16px;border-top:1px solid hsl(var(--border));display:flex;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:hsl(var(--muted-foreground))}
 @media (prefers-reduced-motion:reduce){.nx-dot{animation:none}.nx-aurora{animation:none}}
 `
+
+function prefersReducedMotion(): boolean {
+    try {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    } catch {
+        return false
+    }
+}
+
+// The animated logo: a muted, looping MP4 rather than a GIF (~87 KB against
+// ~1.7 MB for the same clip as a GIF). The poster is the clip's final frame,
+// so the complete logo shows before playback starts, when the browser refuses
+// autoplay (iOS Low Power Mode, data saver), if the video fails to load, and
+// for anyone who asked the OS for reduced motion.
+function LoginLogo({ label }: { label: string }) {
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [animated, setAnimated] = useState(() => !prefersReducedMotion())
+
+    useEffect(() => {
+        const el = videoRef.current
+        if (!el) return
+        // React sets `muted` as a property only, never as the attribute, and
+        // some mobile browsers then treat the video as unmuted and block
+        // autoplay. Force it, then ask to play; a refusal just leaves the
+        // poster up, so it must not surface as an unhandled rejection.
+        el.muted = true
+        el.defaultMuted = true
+        try {
+            const pending = el.play()
+            if (pending && typeof pending.catch === 'function') pending.catch(() => { })
+        } catch {
+            // Very old browsers: autoPlay covers it or the poster stays.
+        }
+    }, [animated])
+
+    return (
+        <div className="nx-logo" role="img" aria-label={label}>
+            {animated ? (
+                <video
+                    ref={videoRef}
+                    src={logoVideo}
+                    poster={logoPoster}
+                    width={152}
+                    height={152}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="auto"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onError={() => setAnimated(false)}
+                />
+            ) : (
+                <img src={logoPoster} width={152} height={152} alt="" aria-hidden="true" />
+            )}
+        </div>
+    )
+}
 
 export function LoginPage() {
     const navigate = useNavigate()
@@ -126,9 +190,7 @@ export function LoginPage() {
             <main className="nx-card">
                 <div className="nx-brand"><span className="nx-dot" /> Panel Access</div>
 
-                <div className="nx-logo">
-                    <img src={branding.has_logo ? getLogoUrl() : logo} alt={branding.login_title} />
-                </div>
+                <LoginLogo label={branding.login_title} />
 
                 <h1 className="nx-title">Sign in</h1>
                 <p className="nx-sub">Enter your credentials to access {branding.login_title}.</p>
