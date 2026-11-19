@@ -413,6 +413,15 @@ def get_marzban_users_grouped(db: Session) -> dict[str, dict[str, MarzbanUsers]]
     return grouped
 
 
+def get_marzban_user(db: Session, owner: str, username: str) -> MarzbanUsers | None:
+    """The single ledger row for (owner, username), or None if it isn't tracked."""
+    return (
+        db.query(MarzbanUsers)
+        .filter(MarzbanUsers.owner == owner, MarzbanUsers.username == username)
+        .first()
+    )
+
+
 def record_marzban_user(
     db: Session, username: str, owner: str, data_limit: int = 0, source: str = "bot"
 ) -> MarzbanUsers:
