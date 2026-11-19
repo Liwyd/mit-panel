@@ -394,6 +394,67 @@ async def _consumption_change(admin, task, username, operation, request, limit=N
     return ResponseModel(success=True, message=message)
 
 
+def _owned_by_admin(user: dict, admin_username: str) -> bool:
+    """Whether Marzban reports this user as belonging to `admin_username`.
+
+    Compared case-folded: Marzban matches admin names case-insensitively, so a
+    reseller stored as "Matinsh" still owns a user whose admin reads "matinsh".
+    """
+    owner = ((user.get("admin") or {}).get("username")) or ""
+    return owner.strip().lower() == (admin_username or "").strip().lower()
+
+
+async def _confirm_marzban_create(admin_task, admin_username: str, username: str) -> bool:
+    """Re-read Marzban to decide whether a create that reported failure actually
+    landed.
+
+    `add_user_to_panel` returns False on any error, including a read timeout that
+    arrives *after* Marzban has already created the user — the panel this runs
+    against is frequently slow, not down, so such a user is readable a few
+    seconds later. This retries a handful of times with a short backoff and
+    returns True only when the user is present AND owned by this admin. A clean
+    "not found" ends it at once; staying unreachable after the retries returns
+    False so the caller reports the original failure instead of guessing.
+    """
+    sudo_api = admin_task.api_service_for_main_tasks
+    attempts = 4
+    for attempt in range(attempts):
+        try:
+            user = await sudo_api.get_billing_user(username)
+        except Exception as exc:
+            logger.warning(
+                f"Confirming create of {username} for {admin_username} "
+                f"(attempt {attempt + 1}/{attempts}): {exc}"
+            )
+        else:
+            if user is None:
+                return False
+            return _owned_by_admin(user, admin_username)
+        if attempt + 1 < attempts:
+            await asyncio.sleep(1.5 * (attempt + 1))
+    return False
+
+
+def _finalize_marzban_create(db, admin_check, admin_username: str, user_input) -> ResponseModel:
+    """Ledger a just-created Marzban user, then charge the reseller for it.
+
+    Ledger first, traffic second — the ordering the usage sync itself uses
+    (backend/bot/usage_sync.py). If anything fails between the two, the user is
+    at worst recorded-but-not-charged (a one-off under-bill), never
+    charged-but-unrecorded, which the twice-daily sync would then bill a second
+    time as "created outside the bot". Charges exactly once.
+    """
+    crud.record_marzban_user(
+        db,
+        username=user_input.email,
+        owner=admin_username,
+        data_limit=int(user_input.total or 0),
+        source="bot",
+    )
+    admin_check.reduce_usage(user_input.total, user_input.total)
+    return ResponseModel(success=True, message="User added successfully")
+
+
 @consumption.serialize_user_change
 async def add_new_user(
     admin_username: str, user_input: ClientInput, db: Session
@@ -557,6 +618,21 @@ async def add_new_user(
             )
         existing_user = await admin_task.get_user_by_username(user_input.email)
         if isinstance(existing_user, dict) and existing_user.get("username"):
+            # The username is already on Marzban. If it belongs to this admin and
+            # the ledger never recorded it, an earlier create landed on the panel
+            # but its HTTP response was lost (the panel is often slow), and this
+            # request is the reseller's retry hitting that orphan. Adopt and
+            # charge it once here, instead of refusing and leaving the twice-daily
+            # usage sync to bill it as "created outside the bot". A user owned by
+            # anyone else is a genuine conflict and still refused.
+            if _owned_by_admin(existing_user, admin_username) and (
+                crud.get_marzban_user(db, admin_username, user_input.email) is None
+            ):
+                logger.warning(
+                    f"Adopting orphaned Marzban user {user_input.email} for admin "
+                    f"{admin_username}: already on the panel but never ledgered"
+                )
+                return _finalize_marzban_create(db, admin_check, admin_username, user_input)
             logger.warning(
                 f"Attempt to add duplicate user: {user_input.email} by admin: {admin_username}"
             )
@@ -571,6 +647,17 @@ async def add_new_user(
         success = await admin_task.add_user_to_panel(user_input)
 
         if not success:
+            # add_user_to_panel returns False on any error, including a read
+            # timeout that arrives after Marzban has already created the user.
+            # Confirm against the panel before giving up: a user that really
+            # exists and belongs to this admin was created and must be ledgered,
+            # or the usage sync will later charge the reseller for their own sale.
+            if await _confirm_marzban_create(admin_task, admin_username, user_input.email):
+                logger.warning(
+                    f"Create of {user_input.email} for {admin_username} reported failure "
+                    f"but the user exists on the panel; recording it"
+                )
+                return _finalize_marzban_create(db, admin_check, admin_username, user_input)
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
@@ -578,20 +665,9 @@ async def add_new_user(
                     "message": "Failed to create the user on the panel. Check the username and panel connection.",
                 },
             )
-        admin_check.reduce_usage(user_input.total, user_input.total)
-        # Ledger row for the usage sync: this user was paid for here, so it
-        # must not be reported as debt later.
-        crud.record_marzban_user(
-            db,
-            username=user_input.email,
-            owner=admin_username,
-            data_limit=int(user_input.total or 0),
-            source="bot",
-        )
-        return ResponseModel(
-            success=True,
-            message="User added successfully",
-        )
+        # Ledger row for the usage sync: this user was paid for here, so it must
+        # not be reported as debt later.
+        return _finalize_marzban_create(db, admin_check, admin_username, user_input)
 
     if panel.panel_type == "tx-ui":
         if not admin_check.admin_is_active():
