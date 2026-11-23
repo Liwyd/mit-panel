@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 
-from backend.bot import keyboards, texts
+from backend.bot import black_friday, keyboards, texts
 from backend.bot import db
 from backend.bot.config import bot_config as settings
 from backend.bot import panel_client
@@ -116,11 +116,16 @@ async def send_daily_forecasts(bot: Bot) -> int:
             continue
         body, show_buy = rendered
 
+        # During Black Friday each forecast carries the event's block and entry
+        # button; outside it the message and its keyboard are exactly as before.
+        if black_friday.is_active():
+            body += black_friday.forecast_block(telegram_id, username)
+
         try:
             await bot.send_message(
                 telegram_id,
                 texts.FORECAST_TITLE + body,
-                reply_markup=keyboards.topup_panel_kb(username) if show_buy else None,
+                reply_markup=keyboards.forecast_kb(username, show_buy),
             )
             sent += 1
         except Exception:
