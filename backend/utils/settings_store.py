@@ -78,6 +78,9 @@ DEFAULTS = {
     # offset.
     "black_friday_enabled": False,
     "black_friday_ends_at": "2026-11-29T23:59:59+03:30",
+    # What one GB of traffic costs the business, in toman. The profit report
+    # subtracts it from the revenue of every GB sold or given away.
+    "cost_per_gb": 1000,
 }
 
 
