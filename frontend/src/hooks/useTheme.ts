@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useBlackFriday } from '@/lib/black-friday'
 
 type Theme = 'light' | 'dark'
 
@@ -16,21 +17,18 @@ export function useTheme() {
         return 'light'
     })
 
+    // The Black Friday theme is dark-only. It overrides the class but not the
+    // saved choice, so the user's own theme comes back when the event ends.
+    const blackFriday = useBlackFriday().active
+
     useEffect(() => {
-        const root = document.documentElement
-
-        if (theme === 'dark') {
-            root.classList.add('dark')
-        } else {
-            root.classList.remove('dark')
-        }
-
+        document.documentElement.classList.toggle('dark', theme === 'dark' || blackFriday)
         localStorage.setItem('theme', theme)
-    }, [theme])
+    }, [theme, blackFriday])
 
     const toggleTheme = () => {
         setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
     }
 
-    return { theme, toggleTheme, setTheme }
+    return { theme, toggleTheme, setTheme, locked: blackFriday }
 }

@@ -8,6 +8,14 @@
         // then flipped to dark for users on the dark theme.
         (function () {
             try {
+                // Black Friday theme (see src/lib/black-friday.ts): paint it
+                // before React mounts. It is dark-only, the login page included.
+                var bfUntil = Number(localStorage.getItem('bf-until'))
+                if (bfUntil && bfUntil > Date.now()) {
+                    document.documentElement.classList.add('bf')
+                    if (!/\/login\/?$/.test(window.location.pathname)) document.documentElement.classList.add('dark')
+                    return
+                }
                 // The login page is light only, so it never takes the class.
                 // Covers a direct hit; LoginPage handles arriving from inside
                 // the app, and hands the theme back on the way out.

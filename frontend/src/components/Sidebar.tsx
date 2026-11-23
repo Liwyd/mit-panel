@@ -81,7 +81,11 @@ const navigationItems = [
 ]
 
 function ThemeToggleButton() {
-    const { theme, toggleTheme } = useTheme()
+    const { theme, toggleTheme, locked } = useTheme()
+
+    // Dark-only while the Black Friday theme runs; a toggle that does nothing
+    // would only confuse.
+    if (locked) return null
 
     return (
         <Button

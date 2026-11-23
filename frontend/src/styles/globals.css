@@ -99,6 +99,44 @@
         --surface-shadow-hover: 0 26px 62px rgba(0, 0, 0, 0.26);
         --header-bg: rgba(18, 18, 18, 0.88);
     }
+
+    /* Black Friday (temporary, switched on in Settings). Near-black graphite
+       with a trace of warmth so the brand coral reads as ink, not neon. The
+       coral itself is the light theme's exact brand value; text on it turns
+       dark because white on this coral is about 3:1. Comes after .dark so it
+       wins over it. */
+    .bf {
+        color-scheme: dark;
+        --background: 0 3% 6%;
+        --foreground: 20 12% 92%;
+        --card: 0 4% 9%;
+        --card-foreground: 20 12% 92%;
+        --popover: 0 4% 10%;
+        --popover-foreground: 20 12% 92%;
+        --muted: 0 4% 13%;
+        --muted-foreground: 20 5% 63%;
+        --accent: 0 70% 67%;
+        --accent-foreground: 0 40% 8%;
+        --destructive: 0 65% 58%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 0 4% 15%;
+        --input: 0 4% 17%;
+        --primary: 0 70% 67%;
+        --primary-foreground: 0 40% 8%;
+        --secondary: 0 4% 13%;
+        --secondary-foreground: 20 12% 92%;
+        --ring: 0 70% 67%;
+
+        --brand-blue: 12 76% 62%;
+        --brand-gold: 0 70% 67%;
+        --brand-green: 350 65% 60%;
+
+        --surface-gradient: linear-gradient(180deg, #181616 0%, #151313 100%);
+        --surface-highlight: rgba(255, 255, 255, 0.04);
+        --surface-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+        --surface-shadow-hover: 0 1px 0 rgba(0, 0, 0, 0.4);
+        --header-bg: rgba(16, 15, 15, 0.88);
+    }
 }
 
 @layer base {
@@ -137,6 +175,10 @@
     table td,
     table th {
         font-variant-numeric: tabular-nums;
+    }
+
+    .bf body {
+        background-image: none !important;
     }
 
     .dark body {
