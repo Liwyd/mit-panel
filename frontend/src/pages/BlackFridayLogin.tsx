@@ -3,6 +3,7 @@ import type { FieldErrors, UseFormRegister } from 'react-hook-form'
 import type { LoginFormData } from '@/types'
 import { LoginLogo } from '@/components/LoginLogo'
 import { BlackFridayDust } from '@/components/BlackFridayDust'
+import { DecorBoundary } from '@/components/DecorBoundary'
 
 /*
  * The login page while the Black Friday theme is on: a shop window at night.
@@ -45,7 +46,7 @@ const styles = `
 .bf-dates{font-size:13px;line-height:20px;color:#6f675e;text-align:end;font-variant-numeric:tabular-nums}
 
 .bf-panel{display:flex;align-items:center;justify-content:center;padding:48px 32px}
-.bf-form-wrap{width:100%;max-width:360px}
+.bf-form-wrap{position:relative;z-index:2;width:100%;max-width:360px}
 .bf-kicker{display:flex;align-items:center;gap:8px;font-size:13px;line-height:20px;color:var(--bf-text-2);margin-bottom:16px}
 .bf-kicker i{width:6px;height:6px;border-radius:50%;background:var(--bf-coral)}
 .bf-title{font-size:32px;font-weight:500;margin-bottom:8px;color:var(--bf-text)}
@@ -171,7 +172,6 @@ export function BlackFridayLogin({ title, endsAt, serverError, register, errors,
     return (
         <div className="bf-login">
             <style>{styles}</style>
-            <BlackFridayDust variant="login" />
 
             <section className="bf-stage" ref={stageRef} aria-hidden="true">
                 <div className="bf-hanger">
@@ -187,6 +187,12 @@ export function BlackFridayLogin({ title, endsAt, serverError, register, errors,
                     </div>
                 </div>
             </section>
+
+            {/* After the stage so the dust drifts over the tag, but under the
+                form (.bf-form-wrap sits above it), so the fields stay clear. */}
+            <DecorBoundary>
+                <BlackFridayDust variant="login" />
+            </DecorBoundary>
 
             <main className="bf-panel">
                 <div className="bf-form-wrap">

@@ -11,12 +11,14 @@ import { useBlackFriday } from '@/lib/black-friday'
  *
  * 'panel' sits behind the content (z-index -1 inside the isolated Layout root,
  * so it paints over the root background but under the sidebar and cards).
- * 'login' sits above the page, thinner and fainter so the form stays clear.
+ * 'login' drifts over the price tag but under the form, thinner than the panel's.
  */
 
-const COLORS = ['#ff3b2f', 'hsl(0 70% 67%)', '#d9241c']
-const SPARK_BUCKETS = [0.8, 1.2, 1.8]
-const BOKEH_BUCKETS = [3.5, 5]
+// Hex only: canvas colour parsing on older browsers rejects CSS Color 4 syntax.
+// #e67070 is the panel coral, hsl(0 70% 67%).
+const COLORS = ['#ff3b2f', '#e67070', '#d9241c']
+const SPARK_BUCKETS = [1, 1.6, 2.4]
+const BOKEH_BUCKETS = [4, 6]
 const FRAME_MS = 1000 / 30
 
 interface Particle {
@@ -74,14 +76,14 @@ function spriteIndex(color: number, r: number, bokeh: boolean) {
 
 function spawn(width: number, height: number, maxAlpha: number, anywhere: boolean): Particle {
     const bokeh = Math.random() < 0.1
-    const r = bokeh ? rand(3, 5) : rand(0.6, 1.8)
+    const r = bokeh ? rand(3.5, 6) : rand(0.9, 2.4)
     const color = Math.floor(Math.random() * COLORS.length)
     return {
         x: rand(0, width),
         y: anywhere ? rand(0, height) : height + rand(0, 20),
         r,
         sprite: spriteIndex(color, r, bokeh),
-        alpha: bokeh ? rand(0.05, 0.12) : rand(0.15, maxAlpha),
+        alpha: bokeh ? rand(0.08, 0.2) : rand(0.3, maxAlpha),
         speed: rand(6, 18),
         freq: rand(0.2, 0.7),
         phase: rand(0, Math.PI * 2),
@@ -98,11 +100,17 @@ export function BlackFridayDust({ variant }: { variant: 'panel' | 'login' }) {
 
     useEffect(() => {
         const canvas = ref.current
-        const ctx = canvas?.getContext('2d')
-        if (!active || !canvas || !ctx) return
+        if (!active || !canvas) return
+        let ctx: CanvasRenderingContext2D | null = null
+        try {
+            ctx = canvas.getContext('2d')
+        } catch {
+            return
+        }
+        if (!ctx) return
 
         const login = variant === 'login'
-        const maxAlpha = login ? 0.4 : 0.55
+        const maxAlpha = login ? 0.6 : 0.8
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         let sprites: Sprite[] = []
         let dpr = 0
@@ -114,7 +122,7 @@ export function BlackFridayDust({ variant }: { variant: 'panel' | 'login' }) {
         let time = 0
 
         const targetCount = () => {
-            const base = Math.min(90, Math.max(24, Math.round((width * height) / 18000)))
+            const base = Math.min(100, Math.max(28, Math.round((width * height) / 15000)))
             return login ? Math.round(base * 0.6) : base
         }
 
@@ -160,6 +168,15 @@ export function BlackFridayDust({ variant }: { variant: 'panel' | 'login' }) {
 
         const frame = (ts: number) => {
             raf = requestAnimationFrame(frame)
+            try {
+                step(ts)
+            } catch {
+                // Never let a drawing error repeat every frame.
+                stop()
+            }
+        }
+
+        const step = (ts: number) => {
             if (ts - last < FRAME_MS) return
             const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0
             last = ts
@@ -185,7 +202,12 @@ export function BlackFridayDust({ variant }: { variant: 'panel' | 'login' }) {
         }
         const onVisibility = () => (document.hidden ? stop() : start())
 
-        resize()
+        try {
+            resize()
+        } catch {
+            // Decoration only: no canvas support worth having, so stay blank.
+            return
+        }
         const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
         observer?.observe(canvas)
         window.addEventListener('resize', resize)
@@ -205,7 +227,7 @@ export function BlackFridayDust({ variant }: { variant: 'panel' | 'login' }) {
     const style: React.CSSProperties =
         variant === 'panel'
             ? { position: 'fixed', inset: 0, zIndex: -1, width: '100%', height: '100%', pointerEvents: 'none' }
-            : { position: 'absolute', inset: 0, zIndex: 2, width: '100%', height: '100%', pointerEvents: 'none' }
+            : { position: 'absolute', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none' }
 
     return <canvas ref={ref} aria-hidden="true" style={style} />
 }

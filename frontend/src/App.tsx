@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Sidebar } from '@/components/Sidebar'
 import { BlackFridayDust } from '@/components/BlackFridayDust'
+import { DecorBoundary } from '@/components/DecorBoundary'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
@@ -128,8 +129,10 @@ function Layout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     return (
-        <div className="relative isolate flex h-dvh w-screen bg-background overflow-hidden">
-            <BlackFridayDust variant="panel" />
+        <div className="isolate flex h-dvh w-screen bg-background overflow-hidden">
+            <DecorBoundary>
+                <BlackFridayDust variant="panel" />
+            </DecorBoundary>
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
