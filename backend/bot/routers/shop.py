@@ -16,7 +16,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from backend.bot import db, keyboards, notify, texts, validation
+from backend.bot import black_friday, db, keyboards, notify, texts, validation
 from backend.bot import panel_client
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
@@ -221,12 +221,8 @@ async def shop_get_username(message: Message, state: FSMContext) -> None:
 
 # ── 6. Password ────────────────────────────────────────────────────────
 
-def _is_strong_password(pw: str) -> bool:
-    if len(pw) < 8:
-        return False
-    has_letter = any(c.isalpha() for c in pw)
-    has_digit = any(c.isdigit() for c in pw)
-    return has_letter and has_digit
+# The rule lives in `validation` so the Black Friday new-panel flow shares it.
+_is_strong_password = validation.is_strong_password
 
 
 async def _ask_password(message: Message, state: FSMContext) -> None:
@@ -398,6 +394,37 @@ async def shop_get_receipt(message: Message, state: FSMContext, bot: Bot) -> Non
             pass
 
 
+def _record_panel_sale(req: dict, username: str) -> None:
+    """Book an approved panel purchase in the sales ledger.
+
+    The panel already exists and the buyer has paid, so a ledger problem is only
+    logged: it must never stop the buyer from being told their panel is ready."""
+    try:
+        if req.get("bf_total"):
+            wallet = req.get("paid_method") == black_friday.METHOD_WALLET
+            db.record_sale(
+                telegram_id=req["telegram_id"], username=username, gb=req["traffic_gb"],
+                amount=int(req["bf_total"]),
+                method=db.BF_WALLET_METHOD if wallet else db.BF_CARD_METHOD,
+            )
+            black_friday.record_purchase(
+                telegram_id=req["telegram_id"], username=username,
+                kind=black_friday.PURCHASE_NEW_PANEL,
+                paid_gb=req.get("bf_paid_gb") or 0.0, gift_gb=req.get("bf_gift_gb") or 0.0,
+                amount=int(req["bf_total"]),
+                list_amount=int(req.get("bf_list_amount") or req["bf_total"]),
+                method=black_friday.METHOD_WALLET if wallet else black_friday.METHOD_CARD,
+            )
+            return
+        price_per_gb = _resolve_price(req["panel_name"], req.get("referral_code_id"))
+        db.record_sale(
+            telegram_id=req["telegram_id"], username=username, gb=req["traffic_gb"],
+            amount=int(req["traffic_gb"] * price_per_gb), method="shop",
+        )
+    except Exception:
+        logger.exception("could not record the sale of panel request %s", req.get("id"))
+
+
 # ── 7. Superadmin approves ───────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("panel_req_approve:"))
@@ -441,6 +468,7 @@ async def panel_request_approve(call: CallbackQuery, bot: Bot) -> None:
     # Mark approved
     if not db.mark_panel_request_reviewed(request_id, "approved", call.from_user.id):
         logger.critical("Provisioned panel for request %s but could not mark it approved", request_id)
+    _record_panel_sale(req, username)
     db.ensure_user(req["telegram_id"])
     db.set_user_linked(req["telegram_id"], True)
     metadata = db.ensure_panel_metadata(req["telegram_id"], [username])
@@ -544,18 +572,46 @@ async def panel_request_reject_finish(message: Message, state: FSMContext, bot: 
         await message.answer(texts.ALREADY_HANDLED)
         return
 
-    db.mark_panel_request_reviewed(request_id, "rejected", message.from_user.id, reason or None)
+    if not db.mark_panel_request_reviewed(
+        request_id, "rejected", message.from_user.id, reason or None
+    ):
+        await message.answer(texts.ALREADY_HANDLED)
+        return
+
+    # A Black Friday purchase paid from the wallet already took the money; the
+    # status flip above happens once, so this refund can happen only once too.
+    refunded = 0
+    refund_failed = False
+    if req.get("paid_method") == black_friday.METHOD_WALLET and req.get("bf_total"):
+        try:
+            db.add_wallet_balance(req["telegram_id"], int(req["bf_total"]))
+            refunded = int(req["bf_total"])
+        except Exception:
+            logger.critical(
+                "could not refund %s toman to %s for rejected panel request %s",
+                req["bf_total"], req["telegram_id"], request_id, exc_info=True,
+            )
+            refund_failed = True
 
     # Notify buyer
-    try:
-        await bot.send_message(
-            req["telegram_id"],
-            texts.SHOP_REQUEST_REJECTED.format(reason=reason or "بدون علت"),
+    buyer_text = texts.SHOP_REQUEST_REJECTED.format(reason=reason or "بدون علت")
+    if refunded:
+        buyer_text += texts.BF_NEW_REJECT_REFUND.format(
+            amount=refunded, balance=db.get_wallet_balance(req["telegram_id"])
         )
+    try:
+        await bot.send_message(req["telegram_id"], buyer_text)
     except Exception:
         pass
 
-    await message.answer(texts.PANEL_REQUEST_REJECTED)
+    admin_text = texts.PANEL_REQUEST_REJECTED
+    if refunded:
+        admin_text += texts.BF_NEW_REJECT_REFUND_ADMIN.format(amount=refunded)
+    elif refund_failed:
+        admin_text = texts.BF_NEW_REFUND_FAILED_ADMIN.format(
+            amount=req["bf_total"], telegram_id=req["telegram_id"]
+        )
+    await message.answer(admin_text)
 
     # Remove approval buttons — find original message by scanning pending
     try:
@@ -600,17 +656,21 @@ async def list_pending_panel_requests(message: Message, bot: Bot) -> None:
         requested_panel_number = max(
             (row["panel_number"] for row in existing_metadata.values()), default=0
         ) + 1
-        price_per_gb = _resolve_price(req["panel_name"], req.get("referral_code_id"))
-        total = int(req["traffic_gb"] * price_per_gb)
-        caption = (
-            texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=req["telegram_id"])
-            + "\n\n"
-            + texts.PANEL_NUMBER_LABEL.format(panel_number=requested_panel_number)
-            + "\n"
-            + texts.PANEL_REQUEST_INFO.format(
-                panel=req["panel_name"], gb=req["traffic_gb"], price=total
+        if req.get("bf_total"):
+            # The price the buyer was quoted, not today's.
+            caption = black_friday.panel_request_caption(req)
+        else:
+            price_per_gb = _resolve_price(req["panel_name"], req.get("referral_code_id"))
+            total = int(req["traffic_gb"] * price_per_gb)
+            caption = (
+                texts.PANEL_REQUEST_HEADER.format(username=username, telegram_id=req["telegram_id"])
+                + "\n\n"
+                + texts.PANEL_NUMBER_LABEL.format(panel_number=requested_panel_number)
+                + "\n"
+                + texts.PANEL_REQUEST_INFO.format(
+                    panel=req["panel_name"], gb=req["traffic_gb"], price=total
+                )
             )
-        )
         receipt_path = req.get("receipt_path")
         if receipt_path and os.path.isfile(receipt_path):
             from aiogram.types import FSInputFile
