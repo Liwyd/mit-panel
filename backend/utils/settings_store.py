@@ -81,6 +81,12 @@ DEFAULTS = {
     # What one GB of traffic costs the business, in toman. The profit report
     # subtracts it from the revenue of every GB sold or given away.
     "cost_per_gb": 1000,
+    # Fixed costs of running the business per month (servers, infrastructure,
+    # staff), in toman. The profit page subtracts it from gross profit to get
+    # net profit.
+    "fixed_monthly_cost": 0,
+    # Revenue the owner wants each month, in toman. 0 means no target.
+    "monthly_revenue_target": 0,
 }
 
 
