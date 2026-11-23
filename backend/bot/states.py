@@ -17,6 +17,11 @@ class BlackFriday(StatesGroup):
     custom_amount = State()
     awaiting_payment = State()
     receipt = State()
+    # Where the chosen volume goes, and the new-panel details when it is a new one.
+    choosing_target = State()
+    new_server = State()
+    new_username = State()
+    new_password = State()
 
 
 class RejectReason(StatesGroup):

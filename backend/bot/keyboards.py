@@ -35,25 +35,37 @@ def unlinked_menu_kb() -> ReplyKeyboardMarkup:
     balance and be invoiced, so the money side of the bot is open to them. The
     panel button is where activation and the requests live."""
     kb = ReplyKeyboardBuilder()
+    bf_active = black_friday.is_active()
+    if bf_active:
+        kb.row(KeyboardButton(text=texts.BTN_BLACK_FRIDAY, style="danger"))
     kb.button(text=texts.BTN_WALLET)
     kb.button(text=texts.BTN_MY_INVOICES)
     kb.button(text=texts.BTN_MY_PANELS)
     kb.button(text=texts.BTN_REQUEST_REFERRAL)
     kb.button(text=texts.BTN_PANEL_PREVIEW)
     kb.button(text=texts.BTN_SUPPORT)
-    kb.adjust(2, 2, 2)
+    if bf_active:
+        kb.adjust(1, 2, 2, 2)
+    else:
+        kb.adjust(2, 2, 2)
     return kb.as_markup(resize_keyboard=True)
 
 
 def prospect_menu_kb() -> ReplyKeyboardMarkup:
     """Shown to users who have no panel yet — shop-style."""
     kb = ReplyKeyboardBuilder()
+    bf_active = black_friday.is_active()
+    if bf_active:
+        kb.row(KeyboardButton(text=texts.BTN_BLACK_FRIDAY, style="danger"))
     kb.button(text=texts.BTN_REQUEST_PANEL)
     kb.button(text=texts.BTN_MY_PANELS)
     kb.button(text=texts.BTN_REQUEST_REFERRAL)
     kb.button(text=texts.BTN_PANEL_PREVIEW)
     kb.button(text=texts.BTN_SUPPORT)
-    kb.adjust(2, 2, 1)
+    if bf_active:
+        kb.adjust(1, 2, 2, 1)
+    else:
+        kb.adjust(2, 2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -233,6 +245,30 @@ def bf_packages_kb(quotes, custom: bool = True) -> InlineKeyboardMarkup:
         kb.button(text=f"{label} · {quote.total:,}", callback_data=f"bf_pkg:{int(quote.paid_gb)}")
     if custom:
         kb.button(text=texts.BTN_BF_CUSTOM, callback_data="bf_pkg:custom")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_target_kb(panels) -> InlineKeyboardMarkup:
+    """Where a chosen volume goes: one button per panel the buyer owns, plus a
+    brand-new panel. `panels` is [(username, panel number or None)]."""
+    kb = InlineKeyboardBuilder()
+    for username, number in panels:
+        if number:
+            label = texts.BF_TARGET_PANEL_LABEL_NUMBERED.format(username=username, number=number)
+        else:
+            label = texts.BF_TARGET_PANEL_LABEL.format(username=username)
+        kb.button(text=label, callback_data=f"bf_target:p:{username}")
+    kb.button(text=texts.BTN_BF_NEW_PANEL, callback_data="bf_target:new")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_server_kb(servers: list[str]) -> InlineKeyboardMarkup:
+    """Which Marzban server a Black Friday new panel is created on."""
+    kb = InlineKeyboardBuilder()
+    for name in servers:
+        kb.button(text=name, callback_data=f"bf_srv:{name}")
     kb.adjust(1)
     return kb.as_markup()
 
