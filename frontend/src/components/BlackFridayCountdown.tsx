@@ -3,9 +3,10 @@ import { useBlackFriday } from '@/lib/black-friday'
 
 /*
  * A red dot-matrix clock counting down to the end of the Black Friday theme.
- * Each digit is a 5x7 grid of dots. A dot lights in 70ms and fades over
- * 260ms, like LED phosphor, so the seconds read as live without anything
- * sliding or flipping. Reduced motion keeps the numbers and drops the fades.
+ * It shows days and hours only, each as two digits of a 5x7 dot grid, with a
+ * colon between them that blinks once a second so the clock still feels live.
+ * A dot lights in 70ms and fades over 260ms, like LED phosphor. Reduced motion
+ * keeps the numbers and drops the fades.
  */
 
 const FONT: Record<number, string[]> = {
@@ -21,7 +22,7 @@ const FONT: Record<number, string[]> = {
     9: ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
 }
 const COLON = '0010100'
-const UNITS = ['days', 'hours', 'min', 'sec'] as const
+const UNITS = ['days', 'hours'] as const
 
 const styles = `
 .bf-cd{
@@ -36,7 +37,7 @@ const styles = `
 .bf-cd-t{font-size:24px;line-height:1.2;font-weight:500;letter-spacing:0}
 .bf-cd-msg{font-size:14px;line-height:22px;color:#a8a19d;margin-top:4px}
 .bf-cd-end{font-size:12px;line-height:16px;color:#86807c;margin-top:12px;font-variant-numeric:tabular-nums}
-.bf-clock{--d:7px;--g:3px;display:flex;align-items:flex-start;gap:calc(var(--d)*2);flex-shrink:0;direction:ltr}
+.bf-clock{--d:10px;--g:4px;display:flex;align-items:flex-start;gap:calc(var(--d)*2);flex-shrink:0;direction:ltr}
 .bf-unit{display:flex;flex-direction:column;align-items:center;gap:10px}
 .bf-pair{display:flex;gap:calc(var(--d) + var(--g))}
 .bf-digit{display:grid;grid-template-columns:repeat(5,var(--d));grid-auto-rows:var(--d);gap:var(--g)}
@@ -58,10 +59,10 @@ const styles = `
   .bf-digit span,.bf-colon span{transition:none}
   .bf-colon span.on{animation:none}
 }
-@media (max-width:1100px){.bf-clock{--d:5px;--g:2px}}
+@media (max-width:1100px){.bf-clock{--d:8px;--g:3px}}
 @media (max-width:767px){
   .bf-cd{flex-direction:column;align-items:stretch;gap:24px;padding:20px}
-  .bf-clock{--d:4px;--g:2px;justify-content:space-between}
+  .bf-clock{--d:7px;--g:3px;justify-content:flex-start;align-self:flex-start}
 }
 `
 
@@ -133,7 +134,7 @@ export function BlackFridayCountdown() {
     if (!active || !endsAt) return null
 
     const total = Math.max(0, Math.floor((endsAt.getTime() - now) / 1000))
-    const values = [Math.min(99, Math.floor(total / 86400)), Math.floor(total / 3600) % 24, Math.floor(total / 60) % 60, total % 60]
+    const values = [Math.min(99, Math.floor(total / 86400)), Math.floor(total / 3600) % 24]
 
     return (
         <section className="bf-cd" aria-label="Black Friday countdown">
@@ -147,7 +148,7 @@ export function BlackFridayCountdown() {
             <div
                 className="bf-clock"
                 role="timer"
-                aria-label={`${values[0]} days ${values[1]} hours ${values[2]} minutes left`}
+                aria-label={`${values[0]} days ${values[1]} hours left`}
             >
                 {UNITS.map((unit, i) => (
                     <div key={unit} style={{ display: 'contents' }}>
