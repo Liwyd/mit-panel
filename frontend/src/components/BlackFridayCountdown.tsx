@@ -14,20 +14,28 @@ const styles = `
 .bf-cd{
   position:relative;display:flex;align-items:center;justify-content:space-between;gap:32px;
   background:#0a0909;border:1px solid rgba(237,233,230,.07);border-radius:20px;
-  padding:24px 28px;color:#ede9e6;
+  padding:24px 28px;color:#ede9e6;overflow:hidden;isolation:isolate;
   animation:bf-cd-rise 420ms cubic-bezier(.23,1,.32,1) backwards;
 }
-.bf-cd-text{min-width:0}
+.bf-cd-text{position:relative;z-index:1;min-width:0}
+/* Newsprint: the event name set as dense bold small caps in deep red, at low
+   opacity, filling the card behind the content like a printed sheet. It fades
+   out under the text column so the copy keeps full contrast. */
+.bf-cd-print{position:absolute;inset:-4px;z-index:0;pointer-events:none;user-select:none;
+  font-size:11px;line-height:14px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:#d9241c;opacity:.14;text-align:justify;word-spacing:.2em;overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.45) 35%,#000 70%);
+  mask-image:linear-gradient(90deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.45) 35%,#000 70%)}
 .bf-cd-k{display:flex;align-items:center;gap:8px;font-size:13px;line-height:20px;color:#a8a19d;margin-bottom:8px}
 .bf-cd-k i{width:6px;height:6px;border-radius:50%;background:#ff3b2f;animation:bf-cd-live 2.4s ease-in-out infinite}
 .bf-cd-t{font-size:24px;line-height:1.2;font-weight:500;letter-spacing:0}
 .bf-cd-msg{width:fit-content;font-size:14px;line-height:22px;color:#a8a19d;margin-top:4px}
 .bf-cd-end{font-size:12px;line-height:16px;color:#86807c;margin-top:12px;font-variant-numeric:tabular-nums}
 
-.bf-clock{--w:96px;--h:112px;--fs:64px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;direction:ltr}
+.bf-clock{position:relative;z-index:1;--w:96px;--h:112px;--fs:64px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;direction:ltr}
 .bf-unit{display:flex;flex-direction:column;align-items:center;gap:10px}
-.bf-sep{height:var(--h);display:flex;align-items:center;font-size:calc(var(--fs)*.5);color:#4a4542;line-height:1}
-.bf-cap{font-size:11px;line-height:16px;color:#86807c}
+.bf-sep{height:var(--h);display:flex;align-items:center;text-shadow:0 0 6px #0a0909;font-size:calc(var(--fs)*.5);color:#4a4542;line-height:1}
+.bf-cap{font-size:11px;line-height:16px;color:#a8a19d;background:#0a0909;padding:0 6px;border-radius:4px}
 
 .bf-flip{position:relative;width:var(--w);height:var(--h);perspective:600px;
   font-size:var(--fs);font-weight:500;color:#f1ece8;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -57,6 +65,7 @@ const styles = `
 }
 @media (max-width:1100px){.bf-clock{--w:80px;--h:94px;--fs:52px}}
 @media (max-width:767px){
+  .bf-cd-print{-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.3) 0%,rgba(0,0,0,.45) 45%,#000 80%);mask-image:linear-gradient(180deg,rgba(0,0,0,.3) 0%,rgba(0,0,0,.45) 45%,#000 80%)}
   .bf-cd{flex-direction:column;align-items:stretch;gap:24px;padding:20px}
   .bf-clock{--w:72px;--h:84px;--fs:46px;align-self:flex-start;gap:10px}
 }
@@ -136,6 +145,9 @@ function formatEnd(date: Date): string {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+// Enough copies to fill the widest card; the overflow is clipped.
+const PRINT = Array.from({ length: 160 }, () => 'MIT VPN BLACK FRIDAY').join(' · ')
+
 export function BlackFridayCountdown() {
     const { active, endsAt } = useBlackFriday()
     const now = useNow(active)
@@ -159,6 +171,7 @@ export function BlackFridayCountdown() {
     return (
         <section className="bf-cd" aria-label="Black Friday countdown">
             <style>{styles}</style>
+            <div className="bf-cd-print" aria-hidden="true">{PRINT}</div>
             <div className="bf-cd-text">
                 <div className="bf-cd-k"><i />Black Friday</div>
                 <div className="bf-cd-t">Ends in</div>
