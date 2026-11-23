@@ -30,7 +30,7 @@ def apply_wallet_to_debts(
         # During the event a debt owed at more than the event rate is cleared at
         # the event rate; every other debt (and every run outside the event)
         # drains exactly as it always has.
-        if event_running and black_friday.event_rate_price(debt["username"]):
+        if event_running and black_friday.has_debt_saving(debt["username"]):
             entry = black_friday.drain_wallet_into_debt(telegram_id, debt)
             if entry:
                 results.append(entry)
