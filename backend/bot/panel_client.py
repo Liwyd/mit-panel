@@ -131,12 +131,31 @@ async def topup(telegram_id: int, added_gb: float, username: str | None = None) 
                 raise PanelClientError("Multiple panels found; specify username")
             admin = admins[0]
 
-        crud.grant_admin_traffic(db, admin, added_bytes)
+        username_ = admin.username
+        telegram_id_ = admin.telegram_id
+        # Callers take the money first and refund on PanelClientError, so that
+        # error has to mean "nothing was credited". grant_admin_traffic is one
+        # UPDATE and a commit: if it raises, the commit did not happen. Any
+        # failure there (a locked database, say) becomes PanelClientError
+        # instead of escaping as something the refund paths don't catch.
+        try:
+            crud.grant_admin_traffic(db, admin, added_bytes)
+        except Exception as exc:
+            db.rollback()
+            raise PanelClientError(f"Could not credit the traffic: {exc}") from exc
+        # The grant is committed from here on: a failure to read the new totals
+        # back must not look like a failed grant, or the money would be
+        # refunded for traffic that was handed over.
+        try:
+            db.refresh(admin)
+            new_traffic, new_initial = admin.traffic, admin.initial_traffic
+        except Exception:
+            new_traffic = new_initial = None
         return {
-            "username": admin.username,
-            "telegram_id": admin.telegram_id,
-            "new_traffic_bytes": admin.traffic,
-            "new_initial_traffic_bytes": admin.initial_traffic,
+            "username": username_,
+            "telegram_id": telegram_id_,
+            "new_traffic_bytes": new_traffic,
+            "new_initial_traffic_bytes": new_initial,
         }
 
 
