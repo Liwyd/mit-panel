@@ -132,17 +132,12 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
                 db.revert_to_pending(request_id)
                 return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
 
-        # Paid at the Black Friday rate: write the waived amount down, now that
+        # Paid at the Black Friday rate: note it for the event's stats, now that
         # nothing can still revert this approval. Only requests raised by the
-        # event's flow carry a credit amount.
+        # event's flow carry a credit amount. No ledger discount row: invoice
+        # revenue is booked at payment, already at the event price.
         if req.bf_credit_amount:
-            discount = req.bf_credit_amount - req.toman_amount
-            if discount > 0:
-                black_friday.record_discount(
-                    telegram_id=customer,
-                    username=invoice.admin_username if invoice else None,
-                    discount=discount,
-                )
+            if req.bf_credit_amount - req.toman_amount > 0:
                 black_friday.record_purchase(
                     telegram_id=customer,
                     username=invoice.admin_username if invoice else None,
