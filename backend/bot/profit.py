@@ -518,6 +518,8 @@ def _selected(
     rows: list[_Row], key: str, today: datetime, current_key: str, settings: dict,
     fixed_for: dict[str, float], unit_cost: float, buyers: dict, previous_key: str,
 ) -> dict:
+    """The selected month in depth. `buyers` is {"active": {key: panels},
+    "first": {panel: first month key}}."""
     year, month = parse_month_key(key)
     in_month = [r for r in rows if r.key == key]
     totals = _new_bucket()
@@ -529,7 +531,8 @@ def _selected(
     fixed = fixed_for.get(key, 0)
     figures = _month_figures(totals, unit_cost, fixed)
     per_admin = _admin_rows(admins, unit_cost, figures["revenue"])
-    active = len(buyers["active"].get(key, ()))
+    here = buyers["active"].get(key, set())
+    active = len(here)
 
     prev_totals = _new_bucket()
     for row in rows:
@@ -555,6 +558,9 @@ def _selected(
         "is_current": key == current_key,
         **figures,
         "previous": previous,
+        "active_buyers": active,
+        "new_buyers": sum(1 for first in buyers["first"].values() if first == key),
+        "lost_buyers": len(buyers["active"].get(previous_key, set()) - here),
         "arpu": _share(figures["revenue"], active) if active else None,
         "net_profit_per_gb": (
             figures["net_profit"] / figures["gb_sold"] if figures["gb_sold"] > 0 else None
@@ -680,7 +686,7 @@ def overview(
             "selected",
             lambda: _selected(
                 rows, selected_key, today, current_key, settings, fixed_for, unit_cost,
-                {"active": buyers_active}, previous_key_of(selected_key),
+                {"active": buyers_active, "first": buyers_first}, previous_key_of(selected_key),
             ),
         )
     result["receivables"] = _safe("receivables", lambda: receivables(now))

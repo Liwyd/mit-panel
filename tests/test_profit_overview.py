@@ -78,6 +78,9 @@ def test_active_new_and_lost_buyers(ledger, settings):
     assert (aban["active_buyers"], aban["new_buyers"], aban["lost_buyers"]) == (2, 2, 0)
     # b bought in Aban and not in Azar; c is new in Azar.
     assert (azar["active_buyers"], azar["new_buyers"], azar["lost_buyers"]) == (2, 1, 1)
+    # The selected month carries the same counts, for a month outside the range too.
+    s = report["selected"]
+    assert (s["active_buyers"], s["new_buyers"], s["lost_buyers"]) == (2, 1, 1)
 
 
 def test_a_returning_panel_is_not_new_again(ledger, settings):
