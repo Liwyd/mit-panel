@@ -19,7 +19,9 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import approvals, auto_approve, black_friday, db, keyboards, notify, panel_client, texts
+from backend.bot import (
+    approvals, auto_approve, black_friday, db, keyboards, notify, panel_client, texts, validation,
+)
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, superadmin_kb
@@ -49,7 +51,9 @@ async def _enter(message: Message, state: FSMContext, user_id: int) -> None:
     admins = await safe_get_admins(message, user_id)
     if admins is None:
         return
-    if not admins:
+    # A superadmin has no use for buying a panel through the shop; they keep
+    # getting the "no panel" notice they always did.
+    if not admins and user_id in settings.superadmin_id_list:
         await message.answer(texts.NOT_LINKED_RETRY, reply_markup=await menu_kb_for(user_id))
         return
 
@@ -59,12 +63,9 @@ async def _enter(message: Message, state: FSMContext, user_id: int) -> None:
         await _show_items(message, user_id)
         return
 
-    if len(admins) == 1:
-        await _show_packages(message, state, user_id, admins[0]["username"])
-        return
-    await message.answer(
-        texts.CHOOSE_PANEL, reply_markup=keyboards.panel_picker_kb(admins, "bf")
-    )
+    # Everyone sees the packages, panel or not; where the volume goes is asked
+    # after they have chosen it.
+    await _show_packages(message, state)
 
 
 @router.message(F.text == texts.BTN_BLACK_FRIDAY)
@@ -91,7 +92,7 @@ async def picked_panel(call: CallbackQuery, state: FSMContext) -> None:
     if black_friday.has_open_bills(call.from_user.id):
         await _show_items(call.message, call.from_user.id)
         return
-    await _show_packages(call.message, state, call.from_user.id, username)
+    await _show_packages(call.message, state)
 
 
 # ---- debt first ------------------------------------------------------------------
@@ -197,18 +198,39 @@ async def pick_item(call: CallbackQuery, state: FSMContext) -> None:
 
 # ---- packages --------------------------------------------------------------------
 
-async def _show_packages(message: Message, state: FSMContext, user_id: int, username: str) -> None:
-    quotes = [black_friday.package_quote(username, float(paid)) for paid, _ in black_friday.PACKAGES]
+async def _show_packages(message: Message, state: FSMContext) -> None:
+    """The public terms: priced with no panel (the global price), because the
+    panel the volume goes to is only chosen afterwards."""
+    quotes = [black_friday.package_quote("", float(paid)) for paid, _ in black_friday.PACKAGES]
     await state.set_state(BlackFriday.choosing)
-    await state.update_data(panel_username=username)
     await message.answer(
-        texts.BF_MENU_INTRO.format(
-            username=html.escape(username),
-            price=black_friday.bf_price(username),
-            gift_note=texts.BF_GIFT_NOTE if black_friday.gift_eligible(username) else texts.BF_NO_GIFT_NOTE,
+        texts.BF_MENU_INTRO_PUBLIC.format(
+            price=black_friday.bf_price(""),
+            gift_note=texts.BF_GIFT_NOTE if black_friday.gift_eligible("") else texts.BF_NO_GIFT_NOTE,
         ),
         reply_markup=keyboards.bf_packages_kb(quotes),
     )
+
+
+async def _gate(message: Message, state: FSMContext, user_id: int) -> bool:
+    """Whether the event is still on and nothing is owed; otherwise says why."""
+    if not black_friday.is_active():
+        await state.clear()
+        await message.answer(texts.BF_ENDED, reply_markup=await menu_kb_for(user_id))
+        return False
+    if black_friday.has_open_bills(user_id):
+        await state.clear()
+        await _show_items(message, user_id)
+        return False
+    return True
+
+
+def _quote_for(username: str, selection: dict) -> black_friday.Quote | None:
+    """The quote for the chosen volume at one panel's price ("" is the public
+    price, used for a new panel)."""
+    if selection["kind"] == "pkg":
+        return black_friday.package_quote(username, selection["paid_gb"])
+    return black_friday.custom_quote(username, selection["paid_gb"])
 
 
 async def _show_quote(
@@ -234,19 +256,11 @@ async def _show_quote(
 @router.callback_query(F.data.startswith("bf_pkg:"), BlackFriday.choosing)
 async def pick_package(call: CallbackQuery, state: FSMContext) -> None:
     choice = call.data.split(":", 1)[1]
-    data = await state.get_data()
-    username = data.get("panel_username", "")
     user_id = call.from_user.id
 
-    if not black_friday.is_active():
+    if not black_friday.is_active() or black_friday.has_open_bills(user_id):
         await call.answer()
-        await state.clear()
-        await call.message.answer(texts.BF_ENDED, reply_markup=await menu_kb_for(user_id))
-        return
-    if black_friday.has_open_bills(user_id):
-        await call.answer()
-        await state.clear()
-        await _show_items(call.message, user_id)
+        await _gate(call.message, state, user_id)
         return
 
     if choice == "custom":
@@ -260,12 +274,12 @@ async def pick_package(call: CallbackQuery, state: FSMContext) -> None:
         )
         return
 
-    quote = black_friday.package_quote(username, float(choice)) if choice.isdigit() else None
-    if quote is None:
+    selection = {"kind": "pkg", "paid_gb": float(choice)} if choice.isdigit() else None
+    if selection is None or _quote_for("", selection) is None:
         await call.answer(texts.BF_NOT_AVAILABLE, show_alert=True)
         return
     await call.answer()
-    await _show_quote(call.message, state, username, quote)
+    await _ask_target(call.message, state, user_id, selection)
 
 
 @router.message(BlackFriday.custom_amount, ~F.text.in_(ALL_MENU_TEXTS))
@@ -279,10 +293,8 @@ async def get_custom_amount(message: Message, state: FSMContext) -> None:
         await message.answer(texts.BF_CUSTOM_INVALID)
         return
 
-    data = await state.get_data()
-    username = data.get("panel_username", "")
-    quote = black_friday.custom_quote(username, amount)
-    if quote is None:
+    selection = {"kind": "custom", "paid_gb": amount}
+    if _quote_for("", selection) is None:
         await message.answer(
             texts.BF_CUSTOM_OUT_OF_RANGE.format(
                 min_gb=black_friday.CUSTOM_MIN_GB, max_gb=black_friday.CUSTOM_MAX_GB
@@ -291,15 +303,179 @@ async def get_custom_amount(message: Message, state: FSMContext) -> None:
         return
 
     user_id = message.from_user.id
-    if not black_friday.is_active():
-        await state.clear()
-        await message.answer(texts.BF_ENDED, reply_markup=await menu_kb_for(user_id))
+    if not await _gate(message, state, user_id):
         return
-    if black_friday.has_open_bills(user_id):
-        await state.clear()
-        await _show_items(message, user_id)
+    await _ask_target(message, state, user_id, selection)
+
+
+# ---- where the volume goes ------------------------------------------------------------
+
+async def _ask_target(
+    message: Message, state: FSMContext, user_id: int, selection: dict
+) -> None:
+    """Their own panels plus a new one; with no panel the only choice is a new one,
+    so that question is skipped."""
+    await state.update_data(bf_sel=selection)
+    admins = await safe_get_admins(message, user_id)
+    if admins is None:
         return
-    await _show_quote(message, state, username, quote)
+    if not admins:
+        await _start_new_panel(message, state, user_id)
+        return
+    metadata = db.list_panel_metadata(user_id)
+    panels = [
+        (admin["username"], metadata.get(admin["username"], {}).get("panel_number"))
+        for admin in admins
+    ]
+    await state.set_state(BlackFriday.choosing_target)
+    await message.answer(texts.BF_ASK_TARGET, reply_markup=keyboards.bf_target_kb(panels))
+
+
+@router.callback_query(F.data.startswith("bf_target:"), BlackFriday.choosing_target)
+async def pick_target(call: CallbackQuery, state: FSMContext) -> None:
+    user_id = call.from_user.id
+    selection = (await state.get_data()).get("bf_sel")
+    # bf_target:new or bf_target:p:<panel>; the client wrote it.
+    parts = call.data.split(":", 2)
+    if not selection or len(parts) < 2 or parts[1] not in ("new", "p"):
+        await call.answer(texts.BF_NOT_AVAILABLE, show_alert=True)
+        return
+    if not black_friday.is_active() or black_friday.has_open_bills(user_id):
+        await call.answer()
+        await _gate(call.message, state, user_id)
+        return
+
+    if parts[1] == "new":
+        await call.answer()
+        await _start_new_panel(call.message, state, user_id)
+        return
+
+    username = parts[2] if len(parts) == 3 else ""
+    try:
+        owned = await owned_panel(user_id, username) if username else None
+    except Exception as exc:
+        logger.error("panel lookup failed for %s: %s", user_id, exc)
+        await call.answer(texts.PANEL_UNREACHABLE, show_alert=True)
+        return
+    if not owned:
+        await call.answer(texts.NOT_LINKED_RETRY, show_alert=True)
+        return
+    quote = _quote_for(username, selection)
+    if quote is None:
+        await call.answer(texts.BF_NOT_AVAILABLE, show_alert=True)
+        return
+    await call.answer()
+    await _show_quote(call.message, state, username, quote)
+
+
+# ---- a new panel ---------------------------------------------------------------------
+
+async def _list_servers() -> list[str]:
+    try:
+        return await panel_client.list_panels()
+    except Exception as exc:
+        logger.warning("could not list the panel servers: %s", exc)
+        return []
+
+
+async def _username_taken(username: str) -> bool:
+    # Same as the shop: a failed lookup is not a reason to turn the buyer away.
+    try:
+        return await panel_client.check_username_taken(username)
+    except Exception:
+        return False
+
+
+async def _start_new_panel(message: Message, state: FSMContext, user_id: int) -> None:
+    if db.get_pending_panel_request(user_id):
+        await state.clear()
+        await message.answer(texts.SHOP_ALREADY_PENDING, reply_markup=await menu_kb_for(user_id))
+        return
+    servers = await _list_servers()
+    if not servers:
+        await state.clear()
+        await message.answer(texts.NO_MARZBAN_PANELS, reply_markup=await menu_kb_for(user_id))
+        return
+    if len(servers) == 1:
+        await _ask_new_username(message, state, servers[0])
+        return
+    await state.set_state(BlackFriday.new_server)
+    await message.answer(texts.BF_ASK_NEW_SERVER, reply_markup=keyboards.bf_server_kb(servers))
+
+
+@router.callback_query(F.data.startswith("bf_srv:"), BlackFriday.new_server)
+async def pick_server(call: CallbackQuery, state: FSMContext) -> None:
+    server = call.data.split(":", 1)[1]
+    # The name came from the client: it must be one of the real servers.
+    if server not in await _list_servers():
+        await call.answer(texts.BF_NOT_AVAILABLE, show_alert=True)
+        return
+    await call.answer()
+    await _ask_new_username(call.message, state, server)
+
+
+async def _ask_new_username(message: Message, state: FSMContext, server: str) -> None:
+    await state.update_data(bf_new_server=server)
+    await state.set_state(BlackFriday.new_username)
+    await message.answer(texts.SHOP_ASK_USERNAME, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(BlackFriday.new_username, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_new_username(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip().lower()
+    if not username:
+        await message.answer(texts.SHOP_ASK_USERNAME)
+        return
+    if validation.has_space(username):
+        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
+        return
+    if await _username_taken(username):
+        await message.answer(texts.SHOP_USERNAME_TAKEN)
+        return
+    await state.update_data(bf_new_username=username)
+    await state.set_state(BlackFriday.new_password)
+    await message.answer(texts.SHOP_ASK_PASSWORD, reply_markup=keyboards.cancel_kb())
+
+
+@router.message(BlackFriday.new_password, ~F.text.in_(ALL_MENU_TEXTS))
+async def get_new_password(message: Message, state: FSMContext) -> None:
+    password = (message.text or "").strip()
+    if not validation.is_strong_password(password):
+        await message.answer(texts.SHOP_PASSWORD_WEAK)
+        return
+
+    data = await state.get_data()
+    selection = data.get("bf_sel")
+    quote = _quote_for("", selection) if selection else None
+    if quote is None or not data.get("bf_new_server") or not data.get("bf_new_username"):
+        await state.clear()
+        await message.answer(
+            texts.BF_NOT_AVAILABLE, reply_markup=await menu_kb_for(message.from_user.id)
+        )
+        return
+    bf = {
+        "kind": "new_panel", "selection": selection, "server": data["bf_new_server"],
+        "username": data["bf_new_username"], "password": password, "quote": asdict(quote),
+    }
+    await _show_new_quote(message, state, bf)
+
+
+async def _show_new_quote(message: Message, state: FSMContext, bf: dict) -> None:
+    quote = black_friday.Quote(**bf["quote"])
+    await state.update_data(bf=bf)
+    await state.set_state(BlackFriday.awaiting_payment)
+    await message.answer(
+        texts.BF_NEW_QUOTE.format(
+            server=html.escape(bf["server"]),
+            username=html.escape(bf["username"]),
+            paid_gb=quote.paid_gb,
+            gift_line=texts.BF_GIFT_LINE.format(gift_gb=quote.gift_gb) if quote.gift_gb else "",
+            granted_gb=quote.granted_gb,
+            total=quote.total,
+            saving_line=texts.BF_SAVING_LINE.format(saving=quote.saving) if quote.saving > 0 else "",
+        ),
+        reply_markup=keyboards.bf_payment_methods_kb(),
+    )
 
 
 # ---- checks that run again at the moment of payment ---------------------------------
@@ -310,6 +486,8 @@ async def _revalidate(message: Message, state: FSMContext, user_id: int, bf: dic
     The menu check is not a gate: debt may have appeared, a price may have
     moved or an invoice been paid since. Anything that differs is shown again
     rather than charged, and nothing here has taken money yet."""
+    if bf["kind"] == "new_panel":
+        return await _revalidate_new_panel(message, state, user_id, bf)
     if bf["kind"] == "topup":
         if black_friday.has_open_bills(user_id):
             await state.clear()
@@ -343,14 +521,43 @@ async def _revalidate(message: Message, state: FSMContext, user_id: int, bf: dic
     return True
 
 
+async def _revalidate_new_panel(
+    message: Message, state: FSMContext, user_id: int, bf: dict
+) -> bool:
+    if black_friday.has_open_bills(user_id):
+        await state.clear()
+        await _show_items(message, user_id)
+        return False
+    if db.get_pending_panel_request(user_id):
+        await state.clear()
+        await message.answer(texts.SHOP_ALREADY_PENDING, reply_markup=await menu_kb_for(user_id))
+        return False
+    if await _username_taken(bf["username"]):
+        # Someone took the name while they were deciding: ask for another.
+        await state.update_data(bf_new_server=bf["server"])
+        await state.set_state(BlackFriday.new_username)
+        await message.answer(texts.SHOP_USERNAME_TAKEN, reply_markup=keyboards.cancel_kb())
+        return False
+    quote = black_friday.Quote(**bf["quote"])
+    fresh = black_friday.requote("", quote)
+    if fresh != quote:
+        await message.answer(texts.BF_REQUOTED)
+        await _show_new_quote(message, state, {**bf, "quote": asdict(fresh)})
+        return False
+    return True
+
+
 def _amount_of(bf: dict) -> int:
-    return bf["quote"]["total"] if bf["kind"] == "topup" else bf["discounted"]
+    return bf["quote"]["total"] if bf["kind"] in ("topup", "new_panel") else bf["discounted"]
 
 
-async def _notify_superadmins(bot: Bot, text: str) -> None:
+async def _notify_superadmins(bot: Bot, text: str, reply_markup=None) -> None:
     for superadmin_id in settings.superadmin_id_list:
         try:
-            await bot.send_message(superadmin_id, text)
+            if reply_markup is None:
+                await bot.send_message(superadmin_id, text)
+            else:
+                await bot.send_message(superadmin_id, text, reply_markup=reply_markup)
         except Exception:
             continue
 
@@ -383,6 +590,8 @@ async def pay_from_wallet(call: CallbackQuery, state: FSMContext, bot: Bot) -> N
             return
         if bf["kind"] == "topup":
             await _wallet_topup(call, state, bot, bf)
+        elif bf["kind"] == "new_panel":
+            await _wallet_new_panel(call, state, bot, bf)
         elif bf["kind"] == "debt":
             await _wallet_debt(call, state, bot, bf)
         else:
@@ -437,6 +646,69 @@ async def _wallet_topup(call: CallbackQuery, state: FSMContext, bot: Bot, bf: di
             username=username, telegram_id=user_id, paid_gb=quote.paid_gb,
             gift_gb=quote.gift_gb, total=quote.total,
         ),
+    )
+
+
+async def _create_new_panel_request(
+    user_id: int, bf: dict, quote: black_friday.Quote, *, receipt_path: str, method: str
+) -> int | None:
+    """The panel request for a Black Friday new panel, complete in one INSERT.
+    None when the buyer already has an open request."""
+    return db.create_panel_request_if_unowned(
+        telegram_id=user_id,
+        panel_name=bf["server"],
+        traffic_gb=quote.granted_gb,
+        receipt_path=receipt_path,
+        referral_code_id=None,
+        desired_username=bf["username"],
+        desired_password=bf["password"],
+        bf_total=quote.total,
+        bf_paid_gb=quote.paid_gb,
+        bf_gift_gb=quote.gift_gb,
+        bf_list_amount=quote.list_total,
+        paid_method=method,
+    )
+
+
+async def _wallet_new_panel(call: CallbackQuery, state: FSMContext, bot: Bot, bf: dict) -> None:
+    user_id = call.from_user.id
+    quote = black_friday.Quote(**bf["quote"])
+
+    if db.get_wallet_balance(user_id) < quote.total or not db.spend_wallet(user_id, quote.total):
+        await _insufficient_message(call.message, quote.total, user_id)
+        return
+
+    # The money is taken first; if the request cannot be stored it goes straight
+    # back, so nobody pays for a panel nobody will review.
+    try:
+        request_id = await _create_new_panel_request(
+            user_id, bf, quote, receipt_path="", method=black_friday.METHOD_WALLET
+        )
+    except Exception:
+        logger.exception("could not store the black friday panel request for %s", user_id)
+        request_id = None
+    if request_id is None:
+        db.add_wallet_balance(user_id, quote.total)  # refund
+        await state.clear()
+        pending = db.get_pending_panel_request(user_id)
+        await call.message.answer(
+            texts.SHOP_ALREADY_PENDING if pending else texts.BF_NEW_REQUEST_FAILED,
+            reply_markup=await menu_kb_for(user_id),
+        )
+        return
+
+    await state.clear()
+    await call.message.answer(
+        texts.BF_NEW_WALLET_SUBMITTED.format(
+            total=quote.total, balance=db.get_wallet_balance(user_id)
+        ),
+        reply_markup=await menu_kb_for(user_id),
+    )
+    req = db.get_panel_request(request_id)
+    await _notify_superadmins(
+        bot,
+        black_friday.panel_request_caption(req),
+        reply_markup=keyboards.panel_request_approval_kb(request_id),
     )
 
 
@@ -588,7 +860,11 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
     # before a request lands in front of the superadmin. (The event itself is
     # not re-checked: the price was shown while it ran and the card payment was
     # started then, so the receipt is honoured.)
-    if bf["kind"] == "topup":
+    if bf["kind"] == "new_panel":
+        if black_friday.has_open_bills(user_id):
+            await message.answer(texts.BF_RECEIPT_BLOCKED, reply_markup=await menu_kb_for(user_id))
+            return
+    elif bf["kind"] == "topup":
         if black_friday.has_open_bills(user_id):
             await message.answer(texts.BF_RECEIPT_BLOCKED, reply_markup=await menu_kb_for(user_id))
             return
@@ -610,6 +886,9 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
     receipt_path = os.path.join(settings.media_dir, f"receipt_{uuid.uuid4().hex}.jpg")
     await bot.download(message.photo[-1], destination=receipt_path)
 
+    if bf["kind"] == "new_panel":
+        await _card_new_panel(message, bot, bf, receipt_path)
+        return
     if bf["kind"] == "topup":
         quote = black_friday.Quote(**bf["quote"])
         request_id = db.create_request(
@@ -662,9 +941,36 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
 
+async def _card_new_panel(message: Message, bot: Bot, bf: dict, receipt_path: str) -> None:
+    user_id = message.from_user.id
+    quote = black_friday.Quote(**bf["quote"])
+    request_id = await _create_new_panel_request(
+        user_id, bf, quote, receipt_path=receipt_path, method=black_friday.METHOD_CARD
+    )
+    if request_id is None:
+        await message.answer(texts.SHOP_ALREADY_PENDING, reply_markup=await menu_kb_for(user_id))
+        return
+    await message.answer(
+        texts.SHOP_REQUEST_SUBMITTED + texts.SHOP_RECEIPT_WARNING,
+        reply_markup=await menu_kb_for(user_id),
+    )
+    req = db.get_panel_request(request_id)
+    await notify.send_receipt_to_superadmins(
+        bot,
+        photo=FSInputFile(receipt_path),
+        caption=black_friday.panel_request_caption(req),
+        reply_markup=keyboards.panel_request_approval_kb(request_id),
+        request_id=request_id,
+        kind="panel",
+    )
+
+
 # ---- stale buttons ----------------------------------------------------------------------
 
-@router.callback_query(F.data.startswith("bf_pay:") | F.data.startswith("bf_pkg:"))
+@router.callback_query(
+    F.data.startswith("bf_pay:") | F.data.startswith("bf_pkg:")
+    | F.data.startswith("bf_target:") | F.data.startswith("bf_srv:")
+)
 async def stale_button(call: CallbackQuery) -> None:
     """A Black Friday button whose flow is gone (restart, cancel, a newer
     screen): say so instead of leaving the tap unanswered."""
