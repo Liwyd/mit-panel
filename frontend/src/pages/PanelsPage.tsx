@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
     ChevronDown,
     Plus,
@@ -74,7 +75,7 @@ export function PanelsPage() {
             fetchPanels()
         } catch (err: any) {
             console.error('Failed to delete panel:', err)
-            alert(err?.message || 'Failed to delete panel')
+            toast.error(err?.message || 'Failed to delete panel')
         }
     }
 
@@ -84,7 +85,7 @@ export function PanelsPage() {
             fetchPanels()
         } catch (err: any) {
             console.error('Failed to toggle panel status:', err)
-            alert(err?.message || 'Failed to toggle panel status')
+            toast.error(err?.message || 'Failed to toggle panel status')
         }
     }
 

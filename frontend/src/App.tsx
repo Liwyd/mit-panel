@@ -15,6 +15,7 @@ import { BotsPage } from '@/pages/BotsPage'
 import { TopupBotPage } from '@/pages/TopupBotPage'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AppToaster } from '@/components/AppToaster'
 
 // BASE_URL carries a trailing slash ("/dashboard/"), and React Router only
 // strips a basename when the URL starts with it in full — so a bare
@@ -25,6 +26,7 @@ const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
 function App() {
     return (
         <Router basename={ROUTER_BASENAME}>
+            <AppToaster />
             <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<LoginPage />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
     Zap,
     Users,
@@ -434,7 +435,7 @@ export function DashboardPage() {
             fetchServers()
         } catch (err: any) {
             console.error('Failed to queue reboot:', err)
-            alert(err?.message || 'Failed to queue reboot')
+            toast.error(err?.message || 'Failed to queue reboot')
         }
     }
 
@@ -503,7 +504,7 @@ export function DashboardPage() {
             fetchDashboardData()
         } catch (err: any) {
             console.error('Failed to delete user:', err)
-            alert(err?.message || 'Failed to delete user')
+            toast.error(err?.message || 'Failed to delete user')
         }
     }
 
@@ -513,7 +514,7 @@ export function DashboardPage() {
             fetchDashboardData()
         } catch (err: any) {
             console.error('Failed to reset usage:', err)
-            alert(err?.message || 'Failed to reset usage')
+            toast.error(err?.message || 'Failed to reset usage')
         }
     }
 
@@ -529,7 +530,7 @@ export function DashboardPage() {
             setUserToRevoke(null)
             await fetchDashboardData()
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Could not confirm revocation; refresh before retrying')
+            toast.error(err instanceof Error ? err.message : 'Could not confirm revocation; refresh before retrying')
         } finally {
             setRevoking(false)
         }
@@ -553,7 +554,7 @@ export function DashboardPage() {
             fetchDashboardData()
         } catch (err: any) {
             console.error('Failed to toggle status:', err)
-            alert(err?.message || 'Failed to toggle user status')
+            toast.error(err?.message || 'Failed to toggle user status')
         }
     }
 

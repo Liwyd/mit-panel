@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
     ChevronDown,
     Plus,
@@ -84,7 +85,7 @@ export function AdminsPage() {
             fetchAdmins()
         } catch (err: any) {
             console.error('Failed to delete admin:', err)
-            alert(err?.message || 'Failed to delete admin')
+            toast.error(err?.message || 'Failed to delete admin')
         }
     }
 
@@ -94,7 +95,7 @@ export function AdminsPage() {
             fetchAdmins()
         } catch (err: any) {
             console.error('Failed to toggle admin status:', err)
-            alert(err?.message || 'Failed to toggle admin status')
+            toast.error(err?.message || 'Failed to toggle admin status')
         }
     }
 

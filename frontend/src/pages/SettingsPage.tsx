@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
     Download,
     Upload,
@@ -122,9 +123,9 @@ export function SettingsPage() {
                 mitseller_server_cert: settings.mitseller_server_cert?.trim() ?? '',
             })
             setSettings(data)
-            alert('Settings saved successfully')
+            toast.success('Settings saved successfully')
         } catch (err: any) {
-            alert(err?.message || 'Failed to save settings')
+            toast.error(err?.message || 'Failed to save settings')
         } finally {
             setSavingSettings(false)
         }
@@ -144,11 +145,11 @@ export function SettingsPage() {
                 bot_max_gb: Number(settings.bot_max_gb) || 10000,
             })
             setSettings(data)
-            alert(restart
+            toast.success(restart
                 ? 'Bot settings saved. Restart the panel for changes to take effect.'
                 : 'Bot settings saved successfully')
         } catch (err: any) {
-            alert(err?.message || 'Failed to save bot settings')
+            toast.error(err?.message || 'Failed to save bot settings')
         } finally {
             setSavingBot(false)
             setSavingBotRestart(false)
@@ -163,9 +164,9 @@ export function SettingsPage() {
             await settingsAPI.uploadLogo(file)
             setLogoVersion((v) => v + 1)
             await fetchSettings()
-            alert('Logo updated successfully')
+            toast.success('Logo updated successfully')
         } catch (err: any) {
-            alert(err?.message || 'Failed to upload logo')
+            toast.error(err?.message || 'Failed to upload logo')
         } finally {
             setUploadingLogo(false)
             event.target.value = ''
@@ -176,9 +177,9 @@ export function SettingsPage() {
         try {
             setTestingTelegram(true)
             const message = await settingsAPI.testTelegram()
-            alert(message)
+            toast.success(message)
         } catch (err: any) {
-            alert(err?.message || 'Failed to send test backup')
+            toast.error(err?.message || 'Failed to send test backup')
         } finally {
             setTestingTelegram(false)
         }
@@ -191,7 +192,7 @@ export function SettingsPage() {
             setNews(newsData)
         } catch (err: any) {
             console.error('Failed to fetch news:', err)
-            alert(err?.message || 'Failed to fetch news')
+            toast.error(err?.message || 'Failed to fetch news')
         } finally {
             setNewsLoading(false)
         }
@@ -204,7 +205,7 @@ export function SettingsPage() {
             setLogs(logsData)
         } catch (err: any) {
             console.error('Failed to fetch logs:', err)
-            alert(err?.message || 'Failed to fetch logs')
+            toast.error(err?.message || 'Failed to fetch logs')
         } finally {
             setLogsLoading(false)
         }
@@ -224,7 +225,7 @@ export function SettingsPage() {
             document.body.removeChild(a)
         } catch (err: any) {
             console.error('Failed to download backup:', err)
-            alert(err?.message || 'Failed to download backup')
+            toast.error(err?.message || 'Failed to download backup')
         } finally {
             setBackupLoading(false)
         }
@@ -240,7 +241,7 @@ export function SettingsPage() {
             alert(message)
         } catch (err: any) {
             console.error('Failed to restore backup:', err)
-            alert(err?.message || 'Failed to restore backup')
+            toast.error(err?.message || 'Failed to restore backup')
         } finally {
             setRestoreLoading(false)
             event.target.value = ''
@@ -249,7 +250,7 @@ export function SettingsPage() {
 
     const handleAddNews = async () => {
         if (!newNewsMessage.trim() && !newNewsBanner) {
-            alert('Add a message, a banner image, or both')
+            toast.error('Add a message, a banner image, or both')
             return
         }
 
@@ -260,7 +261,7 @@ export function SettingsPage() {
             fetchNews()
         } catch (err: any) {
             console.error('Failed to add news:', err)
-            alert(err?.message || 'Failed to add news')
+            toast.error(err?.message || 'Failed to add news')
         } finally {
             setAddingNews(false)
         }
@@ -290,7 +291,7 @@ export function SettingsPage() {
             fetchNews()
         } catch (err: any) {
             console.error('Failed to delete news:', err)
-            alert(err?.message || 'Failed to delete news')
+            toast.error(err?.message || 'Failed to delete news')
         } finally {
             setDeletingNews(false)
         }
