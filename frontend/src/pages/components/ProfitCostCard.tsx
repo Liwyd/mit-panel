@@ -48,7 +48,7 @@ export function ProfitCostCard({ settings, onSaved }: Props) {
             </CardHeader>
             <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                    What one GB costs you. The dashboard profit report subtracts it from every GB sold or given away.
+                    What one GB costs you. The profit page (محاسبه سود) subtracts it from every GB sold or given away.
                 </p>
                 <div className="space-y-2">
                     <Label htmlFor="cost-per-gb">Cost per GB (toman)</Label>
