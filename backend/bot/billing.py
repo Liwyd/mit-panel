@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.bot import db
+from backend.bot import black_friday, db
 
 
 def apply_wallet_to_debts(
@@ -18,6 +18,8 @@ def apply_wallet_to_debts(
     Returns one entry per debt touched: {username, paid, remaining}.
     """
     results: list[dict] = []
+    # Read once per run, so one drain cannot straddle the event's end.
+    event_running = black_friday.is_active()
     for debt in db.list_outstanding_debts():
         if debt["telegram_id"] != telegram_id:
             continue
@@ -25,6 +27,14 @@ def apply_wallet_to_debts(
             continue
         if db.get_wallet_balance(telegram_id) <= 0:
             break
+        # During the event a debt owed at more than the event rate is cleared at
+        # the event rate; every other debt (and every run outside the event)
+        # drains exactly as it always has.
+        if event_running and black_friday.event_rate_price(debt["username"]):
+            entry = black_friday.drain_wallet_into_debt(telegram_id, debt)
+            if entry:
+                results.append(entry)
+            continue
         paid = db.drain_wallet(telegram_id, debt["amount"])
         if paid <= 0:
             continue
