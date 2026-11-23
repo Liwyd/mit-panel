@@ -2,93 +2,100 @@ import { useEffect, useState } from 'react'
 import { useBlackFriday } from '@/lib/black-friday'
 
 /*
- * A red dot-matrix clock counting down to the end of the Black Friday theme.
- * It shows days and hours only, each as two digits of a 5x7 dot grid, with a
- * colon between them that blinks once a second so the clock still feels live.
- * A dot lights in 70ms and fades over 260ms, like LED phosphor. Reduced motion
- * keeps the numbers and drops the fades.
+ * Countdown to the end of the Black Friday theme, as a quiet flip clock:
+ * two cards, days and hours. When a value changes the upper leaf falls away
+ * and the lower one lands, like a split-flap board. That happens on the
+ * hour, and once per browser session as an entrance; the small red dot in the
+ * label breathes so the card reads as live in between. Reduced motion swaps
+ * the numbers without the flip.
  */
-
-const FONT: Record<number, string[]> = {
-    0: ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
-    1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
-    2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
-    3: ['11111', '00010', '00100', '00010', '00001', '10001', '01110'],
-    4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
-    5: ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
-    6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
-    7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
-    8: ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-    9: ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
-}
-const COLON = '0010100'
-const UNITS = ['days', 'hours'] as const
 
 const styles = `
 .bf-cd{
   position:relative;display:flex;align-items:center;justify-content:space-between;gap:32px;
-  background:#070606;border:1px solid rgba(255,59,47,.14);border-radius:20px;
+  background:#0a0909;border:1px solid rgba(237,233,230,.07);border-radius:20px;
   padding:24px 28px;color:#ede9e6;
-  animation:bf-cd-rise 420ms cubic-bezier(.23,1,.32,1) both;
+  animation:bf-cd-rise 420ms cubic-bezier(.23,1,.32,1) backwards;
 }
 .bf-cd-text{min-width:0}
 .bf-cd-k{display:flex;align-items:center;gap:8px;font-size:13px;line-height:20px;color:#a8a19d;margin-bottom:8px}
-.bf-cd-k i{width:6px;height:6px;border-radius:50%;background:#ff3b2f}
+.bf-cd-k i{width:6px;height:6px;border-radius:50%;background:#ff3b2f;animation:bf-cd-live 2.4s ease-in-out infinite}
 .bf-cd-t{font-size:24px;line-height:1.2;font-weight:500;letter-spacing:0}
 .bf-cd-msg{width:fit-content;font-size:14px;line-height:22px;color:#a8a19d;margin-top:4px}
 .bf-cd-end{font-size:12px;line-height:16px;color:#86807c;margin-top:12px;font-variant-numeric:tabular-nums}
-.bf-clock{--d:10px;--g:4px;display:flex;align-items:flex-start;gap:calc(var(--d)*2);flex-shrink:0;direction:ltr}
+
+.bf-clock{--w:96px;--h:112px;--fs:64px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;direction:ltr}
 .bf-unit{display:flex;flex-direction:column;align-items:center;gap:10px}
-.bf-pair{display:flex;gap:calc(var(--d) + var(--g))}
-.bf-digit{display:grid;grid-template-columns:repeat(5,var(--d));grid-auto-rows:var(--d);gap:var(--g)}
-.bf-colon{display:grid;grid-template-columns:var(--d);grid-template-rows:repeat(7,var(--d));gap:var(--g)}
-.bf-digit span,.bf-colon span{
-  border-radius:50%;background:rgba(255,59,47,.07);
-  transition:background-color 260ms ease,box-shadow 260ms ease;
-}
-.bf-digit span.on,.bf-colon span.on{
-  background:#ff3b2f;box-shadow:0 0 calc(var(--d)*.9) rgba(255,59,47,.45);
-  transition-duration:70ms;
-}
-.bf-colon span.on{animation:bf-cd-blink 1s steps(1,end) both}
-@keyframes bf-cd-blink{0%{background:#ff3b2f}50%{background:rgba(255,59,47,.3);box-shadow:none}}
+.bf-sep{height:var(--h);display:flex;align-items:center;font-size:calc(var(--fs)*.5);color:#4a4542;line-height:1}
 .bf-cap{font-size:11px;line-height:16px;color:#86807c}
+
+.bf-flip{position:relative;width:var(--w);height:var(--h);perspective:600px;
+  font-size:var(--fs);font-weight:500;color:#f1ece8;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.bf-half,.bf-leaf{position:absolute;left:0;right:0;height:50%;overflow:hidden;backface-visibility:hidden}
+.bf-half span,.bf-leaf span{position:absolute;left:0;right:0;top:0;height:var(--h);line-height:var(--h);text-align:center}
+.bf-top{top:0;border-radius:12px 12px 0 0;background:linear-gradient(180deg,#1d1a19,#171514);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.bf-bottom{bottom:0;border-radius:0 0 12px 12px;background:linear-gradient(180deg,#141211,#100e0e)}
+.bf-bottom span{top:auto;bottom:0}
+/* the hinge: a dark seam with a faint lit edge under it */
+.bf-flip::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-1px;
+  background:#050404;box-shadow:0 1px 0 rgba(255,255,255,.035);z-index:3}
+.bf-leaf.bf-top{transform-origin:50% 100%;z-index:2;animation:bf-fall 300ms cubic-bezier(.55,0,.9,.4) forwards}
+.bf-leaf.bf-bottom{transform-origin:50% 0;z-index:2;animation:bf-land 340ms cubic-bezier(.23,1,.32,1) 280ms backwards}
+.bf-leaf.bf-top::after{content:"";position:absolute;inset:0;background:#000;opacity:0;animation:bf-shade 300ms ease-in forwards}
+
+@keyframes bf-fall{to{transform:rotateX(-90deg)}}
+@keyframes bf-land{from{transform:rotateX(90deg)}}
+@keyframes bf-shade{to{opacity:.45}}
 @keyframes bf-cd-rise{from{opacity:0;transform:translateY(8px)}}
+@keyframes bf-cd-live{50%{opacity:.3}}
+
 @media (prefers-reduced-motion:reduce){
   .bf-cd{animation:none}
-  .bf-digit span,.bf-colon span{transition:none}
-  .bf-colon span.on{animation:none}
+  .bf-cd-k i{animation:none}
+  .bf-leaf{display:none}
 }
-@media (max-width:1100px){.bf-clock{--d:8px;--g:3px}}
+@media (max-width:1100px){.bf-clock{--w:80px;--h:94px;--fs:52px}}
 @media (max-width:767px){
   .bf-cd{flex-direction:column;align-items:stretch;gap:24px;padding:20px}
-  .bf-clock{--d:7px;--g:3px;justify-content:flex-start;align-self:flex-start}
+  .bf-clock{--w:72px;--h:84px;--fs:46px;align-self:flex-start;gap:10px}
 }
 `
 
-function Digit({ value }: { value: number }) {
-    const rows = FONT[value] ?? FONT[0]
+const INTRO_KEY = 'bf-flip-intro'
+
+function introSeen(): boolean {
+    try {
+        return sessionStorage.getItem(INTRO_KEY) === '1'
+    } catch {
+        return true
+    }
+}
+
+function FlipCard({ value, intro }: { value: string; intro: boolean }) {
+    // prev is what the card showed before the latest change; n counts changes
+    // and keys the leaves, so each change remounts them and replays the flip.
+    // The first value flips in from blank once per session.
+    const [state, setState] = useState(() => ({ cur: value, prev: intro ? '' : value, n: intro ? 1 : 0 }))
+    if (state.cur !== value) setState({ cur: value, prev: state.cur, n: state.n + 1 })
+
+    const flipping = state.n > 0
     return (
-        <div className="bf-digit">
-            {rows.flatMap((row, r) =>
-                [...row].map((bit, c) => <span key={r * 5 + c} className={bit === '1' ? 'on' : undefined} />)
+        <div className="bf-flip">
+            <div className="bf-half bf-top"><span>{state.cur}</span></div>
+            <div className="bf-half bf-bottom"><span>{flipping ? state.prev : state.cur}</span></div>
+            {flipping && (
+                <>
+                    <div key={`t${state.n}`} className="bf-leaf bf-top"><span>{state.prev}</span></div>
+                    <div key={`b${state.n}`} className="bf-leaf bf-bottom"><span>{state.cur}</span></div>
+                </>
             )}
         </div>
     )
 }
 
-// Remounted on every tick (keyed by the second), which restarts its blink:
-// lit on the tick, dimmed for the second half.
-function Colon() {
-    return (
-        <div className="bf-colon">
-            {[...COLON].map((bit, i) => <span key={i} className={bit === '1' ? 'on' : undefined} />)}
-        </div>
-    )
-}
-
-// Ticks on the second boundary, so the clock changes with the system clock
-// rather than drifting a few hundred ms behind it. Paused in hidden tabs.
+// Re-renders on each minute boundary; that is enough for days and hours.
+// Paused while the tab is hidden, re-synced when it comes back.
 function useNow(enabled: boolean) {
     const [now, setNow] = useState(() => Date.now())
     useEffect(() => {
@@ -96,7 +103,7 @@ function useNow(enabled: boolean) {
         let timer = 0
         const tick = () => {
             setNow(Date.now())
-            timer = window.setTimeout(tick, 1000 - (Date.now() % 1000) + 5)
+            timer = window.setTimeout(tick, 60000 - (Date.now() % 60000) + 50)
         }
         const onVisibility = () => {
             window.clearTimeout(timer)
@@ -127,14 +134,27 @@ function formatEnd(date: Date): string {
     return `Until ${parts.weekday}, ${parts.day} ${parts.month} · ${parts.hour}:${parts.minute}`
 }
 
+const pad = (n: number) => String(n).padStart(2, '0')
+
 export function BlackFridayCountdown() {
     const { active, endsAt } = useBlackFriday()
     const now = useNow(active)
+    const [intro] = useState(() => !introSeen())
+
+    useEffect(() => {
+        if (!intro) return
+        try {
+            sessionStorage.setItem(INTRO_KEY, '1')
+        } catch {
+            // The entrance just plays again next time.
+        }
+    }, [intro])
 
     if (!active || !endsAt) return null
 
     const total = Math.max(0, Math.floor((endsAt.getTime() - now) / 1000))
-    const values = [Math.min(99, Math.floor(total / 86400)), Math.floor(total / 3600) % 24]
+    const days = Math.min(99, Math.floor(total / 86400))
+    const hours = Math.floor(total / 3600) % 24
 
     return (
         <section className="bf-cd" aria-label="Black Friday countdown">
@@ -145,23 +165,16 @@ export function BlackFridayCountdown() {
                 <div className="bf-cd-msg" dir="rtl" lang="fa">برای دریافت تخفیف از ربات اقدام کنید</div>
                 <div className="bf-cd-end">{formatEnd(endsAt)}</div>
             </div>
-            <div
-                className="bf-clock"
-                role="timer"
-                aria-label={`${values[0]} days ${values[1]} hours left`}
-            >
-                {UNITS.map((unit, i) => (
-                    <div key={unit} style={{ display: 'contents' }}>
-                        {i > 0 && <Colon key={Math.floor(now / 1000)} />}
-                        <div className="bf-unit" aria-hidden="true">
-                            <div className="bf-pair">
-                                <Digit value={Math.floor(values[i] / 10)} />
-                                <Digit value={values[i] % 10} />
-                            </div>
-                            <div className="bf-cap">{unit}</div>
-                        </div>
-                    </div>
-                ))}
+            <div className="bf-clock" role="timer" aria-label={`${days} days ${hours} hours left`}>
+                <div className="bf-unit" aria-hidden="true">
+                    <FlipCard value={pad(days)} intro={intro} />
+                    <div className="bf-cap">days</div>
+                </div>
+                <div className="bf-sep" aria-hidden="true">:</div>
+                <div className="bf-unit" aria-hidden="true">
+                    <FlipCard value={pad(hours)} intro={intro} />
+                    <div className="bf-cap">hours</div>
+                </div>
             </div>
         </section>
     )
