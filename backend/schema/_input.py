@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AdminInput(BaseModel):
@@ -125,6 +125,20 @@ class SettingsInput(BaseModel):
     bot_max_gb: Optional[float] = None
     bot_panel_link_url: Optional[str] = None
     agent_base_url: Optional[str] = None
+    black_friday_enabled: Optional[bool] = None
+    black_friday_ends_at: Optional[str] = None
+    black_friday_message: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("black_friday_ends_at")
+    @classmethod
+    def _valid_end(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        try:
+            datetime.fromisoformat(value.strip())
+        except ValueError as exc:
+            raise ValueError("black_friday_ends_at must be an ISO 8601 date") from exc
+        return value.strip()
 
 
 class ServerInput(BaseModel):

@@ -8,6 +8,9 @@ import os
 import json
 import threading
 import time
+from datetime import datetime, timedelta, timezone
+
+TEHRAN = timezone(timedelta(hours=3, minutes=30))
 
 DATA_DIR = os.environ.get("MITPANEL_DATA_DIR", "/app/data")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
@@ -69,6 +72,13 @@ DEFAULTS = {
     # the names set in Marzban: {panel id: {node key: name}}, where the node
     # key is Marzban's node id, or "master" for the main server.
     "node_names": {},
+    # Temporary Black Friday theme: dark login page, dark panel and a
+    # countdown on the dashboard. It switches itself off once ends_at passes,
+    # so nobody has to remember to turn it off. ends_at is ISO 8601 with an
+    # offset; the message is optional copy shown under the countdown.
+    "black_friday_enabled": False,
+    "black_friday_ends_at": "2026-11-30T23:59:59+03:30",
+    "black_friday_message": "",
 }
 
 
@@ -117,11 +127,39 @@ def update_settings(patch: dict) -> dict:
     return get_settings()
 
 
+def parse_black_friday_end(value) -> datetime | None:
+    """The theme's end as an aware datetime, or None when it is unusable.
+    A value without an offset is read as Tehran time, the panel's zone."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        end = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=TEHRAN)
+    return end
+
+
+def black_friday_state(data: dict | None = None) -> dict:
+    data = data if data is not None else _read()
+    end = parse_black_friday_end(data.get("black_friday_ends_at"))
+    active = bool(data.get("black_friday_enabled")) and end is not None and (
+        end > datetime.now(timezone.utc)
+    )
+    return {
+        "active": active,
+        "ends_at": end.isoformat() if end else None,
+        "message": str(data.get("black_friday_message") or "")[:200],
+    }
+
+
 def get_public_branding() -> dict:
     data = _read()
     return {
         "login_title": data.get("login_title") or "MIT Panel",
         "has_logo": os.path.exists(LOGO_PATH),
+        "black_friday": black_friday_state(data),
     }
 
 
