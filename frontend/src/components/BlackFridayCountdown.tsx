@@ -35,7 +35,7 @@ const styles = `
 .bf-cd-k{display:flex;align-items:center;gap:8px;font-size:13px;line-height:20px;color:#a8a19d;margin-bottom:8px}
 .bf-cd-k i{width:6px;height:6px;border-radius:50%;background:#ff3b2f}
 .bf-cd-t{font-size:24px;line-height:1.2;font-weight:500;letter-spacing:0}
-.bf-cd-msg{font-size:14px;line-height:22px;color:#a8a19d;margin-top:4px}
+.bf-cd-msg{width:fit-content;font-size:14px;line-height:22px;color:#a8a19d;margin-top:4px}
 .bf-cd-end{font-size:12px;line-height:16px;color:#86807c;margin-top:12px;font-variant-numeric:tabular-nums}
 .bf-clock{--d:10px;--g:4px;display:flex;align-items:flex-start;gap:calc(var(--d)*2);flex-shrink:0;direction:ltr}
 .bf-unit{display:flex;flex-direction:column;align-items:center;gap:10px}

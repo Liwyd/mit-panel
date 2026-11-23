@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { FieldErrors, UseFormRegister } from 'react-hook-form'
 import type { LoginFormData } from '@/types'
 import { LoginLogo } from '@/components/LoginLogo'
+import { BlackFridayDust } from '@/components/BlackFridayDust'
 
 /*
  * The login page while the Black Friday theme is on: a shop window at night.
@@ -170,6 +171,7 @@ export function BlackFridayLogin({ title, endsAt, serverError, register, errors,
     return (
         <div className="bf-login">
             <style>{styles}</style>
+            <BlackFridayDust variant="login" />
 
             <section className="bf-stage" ref={stageRef} aria-hidden="true">
                 <div className="bf-hanger">
