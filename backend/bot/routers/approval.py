@@ -9,7 +9,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import auto_approve, keyboards, texts
+from backend.bot import auto_approve, black_friday, keyboards, texts
 from backend.bot.approvals import approve_request, reject_request
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, forget_section, superadmin_kb
@@ -40,6 +40,8 @@ async def list_pending(message: Message) -> None:
             f"📊 حجم درخواستی: {req.requested_gb:g} گیگابایت\n"
             f"💰 مبلغ: {req.toman_amount:,} تومان"
         )
+        if black_friday.is_bf_request(req):
+            caption = black_friday.request_caption(req)
         markup = keyboards.approval_kb(req.id, req.admin_telegram_id)
         try:
             await message.answer_photo(
