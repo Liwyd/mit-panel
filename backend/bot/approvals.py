@@ -111,9 +111,6 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
     if req.kind == "invoice":
         if not db.mark_invoice_paid(req.invoice_id):
             return Outcome(False, texts.INVOICE_ALREADY_PAID, alert=True, finished=True)
-        db.record_sale(
-            telegram_id=customer, username=None, gb=0, amount=req.toman_amount, method="invoice"
-        )
 
         invoice = db.get_invoice(req.invoice_id) if req.invoice_id else None
         # An invoice raised by the usage sync buys GB back for one panel. Paying
@@ -131,6 +128,18 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
                 db.revert_invoice_to_pending(invoice.id)
                 db.revert_to_pending(request_id)
                 return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
+
+        # Booked only now that nothing can revert this approval, so a failed
+        # grant followed by a re-approval cannot count the payment twice. An
+        # invoice that bought traffic carries its GB and panel into the ledger
+        # so the profit report can cost it; a manual one has neither.
+        db.record_sale(
+            telegram_id=customer,
+            username=invoice.admin_username if grants_gb else None,
+            gb=invoice.traffic_gb if grants_gb else 0,
+            amount=req.toman_amount,
+            method="invoice",
+        )
 
         # Paid at the Black Friday rate: note it for the event's stats, now that
         # nothing can still revert this approval. Only requests raised by the
