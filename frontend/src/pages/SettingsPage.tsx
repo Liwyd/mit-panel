@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { PageLayout } from '@/components/PageLayout'
 import { NodeNamesCard } from './components/NodeNamesCard'
+import { BlackFridayCard } from './components/BlackFridayCard'
 
 interface NewsItem {
     id: number
@@ -433,6 +434,9 @@ export function SettingsPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Temporary seasonal theme */}
+            <BlackFridayCard settings={settings} onSaved={setSettings} />
 
             {/* Branding + Telegram Backup */}
             <div className="grid gap-6 md:grid-cols-2">
