@@ -514,9 +514,10 @@ async def _wallet_invoice(call: CallbackQuery, state: FSMContext, bot: Bot, bf: 
         telegram_id=user_id, username=panel, gb=invoice.traffic_gb if grants_gb else 0,
         amount=discounted, method="invoice",
     )
-    discount = original - discounted
-    if discount > 0:
-        black_friday.record_discount(telegram_id=user_id, username=panel, discount=discount)
+    # No ledger discount row here: an invoice's revenue is booked when it is
+    # paid, and it was booked above at the event price already. (A weekly debt
+    # is different: it was booked at full price on the day of the sale.)
+    if original - discounted > 0:
         black_friday.record_purchase(
             telegram_id=user_id, username=panel, kind=black_friday.PURCHASE_INVOICE,
             amount=discounted, list_amount=original, method=black_friday.METHOD_WALLET,

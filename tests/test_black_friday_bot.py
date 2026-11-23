@@ -526,7 +526,7 @@ def test_a_bf_settlement_releases_a_locked_admin(ledger, monkeypatch):
     released.assert_awaited_once()
 
 
-def test_a_bf_invoice_receipt_marks_it_paid_and_writes_the_discount(ledger, granted):
+def test_a_bf_invoice_receipt_marks_it_paid_and_books_it_once(ledger, granted):
     priced(ledger, special=2900)
     invoice = ledger.create_invoice(
         telegram_id=ALICE, amount=2_900_000, description="x", due_at=None,
@@ -543,7 +543,9 @@ def test_a_bf_invoice_receipt_marks_it_paid_and_writes_the_discount(ledger, gran
     assert ledger.get_invoice(invoice).status == "paid"
     granted.assert_awaited_once_with(ALICE, 1000, username="alice")
     assert [r["amount"] for r in ledger_rows(ledger, "invoice")] == [2_400_000]
-    assert [r["amount"] for r in ledger_rows(ledger, "bf_discount")] == [-500_000]
+    # Invoice revenue is booked at payment, already at the event price, so a
+    # discount row on top would take the saving off profit a second time.
+    assert ledger_rows(ledger, "bf_discount") == []
     [row] = ledger.list_black_friday_purchases()
     assert (row.kind, row.amount, row.list_amount) == ("invoice", 2_400_000, 2_900_000)
 
@@ -966,7 +968,9 @@ def test_the_wallet_pays_a_traffic_invoice_and_grants_its_gb(handlers):
     assert handlers.ledger.get_wallet_balance(ALICE) == 600_000
     [sale] = ledger_rows(handlers.ledger, "invoice")
     assert (sale["gb"], sale["amount"], sale["username"]) == (1000, 2_400_000, "alice")
-    assert [r["amount"] for r in ledger_rows(handlers.ledger, "bf_discount")] == [-500_000]
+    assert ledger_rows(handlers.ledger, "bf_discount") == []
+    [row] = handlers.ledger.list_black_friday_purchases()
+    assert (row.kind, row.method, row.amount, row.list_amount) == ("invoice", "wallet", 2_400_000, 2_900_000)
 
 
 def test_a_failed_grant_reopens_the_invoice_and_refunds(handlers, monkeypatch):
