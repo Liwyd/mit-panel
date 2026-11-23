@@ -69,6 +69,8 @@ def _request_payload(req) -> dict:
         "amount": req.toman_amount,
         "kind": req.kind,
         "invoice_id": req.invoice_id,
+        "bf_paid_gb": req.bf_paid_gb,
+        "bf_gift_gb": req.bf_gift_gb,
         "status": req.status,
         "created_at": req.created_at,
         "reviewed_at": req.reviewed_at,
@@ -127,8 +129,8 @@ async def api_stats(user: dict = Depends(get_current_admin)):
         pending = conn.execute("SELECT COUNT(*), COALESCE(SUM(toman_amount), 0) FROM topup_requests WHERE status = 'pending'").fetchone()
         sales = conn.execute(
             "SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(gb), 0) FROM sales "
-            "WHERE created_at >= ? AND method NOT IN (?, ?, ?)",
-            (_today_start_utc(), db.SETTLEMENT_METHOD, db.WALLET_CHARGE_METHOD, db.GRANT_METHOD),
+            f"WHERE created_at >= ? AND method NOT IN ({', '.join('?' * len(db.NOT_SALES))})",
+            (_today_start_utc(), *db.NOT_SALES),
         ).fetchone()
     open_amount = sum(invoice.amount for invoice in invoices) + sum(debt["amount"] for debt in debts)
     overdue_invoices = [invoice for invoice in invoices if _is_overdue(invoice.due_at)]
