@@ -23,7 +23,7 @@ const styles = `
    out under the text column so the copy keeps full contrast. */
 .bf-cd-print{position:absolute;inset:-4px;z-index:0;pointer-events:none;user-select:none;
   font-size:11px;line-height:14px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-  color:#d9241c;opacity:.14;text-align:justify;word-spacing:.2em;overflow:hidden;
+  color:#d9241c;opacity:.24;text-align:justify;word-spacing:.2em;overflow:hidden;
   -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.45) 35%,#000 70%);
   mask-image:linear-gradient(90deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.45) 35%,#000 70%)}
 .bf-cd-k{display:flex;align-items:center;gap:8px;font-size:14px;line-height:20px;font-weight:700;letter-spacing:.01em;color:#ede9e6;margin-bottom:8px}
