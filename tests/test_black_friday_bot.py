@@ -9,7 +9,7 @@ single function every other module asks.
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -1247,3 +1247,785 @@ def test_a_successful_grant_still_reports_the_new_total(admin):
     admin(traffic=100 * GB)
     result = asyncio.run(_real_topup(ALICE, 10, username="alice"))
     assert result["new_traffic_bytes"] == 110 * GB
+
+
+# ======================================================================================
+# Black Friday: buying a NEW panel, and choosing where a volume goes
+# ======================================================================================
+
+from dataclasses import asdict as _asdict
+
+from backend.bot import profit
+from backend.bot.routers import shop as shop_router
+from backend.bot.states import BlackFriday as BFStates
+
+NEWBIE = 333
+SUPER = 1
+
+
+class RecMessage(FakeMessage):
+    """A message that also remembers the markup of what it answered."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.markups: list = []
+
+    async def answer(self, text, reply_markup=None, **kwargs):
+        self.answers.append(text)
+        self.markups.append(reply_markup)
+
+    def callback_data(self):
+        markup = self.markups[-1]
+        return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+
+class RecCall(FakeCall):
+    def __init__(self, user_id, data):
+        super().__init__(user_id, data)
+        self.message = RecMessage(user_id)
+
+
+@pytest.fixture()
+def newpanel(handlers, monkeypatch):
+    """The handlers fixture plus a panel API that offers one server."""
+    monkeypatch.setattr(bf_router.panel_client, "list_panels", AsyncMock(return_value=["srv1"]))
+    monkeypatch.setattr(bf_router.panel_client, "check_username_taken", AsyncMock(return_value=False))
+    monkeypatch.setattr(shop_router, "settings", SimpleNamespace(
+        superadmin_id_list=[SUPER], media_dir=".", panel_link_url="https://panel.test/",
+    ))
+    bf_router._in_flight_payments.discard(NEWBIE)
+    yield handlers
+    bf_router._in_flight_payments.discard(NEWBIE)
+
+
+def _enter_as(user_id):
+    message, state = RecMessage(user_id), FakeState()
+    asyncio.run(bf_router._enter(message, state, user_id))
+    return message, state
+
+
+def _choose(user_id, state, data):
+    call = RecCall(user_id, data)
+    asyncio.run(bf_router.pick_package(call, state))
+    return call
+
+
+def _new_panel_state(selection=None, username="newbie", password="pass1234", server="srv1"):
+    """The state of someone who has just typed a valid password."""
+    state = FakeState({
+        "bf_sel": selection or {"kind": "pkg", "paid_gb": 1000.0},
+        "bf_new_server": server, "bf_new_username": username,
+    })
+    message = RecMessage(NEWBIE, text=password)
+    asyncio.run(bf_router.get_new_password(message, state))
+    return state, message
+
+
+def _pay_new(state, bot=None, user_id=NEWBIE):
+    bot = bot or FakeBot()
+    asyncio.run(bf_router.pay_from_wallet(FakeCall(user_id), state, bot))
+    return bot
+
+
+# ---- entry and the target question --------------------------------------------------------------
+
+def test_a_user_with_no_panel_gets_the_packages_not_the_not_linked_notice(newpanel):
+    message, state = _enter_as(NEWBIE)
+
+    assert texts.NOT_LINKED_RETRY not in message.answers
+    assert state.state == BFStates.choosing
+    assert message.callback_data() == [
+        "bf_pkg:1000", "bf_pkg:2000", "bf_pkg:3000", "bf_pkg:5000", "bf_pkg:custom",
+    ]
+
+
+def test_the_package_screen_shows_the_public_terms(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.set_admin_price("alice", 2000)
+
+    message, _ = _enter_as(ALICE)  # a reseller with a special price
+
+    labels = [b.text for row in message.markups[-1].inline_keyboard for b in row]
+    assert "2,400,000" in labels[0]  # the public price, not alice's 2000
+    assert "260" in labels[0]
+
+
+def test_a_debtor_without_a_panel_still_meets_the_debt_screen(newpanel):
+    newpanel.ledger.add_debt("ghost", NEWBIE, 10_000)
+
+    message, state = _enter_as(NEWBIE)
+
+    assert state.state is None
+    assert message.answers[0].startswith(texts.BF_BLOCKED_BY_DEBT.split("{")[0])
+
+
+def test_a_package_with_no_panel_goes_straight_to_the_new_panel_path(newpanel):
+    state = FakeState()
+    call = _choose(NEWBIE, state, "bf_pkg:1000")
+
+    assert state.state == BFStates.new_username
+    assert state.data["bf_new_server"] == "srv1"
+    assert call.message.answers == [texts.SHOP_ASK_USERNAME]
+
+
+def test_several_servers_ask_which_one(newpanel, monkeypatch):
+    monkeypatch.setattr(
+        bf_router.panel_client, "list_panels", AsyncMock(return_value=["srv1", "srv2"])
+    )
+    state = FakeState()
+    call = _choose(NEWBIE, state, "bf_pkg:1000")
+
+    assert state.state == BFStates.new_server
+    assert call.message.callback_data() == ["bf_srv:srv1", "bf_srv:srv2"]
+
+    forged = RecCall(NEWBIE, "bf_srv:evil")
+    asyncio.run(bf_router.pick_server(forged, state))
+    assert forged.alerts == [texts.BF_NOT_AVAILABLE]
+    assert state.state == BFStates.new_server
+
+    real = RecCall(NEWBIE, "bf_srv:srv2")
+    asyncio.run(bf_router.pick_server(real, state))
+    assert state.state == BFStates.new_username
+    assert state.data["bf_new_server"] == "srv2"
+
+
+def test_no_servers_at_all_is_reported(newpanel, monkeypatch):
+    monkeypatch.setattr(bf_router.panel_client, "list_panels", AsyncMock(return_value=[]))
+    state = FakeState()
+    call = _choose(NEWBIE, state, "bf_pkg:1000")
+    assert call.message.answers == [texts.NO_MARZBAN_PANELS]
+    assert state.state is None
+
+
+def test_a_pending_panel_request_stops_the_new_panel_path(newpanel):
+    newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=100, receipt_path="x"
+    )
+    state = FakeState()
+    call = _choose(NEWBIE, state, "bf_pkg:1000")
+    assert call.message.answers == [texts.SHOP_ALREADY_PENDING]
+    assert state.state is None
+
+
+def test_a_user_with_panels_is_asked_where_the_volume_goes(newpanel):
+    newpanel.ledger.ensure_panel_metadata(ALICE, ["alice"])
+    state = FakeState()
+    call = _choose(ALICE, state, "bf_pkg:1000")
+
+    assert state.state == BFStates.choosing_target
+    assert call.message.callback_data() == ["bf_target:p:alice", "bf_target:new"]
+    labels = [b.text for row in call.message.markups[-1].inline_keyboard for b in row]
+    assert "پنل شماره 1" in labels[0]
+    assert labels[-1] == texts.BTN_BF_NEW_PANEL
+
+
+def test_a_custom_amount_is_asked_about_its_target_too(newpanel):
+    state = FakeState()
+    call = _choose(ALICE, state, "bf_pkg:custom")
+    assert state.state == BFStates.custom_amount
+
+    message = RecMessage(ALICE, text="۳۰۰")
+    asyncio.run(bf_router.get_custom_amount(message, state))
+    assert state.state == BFStates.choosing_target
+    assert state.data["bf_sel"] == {"kind": "custom", "paid_gb": 300.0}
+
+
+def test_a_forged_target_for_someone_elses_panel_is_refused(newpanel, admin):
+    admin(username="bobpanel", telegram_id=BOB)
+    state = FakeState({"bf_sel": {"kind": "pkg", "paid_gb": 1000.0}})
+    state.state = BFStates.choosing_target
+    call = RecCall(ALICE, "bf_target:p:bobpanel")
+
+    asyncio.run(bf_router.pick_target(call, state))
+
+    assert call.alerts == [texts.NOT_LINKED_RETRY]
+    assert "bf" not in state.data
+    assert call.message.answers == []
+
+
+@pytest.mark.parametrize(
+    "special, total, gift",
+    [(2000, 2_000_000, 0), (2400, 2_400_000, 0), (2900, 2_400_000, 260)],
+)
+def test_an_existing_panel_target_uses_that_panels_price(newpanel, special, total, gift):
+    priced(newpanel.ledger, special=special)
+    state = FakeState({"bf_sel": {"kind": "pkg", "paid_gb": 1000.0}})
+    state.state = BFStates.choosing_target
+    call = RecCall(ALICE, "bf_target:p:alice")
+
+    asyncio.run(bf_router.pick_target(call, state))
+
+    quote = state.data["bf"]["quote"]
+    assert (quote["total"], quote["gift_gb"]) == (total, gift)
+    assert state.data["bf"]["kind"] == "topup" and state.data["bf"]["panel_username"] == "alice"
+    assert state.state == BFStates.awaiting_payment
+    assert call.message.callback_data() == ["bf_pay:card", "bf_pay:wallet"]
+
+
+def test_choosing_new_panel_from_the_target_keyboard(newpanel):
+    state = FakeState({"bf_sel": {"kind": "pkg", "paid_gb": 1000.0}})
+    state.state = BFStates.choosing_target
+    call = RecCall(ALICE, "bf_target:new")
+    asyncio.run(bf_router.pick_target(call, state))
+    assert state.state == BFStates.new_username
+
+
+# ---- username and password -------------------------------------------------------------------------
+
+def test_the_new_username_follows_the_shop_rules(newpanel, monkeypatch):
+    state = FakeState({"bf_sel": {"kind": "pkg", "paid_gb": 1000.0}})
+    state.state = BFStates.new_username
+
+    spaced = RecMessage(NEWBIE, text="my name")
+    asyncio.run(bf_router.get_new_username(spaced, state))
+    assert spaced.answers == [texts.USERNAME_NO_SPACE]
+
+    monkeypatch.setattr(bf_router.panel_client, "check_username_taken", AsyncMock(return_value=True))
+    taken = RecMessage(NEWBIE, text="alice")
+    asyncio.run(bf_router.get_new_username(taken, state))
+    assert taken.answers == [texts.SHOP_USERNAME_TAKEN]
+    assert "bf_new_username" not in state.data
+
+    monkeypatch.setattr(bf_router.panel_client, "check_username_taken", AsyncMock(return_value=False))
+    ok = RecMessage(NEWBIE, text="  NewBie ")
+    asyncio.run(bf_router.get_new_username(ok, state))
+    assert state.data["bf_new_username"] == "newbie"
+    assert state.state == BFStates.new_password
+
+
+def test_a_weak_password_is_refused(newpanel):
+    state = FakeState({
+        "bf_sel": {"kind": "pkg", "paid_gb": 1000.0},
+        "bf_new_server": "srv1", "bf_new_username": "newbie",
+    })
+    message = RecMessage(NEWBIE, text="short1")
+    asyncio.run(bf_router.get_new_password(message, state))
+    assert message.answers == [texts.SHOP_PASSWORD_WEAK]
+    assert "bf" not in state.data
+
+
+# ---- the new-panel quote ----------------------------------------------------------------------------
+
+def test_the_new_panel_quote_uses_the_global_price(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.set_admin_price("alice", 2000)  # irrelevant to a new panel
+
+    state, message = _new_panel_state()
+
+    quote = state.data["bf"]["quote"]
+    assert (quote["paid_gb"], quote["gift_gb"], quote["total"], quote["list_total"]) == (
+        1000, 260, 2_400_000, 2_900_000,
+    )
+    assert state.state == BFStates.awaiting_payment
+    text = message.answers[-1]
+    assert "srv1" in text and "newbie" in text and "2,400,000" in text
+    assert "1260" in text and "260" in text and "500,000" in text
+    assert message.callback_data() == ["bf_pay:card", "bf_pay:wallet"]
+
+
+def test_a_low_global_price_gives_a_new_panel_no_gift(newpanel):
+    priced(newpanel.ledger, global_price=2000)
+    state, _ = _new_panel_state()
+    quote = state.data["bf"]["quote"]
+    assert (quote["total"], quote["gift_gb"]) == (2_000_000, 0)
+
+
+def test_a_custom_new_panel_gets_no_gift(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    state, _ = _new_panel_state(selection={"kind": "custom", "paid_gb": 300.0})
+    quote = state.data["bf"]["quote"]
+    assert (quote["total"], quote["gift_gb"]) == (720_000, 0)
+
+
+# ---- paying from the wallet ---------------------------------------------------------------------------
+
+def test_the_wallet_pays_for_a_new_panel_and_stores_a_complete_request(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+
+    bot = _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 600_000
+    req = newpanel.ledger.get_pending_panel_request(NEWBIE)
+    assert (req["panel_name"], req["traffic_gb"], req["receipt_path"]) == ("srv1", 1260, "")
+    assert (req["desired_username"], req["desired_password"], req["referral_code_id"]) == (
+        "newbie", "pass1234", None,
+    )
+    assert (req["bf_total"], req["bf_paid_gb"], req["bf_gift_gb"], req["bf_list_amount"],
+            req["paid_method"]) == (2_400_000, 1000, 260, 2_900_000, "wallet")
+    assert state.state is None
+    [(chat, text)] = bot.messages
+    assert chat == SUPER and "بلک‌فرایدی" in text and "newbie" in text and "srv1" in text
+    # No ledger booking until the panel exists.
+    assert ledger_rows(newpanel.ledger, "bf_wallet") == []
+    assert newpanel.ledger.list_black_friday_purchases() == []
+
+
+def test_the_superadmin_notice_carries_the_approval_buttons(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    seen = []
+
+    class Bot(FakeBot):
+        async def send_message(self, chat_id, text, **kwargs):
+            seen.append(kwargs.get("reply_markup"))
+
+    _pay_new(state, Bot())
+    req = newpanel.ledger.get_pending_panel_request(NEWBIE)
+    data = [b.callback_data for row in seen[0].inline_keyboard for b in row]
+    assert data == [f"panel_req_approve:{req['id']}", f"panel_req_reject:{req['id']}"]
+
+
+def test_the_wallet_refuses_a_new_panel_it_cannot_cover(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 2_399_999)
+    state, _ = _new_panel_state()
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 2_399_999
+    assert newpanel.ledger.get_pending_panel_request(NEWBIE) is None
+    assert state.data  # they can top up and retry
+
+
+def test_a_pending_request_that_appeared_later_means_no_debit(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=10, receipt_path="x"
+    )
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+
+
+def test_a_request_that_loses_the_race_after_the_debit_is_refunded(newpanel, monkeypatch):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    monkeypatch.setattr(bf_router, "_create_new_panel_request", AsyncMock(return_value=None))
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+
+
+def test_a_request_that_cannot_be_stored_is_refunded(newpanel, monkeypatch):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    monkeypatch.setattr(
+        bf_router, "_create_new_panel_request", AsyncMock(side_effect=RuntimeError("disk"))
+    )
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+
+
+def test_a_taken_username_at_payment_asks_for_another_without_charging(newpanel, monkeypatch):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    monkeypatch.setattr(bf_router.panel_client, "check_username_taken", AsyncMock(return_value=True))
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+    assert state.state == BFStates.new_username
+
+
+def test_a_price_change_re_shows_the_new_panel_quote(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    newpanel.ledger.set_setting("price_per_gb", "2000")
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+    assert state.data["bf"]["quote"]["total"] == 2_000_000
+
+
+def test_nothing_is_charged_for_a_new_panel_once_the_event_ended(newpanel, event):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    event(False)
+
+    _pay_new(state)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+    assert newpanel.ledger.get_pending_panel_request(NEWBIE) is None
+
+
+def test_a_double_tap_on_a_new_panel_is_turned_away(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    bf_router._in_flight_payments.add(NEWBIE)
+    call = FakeCall(NEWBIE)
+
+    asyncio.run(bf_router.pay_from_wallet(call, state, FakeBot()))
+
+    assert call.alerts == [texts.PAYMENT_PROCESSING]
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+
+
+# ---- paying by card -------------------------------------------------------------------------------------
+
+def _new_card_receipt(handlers, monkeypatch, tmp_path, state, user_id=NEWBIE):
+    sent = []
+
+    async def fake_send(bot, **kwargs):
+        sent.append(kwargs)
+        return 1
+
+    monkeypatch.setattr(bf_router.notify, "send_receipt_to_superadmins", fake_send)
+    monkeypatch.setattr(
+        bf_router, "settings", SimpleNamespace(superadmin_id_list=[SUPER], media_dir=str(tmp_path))
+    )
+
+    class DownloadingBot(FakeBot):
+        async def download(self, photo, destination=None):
+            open(destination, "wb").write(b"x")
+
+    message = FakeMessage(user_id, photo=[object()])
+    asyncio.run(bf_router.get_receipt(message, state, DownloadingBot()))
+    return message, sent
+
+
+def test_a_card_receipt_creates_a_complete_new_panel_request(newpanel, monkeypatch, tmp_path):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 5_000)
+    state, _ = _new_panel_state()
+
+    message, sent = _new_card_receipt(newpanel, monkeypatch, tmp_path, state)
+
+    req = newpanel.ledger.get_pending_panel_request(NEWBIE)
+    assert req["receipt_path"].startswith(str(tmp_path))
+    assert (req["traffic_gb"], req["desired_username"], req["panel_name"]) == (1260, "newbie", "srv1")
+    assert (req["bf_total"], req["bf_paid_gb"], req["bf_gift_gb"], req["bf_list_amount"],
+            req["paid_method"]) == (2_400_000, 1000, 260, 2_900_000, "card")
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 5_000
+    [post] = sent
+    assert post["kind"] == "panel"
+    assert "بلک‌فرایدی" in post["caption"] and "2,400,000" in post["caption"]
+    data = [b.callback_data for row in post["reply_markup"].inline_keyboard for b in row]
+    assert data == [f"panel_req_approve:{req['id']}", f"panel_req_reject:{req['id']}"]
+    assert texts.SHOP_REQUEST_SUBMITTED in message.answers[0]
+
+
+def test_a_card_receipt_with_a_pending_request_is_not_stored_twice(newpanel, monkeypatch, tmp_path):
+    state, _ = _new_panel_state()
+    newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=10, receipt_path="x"
+    )
+
+    message, sent = _new_card_receipt(newpanel, monkeypatch, tmp_path, state)
+
+    assert sent == []
+    assert message.answers == [texts.SHOP_ALREADY_PENDING]
+
+
+# ---- approval and rejection ----------------------------------------------------------------------------
+
+class ReviewBot(FakeBot):
+    pass
+
+
+def _approve(request_id, monkeypatch, created=None):
+    created = created or AsyncMock(return_value={"id": 1})
+    monkeypatch.setattr(panel_client_module, "create_admin_for_shop", created)
+    call = FakeCall(SUPER, f"panel_req_approve:{request_id}")
+    bot = ReviewBot()
+    asyncio.run(shop_router.panel_request_approve(call, bot))
+    return call, bot, created
+
+
+def _reject(request_id, reason="no"):
+    message = FakeMessage(SUPER, text=reason)
+    bot = ReviewBot()
+    state = FakeState({"reject_request_id": request_id})
+    asyncio.run(shop_router.panel_request_reject_finish(message, state, bot))
+    return message, bot
+
+
+@pytest.mark.parametrize("method, sale_method", [("card", "bf_card"), ("wallet", "bf_wallet")])
+def test_approving_a_bf_new_panel_books_the_sale_and_the_purchase(
+    newpanel, monkeypatch, method, sale_method
+):
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=1260, receipt_path="",
+        desired_username="newbie", desired_password="pass1234",
+        bf_total=2_400_000, bf_paid_gb=1000, bf_gift_gb=260, bf_list_amount=2_900_000,
+        paid_method=method,
+    )
+
+    call, bot, created = _approve(request_id, monkeypatch)
+
+    created.assert_awaited_once()
+    assert created.await_args.kwargs["traffic_gb"] == 1260
+    assert newpanel.ledger.get_panel_request(request_id)["status"] == "approved"
+    [sale] = ledger_rows(newpanel.ledger, sale_method)
+    assert (sale["gb"], sale["amount"], sale["username"], sale["telegram_id"]) == (
+        1260, 2_400_000, "newbie", NEWBIE,
+    )
+    assert ledger_rows(newpanel.ledger, "shop") == []
+    [row] = newpanel.ledger.list_black_friday_purchases()
+    assert (row.kind, row.paid_gb, row.gift_gb, row.amount, row.list_amount, row.method,
+            row.username) == ("new_panel", 1000, 260, 2_400_000, 2_900_000, method, "newbie")
+    assert any(chat == NEWBIE for chat, _ in bot.messages)  # the buyer got the credentials
+
+
+def test_a_ledger_failure_never_blocks_the_buyers_credentials(newpanel, monkeypatch):
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=1260, receipt_path="",
+        desired_username="newbie", desired_password="pass1234",
+        bf_total=2_400_000, bf_paid_gb=1000, bf_gift_gb=260, bf_list_amount=2_900_000,
+        paid_method="card",
+    )
+    monkeypatch.setattr(shop_router.db, "record_sale", MagicMock(side_effect=RuntimeError("locked")))
+
+    call, bot, _ = _approve(request_id, monkeypatch)
+
+    assert newpanel.ledger.get_panel_request(request_id)["status"] == "approved"
+    assert any(chat == NEWBIE for chat, _ in bot.messages)
+
+
+def test_a_failed_panel_creation_moves_no_money(newpanel, monkeypatch):
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=1260, receipt_path="",
+        desired_username="newbie", desired_password="pass1234",
+        bf_total=2_400_000, bf_paid_gb=1000, bf_gift_gb=260, bf_list_amount=2_900_000,
+        paid_method="wallet",
+    )
+
+    _approve(request_id, monkeypatch, AsyncMock(side_effect=PanelClientError("down")))
+
+    assert newpanel.ledger.get_panel_request(request_id)["status"] == "pending"
+    assert ledger_rows(newpanel.ledger, "bf_wallet") == []
+    assert newpanel.ledger.list_black_friday_purchases() == []
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 0
+
+
+def test_a_normal_shop_approval_now_records_a_shop_sale(newpanel, monkeypatch):
+    priced(newpanel.ledger, global_price=2900)
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=200, receipt_path="x",
+        desired_username="plain", desired_password="pass1234",
+    )
+
+    _approve(request_id, monkeypatch)
+
+    [sale] = ledger_rows(newpanel.ledger, "shop")
+    assert (sale["gb"], sale["amount"], sale["username"], sale["telegram_id"]) == (
+        200, 580_000, "plain", NEWBIE,
+    )
+    assert newpanel.ledger.list_black_friday_purchases() == []
+    assert "shop" not in newpanel.ledger.NOT_SALES
+    assert "shop" in texts.SALES_METHOD_LABELS
+
+
+def test_a_shop_sale_uses_the_referral_codes_price(newpanel, monkeypatch):
+    priced(newpanel.ledger, global_price=2900)
+    with newpanel.ledger._connect() as conn:
+        conn.execute(
+            "INSERT INTO referral_codes (code, owner_telegram_id, price_per_gb, bonus_percent) "
+            "VALUES ('R1', 777, 2500, 0)"
+        )
+        code_id = conn.execute("SELECT id FROM referral_codes WHERE code = 'R1'").fetchone()["id"]
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=100, receipt_path="x",
+        referral_code_id=code_id, desired_username="plain", desired_password="pass1234",
+    )
+
+    _approve(request_id, monkeypatch)
+
+    [sale] = ledger_rows(newpanel.ledger, "shop")
+    assert sale["amount"] == 250_000
+
+
+def test_the_shop_sale_counts_as_takings_in_the_report(newpanel, monkeypatch):
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=200, receipt_path="x",
+        desired_username="plain", desired_password="pass1234",
+    )
+    priced(newpanel.ledger, global_price=2900)
+    _approve(request_id, monkeypatch)
+    report = profit.monthly_report(1)
+    assert report["months"][0]["revenue"] == 580_000
+
+
+def _wallet_paid_request(newpanel):
+    priced(newpanel.ledger, global_price=2900)
+    newpanel.ledger.add_wallet_balance(NEWBIE, 3_000_000)
+    state, _ = _new_panel_state()
+    _pay_new(state)
+    return newpanel.ledger.get_pending_panel_request(NEWBIE)["id"]
+
+
+def test_rejecting_a_wallet_paid_request_refunds_exactly_once(newpanel):
+    request_id = _wallet_paid_request(newpanel)
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 600_000
+
+    message, bot = _reject(request_id)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+    assert newpanel.ledger.get_panel_request(request_id)["status"] == "rejected"
+    [(chat, text)] = bot.messages
+    assert chat == NEWBIE and "2,400,000" in text and "3,000,000" in text
+    assert "2,400,000" in message.answers[-1]
+
+    again, bot2 = _reject(request_id)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 3_000_000
+    assert again.answers == [texts.ALREADY_HANDLED]
+    assert bot2.messages == []
+
+
+def test_rejecting_a_card_paid_request_refunds_nothing(newpanel, monkeypatch, tmp_path):
+    priced(newpanel.ledger, global_price=2900)
+    state, _ = _new_panel_state()
+    _new_card_receipt(newpanel, monkeypatch, tmp_path, state)
+    request_id = newpanel.ledger.get_pending_panel_request(NEWBIE)["id"]
+
+    message, bot = _reject(request_id)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 0
+    assert newpanel.ledger.get_panel_request(request_id)["status"] == "rejected"
+    assert texts.BF_NEW_REJECT_REFUND.split("{")[0] not in bot.messages[0][1]
+
+
+def test_rejecting_a_normal_shop_request_refunds_nothing(newpanel):
+    request_id = newpanel.ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=200, receipt_path="x",
+        desired_username="plain", desired_password="pass1234",
+    )
+    _reject(request_id)
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 0
+
+
+def test_an_approved_request_cannot_be_rejected_into_a_refund(newpanel, monkeypatch):
+    request_id = _wallet_paid_request(newpanel)
+    _approve(request_id, monkeypatch)
+
+    message, _ = _reject(request_id)
+
+    assert newpanel.ledger.get_wallet_balance(NEWBIE) == 600_000
+    assert message.answers == [texts.ALREADY_HANDLED]
+
+
+def test_the_pending_list_shows_the_quoted_bf_total(newpanel, monkeypatch):
+    request_id = _wallet_paid_request(newpanel)
+    newpanel.ledger.set_setting("price_per_gb", "9999")  # a recompute would show this
+    sent = []
+
+    class Bot(FakeBot):
+        async def send_photo(self, *args, **kwargs):
+            sent.append(kwargs)
+
+    monkeypatch.setattr(
+        shop_router, "settings", SimpleNamespace(superadmin_id_list=[SUPER], media_dir=".")
+    )
+    message = RecMessage(SUPER)
+    message.from_user = SimpleNamespace(id=SUPER)
+    asyncio.run(shop_router.list_pending_panel_requests(message, Bot()))
+
+    [caption] = message.answers
+    assert "بلک‌فرایدی" in caption and "2,400,000" in caption and "newbie" in caption
+
+
+# ---- schema ---------------------------------------------------------------------------------------------------
+
+def test_the_panel_request_columns_exist_and_init_is_idempotent(ledger):
+    ledger.init_db()
+    ledger.init_db()
+    columns = {r["name"] for r in sql(ledger, "PRAGMA table_info(panel_requests)")}
+    assert {"bf_total", "bf_paid_gb", "bf_gift_gb", "bf_list_amount", "paid_method"} <= columns
+
+
+def test_set_panel_request_bf_stamps_an_existing_row(ledger):
+    request_id = ledger.create_panel_request_if_unowned(
+        telegram_id=NEWBIE, panel_name="srv1", traffic_gb=1260, receipt_path="x"
+    )
+    assert ledger.set_panel_request_bf(
+        request_id, total=2_400_000, paid_gb=1000, gift_gb=260,
+        list_amount=2_900_000, paid_method="card",
+    )
+    req = ledger.get_panel_request(request_id)
+    assert (req["bf_total"], req["bf_paid_gb"], req["bf_gift_gb"], req["bf_list_amount"],
+            req["paid_method"]) == (2_400_000, 1000, 260, 2_900_000, "card")
+    assert not ledger.set_panel_request_bf(
+        999, total=1, paid_gb=1, gift_gb=0, list_amount=1, paid_method="card"
+    )
+
+
+# ---- menus -------------------------------------------------------------------------------------------------------
+
+PROSPECT_LAYOUT = [
+    [texts.BTN_REQUEST_PANEL, texts.BTN_MY_PANELS],
+    [texts.BTN_REQUEST_REFERRAL, texts.BTN_PANEL_PREVIEW],
+    [texts.BTN_SUPPORT],
+]
+UNLINKED_LAYOUT = [
+    [texts.BTN_WALLET, texts.BTN_MY_INVOICES],
+    [texts.BTN_MY_PANELS, texts.BTN_REQUEST_REFERRAL],
+    [texts.BTN_PANEL_PREVIEW, texts.BTN_SUPPORT],
+]
+
+
+@pytest.mark.parametrize(
+    "builder, layout",
+    [(keyboards.prospect_menu_kb, PROSPECT_LAYOUT), (keyboards.unlinked_menu_kb, UNLINKED_LAYOUT)],
+)
+def test_the_prospect_and_unlinked_menus_are_unchanged_outside_the_event(event, builder, layout):
+    event(False)
+    markup = builder()
+    assert _rows(markup) == layout
+    assert all(button.style is None for row in markup.keyboard for button in row)
+
+
+@pytest.mark.parametrize(
+    "builder, layout",
+    [(keyboards.prospect_menu_kb, PROSPECT_LAYOUT), (keyboards.unlinked_menu_kb, UNLINKED_LAYOUT)],
+)
+def test_the_prospect_and_unlinked_menus_get_the_red_button_during_the_event(event, builder, layout):
+    markup = builder()
+    rows = _rows(markup)
+    assert rows[0] == [texts.BTN_BLACK_FRIDAY]
+    assert markup.keyboard[0][0].style == "danger"
+    assert rows[1:] == layout
+
+
+# ---- stats -----------------------------------------------------------------------------------------------------------
+
+def test_stats_count_new_panel_purchases_beside_topups(ledger, event, monkeypatch):
+    import backend.utils.settings_store as store
+
+    monkeypatch.setattr(store, "black_friday_state", lambda: {"active": True, "ends_at": None})
+    add = ledger.insert_black_friday_purchase
+    add(telegram_id=ALICE, username="alice", kind="topup", paid_gb=1000, gift_gb=260,
+        amount=2_400_000, list_amount=2_900_000, method="card")
+    add(telegram_id=NEWBIE, username="newbie", kind="new_panel", paid_gb=2000, gift_gb=360,
+        amount=4_800_000, list_amount=5_800_000, method="wallet")
+
+    text = black_friday.stats_text()
+    assert "2 از 2 خریدار" in text
+    assert "3000" in text and "620" in text
+    assert "7,200,000" in text  # purchase money
+    assert "1,500,000" in text  # discount
+    assert "4,800,000" in text  # wallet
+
+    summary = profit.black_friday_summary()
+    assert summary["purchases"] == 2 and summary["buyers"] == 2
+    assert (summary["paid_gb"], summary["gift_gb"], summary["amount"], summary["discount"]) == (
+        3000, 620, 7_200_000, 1_500_000,
+    )
+    assert summary["cost"] == round(3620 * profit.cost_per_gb())
+    assert summary["profit"] == 7_200_000 - summary["cost"]
+    assert summary["settlements"] == 0
