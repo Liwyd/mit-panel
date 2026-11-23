@@ -340,6 +340,14 @@ def init_db() -> None:
         _ensure_column(conn, "debts", "last_warned_at", "TEXT")
         _ensure_column(conn, "panel_requests", "desired_username", "TEXT")
         _ensure_column(conn, "panel_requests", "desired_password", "TEXT")
+        # A Black Friday new-panel purchase carries its locked quote and how it
+        # was paid, so an approval after the event ended honours the price and a
+        # rejection knows whether to refund the wallet.
+        _ensure_column(conn, "panel_requests", "bf_total", "INTEGER")
+        _ensure_column(conn, "panel_requests", "bf_paid_gb", "REAL")
+        _ensure_column(conn, "panel_requests", "bf_gift_gb", "REAL")
+        _ensure_column(conn, "panel_requests", "bf_list_amount", "INTEGER")
+        _ensure_column(conn, "panel_requests", "paid_method", "TEXT")
         # Payment mode: 'delayed' (buy now pay later) or 'consumption' (pay for actual usage)
         _ensure_column(conn, "weekly_payment", "mode", "TEXT NOT NULL DEFAULT 'delayed'")
         conn.executescript(
@@ -1591,8 +1599,15 @@ def create_panel_request_if_unowned(
     telegram_id: int, panel_name: str, traffic_gb: float, receipt_path: str,
     referral_code_id: int | None = None, desired_username: str | None = None,
     desired_password: str | None = None,
+    *,
+    bf_total: int | None = None, bf_paid_gb: float | None = None,
+    bf_gift_gb: float | None = None, bf_list_amount: int | None = None,
+    paid_method: str | None = None,
 ) -> int | None:
-    """Atomically enforce one open request per account while inserting it."""
+    """Atomically enforce one open request per account while inserting it.
+
+    The optional Black Friday fields go into the same INSERT, so the row is
+    complete the moment it exists."""
     with _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
@@ -1603,12 +1618,28 @@ def create_panel_request_if_unowned(
             return None
         cur = conn.execute(
             "INSERT INTO panel_requests "
-            "(telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id, desired_username, desired_password) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id, desired_username, "
+            "desired_password, bf_total, bf_paid_gb, bf_gift_gb, bf_list_amount, paid_method) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (telegram_id, panel_name, traffic_gb, receipt_path, referral_code_id,
-             desired_username, desired_password),
+             desired_username, desired_password, bf_total, bf_paid_gb, bf_gift_gb,
+             bf_list_amount, paid_method),
         )
         return cur.lastrowid
+
+
+def set_panel_request_bf(
+    request_id: int, *, total: int, paid_gb: float, gift_gb: float,
+    list_amount: int, paid_method: str,
+) -> bool:
+    """Stamp an existing panel request with its Black Friday quote."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE panel_requests SET bf_total = ?, bf_paid_gb = ?, bf_gift_gb = ?, "
+            "bf_list_amount = ?, paid_method = ? WHERE id = ?",
+            (total, paid_gb, gift_gb, list_amount, paid_method, request_id),
+        )
+        return cur.rowcount == 1
 
 
 def release_panel_request_claim(request_id: int) -> bool:
