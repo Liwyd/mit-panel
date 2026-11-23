@@ -9,6 +9,16 @@ class TopUp(StatesGroup):
     receipt = State()
 
 
+class BlackFriday(StatesGroup):
+    """Its own group, so the TopUp payment handlers (delayed, consumption) can
+    never fire for a Black Friday quote."""
+
+    choosing = State()
+    custom_amount = State()
+    awaiting_payment = State()
+    receipt = State()
+
+
 class RejectReason(StatesGroup):
     reason = State()
 

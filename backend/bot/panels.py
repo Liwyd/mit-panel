@@ -20,21 +20,26 @@ from backend.bot.units import bytes_to_gb
 logger = logging.getLogger(__name__)
 
 
-async def safe_get_admins(message: Message) -> list[dict] | None:
+async def safe_get_admins(message: Message, user_id: int | None = None) -> list[dict] | None:
     """Their panels, or None if the panel API couldn't be reached.
 
     None is distinct from []: an empty list means "no panels linked", None means
     "we don't know". The caller must not treat an outage as an unlinked account,
     and the user is told what happened rather than being met with silence.
+
+    `user_id` defaults to the sender; a callback passes its own, since the
+    message a button is attached to was sent by the bot.
     """
+    if user_id is None:
+        user_id = message.from_user.id
     try:
-        admins = await panel_client.get_admins(message.from_user.id)
+        admins = await panel_client.get_admins(user_id)
     except Exception as exc:
-        logger.error(f"panel lookup failed for {message.from_user.id}: {exc}")
+        logger.error(f"panel lookup failed for {user_id}: {exc}")
         await message.answer(texts.PANEL_UNREACHABLE)
         return None
     if admins:
-        db.set_user_linked(message.from_user.id, True)
+        db.set_user_linked(user_id, True)
     return admins
 
 
