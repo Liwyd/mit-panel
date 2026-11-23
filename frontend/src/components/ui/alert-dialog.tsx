@@ -17,7 +17,7 @@ const AlertDialogOverlay = React.forwardRef<
     <AlertDialogPrimitive.Overlay
         ref={ref}
         className={cn(
-            "fixed inset-0 z-50 bg-foreground/25 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "fixed inset-0 z-50 bg-foreground/25 backdrop-blur-md data-[state=open]:duration-200 data-[state=closed]:duration-150 [animation-timing-function:var(--ease-out)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             className
         )}
         {...props}
@@ -36,7 +36,7 @@ const AlertDialogContent = React.forwardRef<
         <AlertDialogPrimitive.Content
             ref={ref}
             className={cn(
-                "fixed left-[50%] top-[calc(50%_+_((env(safe-area-inset-top)_-_env(safe-area-inset-bottom))/2))] z-50 flex w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_2rem)] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden border border-border bg-card shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-card",
+                "fixed left-[50%] top-[calc(50%_+_((env(safe-area-inset-top)_-_env(safe-area-inset-bottom))/2))] z-50 flex w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_2rem)] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden border border-border bg-card shadow-2xl data-[state=open]:duration-200 data-[state=closed]:duration-150 [animation-timing-function:var(--ease-out)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.96] data-[state=open]:zoom-in-[0.96] data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-card",
                 className
             )}
             {...props}
