@@ -73,6 +73,9 @@ def _fast(monkeypatch):
     monkeypatch.setattr(broadcast, "PACE_SECONDS", 0)
     monkeypatch.setattr(broadcast.db, "list_known_users", lambda: [OWNER, 1, 2, 3])
     monkeypatch.setattr(broadcast.db, "list_linked_users", lambda: [OWNER, 2])
+    from backend.bot.config import bot_config
+
+    monkeypatch.setattr(type(bot_config), "superadmin_id_list", property(lambda self: [OWNER]))
     broadcast.release()
     yield
     broadcast.release()
@@ -171,8 +174,10 @@ def test_preview_goes_to_superadmin_and_shows_counts():
     calls, answers = asyncio.run(go())
     assert calls == [("copy", OWNER, OWNER, [5])]
     buttons = [b.text for row in answers[-1][1].inline_keyboard for b in row]
-    assert buttons[0] == texts.BTN_BROADCAST_ALL.format(count=4)
-    assert buttons[1] == texts.BTN_BROADCAST_LINKED.format(count=2)
+    # The superadmin saw the preview and is not a recipient, so the counts
+    # leave them out (see _fast: OWNER is a superadmin).
+    assert buttons[0] == texts.BTN_BROADCAST_ALL.format(count=3)
+    assert buttons[1] == texts.BTN_BROADCAST_LINKED.format(count=1)
 
 
 def test_empty_preview():
@@ -273,3 +278,35 @@ def test_cancel_and_clear():
 
     cleared, st, data = asyncio.run(go())
     assert cleared == [] and st is None and data == {}
+
+
+def test_a_command_is_not_queued():
+    async def go():
+        state = _state()
+        message = FakeMessage(9, text="/start")
+        await bc_router.collect_message(message, state)
+        return (await state.get_data()).get("draft", []), message.answers
+
+    draft, answers = asyncio.run(go())
+    assert draft == []
+    assert answers[0][0] == texts.BROADCAST_NO_COMMANDS
+
+
+def test_a_preview_that_cannot_be_copied_says_so():
+    class Broken(FakeBot):
+        async def copy_messages(self, chat_id, from_chat_id, message_ids):
+            raise RuntimeError("message can't be copied")
+
+    async def go():
+        state, call = _state(), FakeCall("bc:preview")
+        await _collect(state, FakeMessage(5))
+        await bc_router.preview(call, state, Broken())
+        return call.message.answers
+
+    answers = asyncio.run(go())
+    assert answers[-1][0] == texts.BROADCAST_PREVIEW_FAILED
+
+
+def test_the_audience_leaves_superadmins_out():
+    assert broadcast.audience("all") == [1, 2, 3]
+    assert broadcast.audience("linked") == [2]

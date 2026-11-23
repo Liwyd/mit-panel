@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
@@ -13,6 +14,8 @@ from backend.bot import broadcast, keyboards, texts
 from backend.bot.filters import SuperadminFilter
 from backend.bot.nav import ALL_MENU_TEXTS, superadmin_kb
 from backend.bot.states import Broadcast
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="broadcast")
 router.message.filter(SuperadminFilter())
@@ -41,6 +44,11 @@ async def start_broadcast(message: Message, state: FSMContext) -> None:
 
 @router.message(Broadcast.collect, ~F.text.in_(ALL_MENU_TEXTS))
 async def collect_message(message: Message, state: FSMContext) -> None:
+    # A command typed while collecting (/start, say) is never news for every
+    # user; keep it out of the queue rather than broadcast it.
+    if (message.text or "").startswith("/"):
+        await message.answer(texts.BROADCAST_NO_COMMANDS)
+        return
     async with _collect_lock:
         data = await state.get_data()
         draft: list[dict] = list(data.get("draft", []))
@@ -80,7 +88,12 @@ async def preview(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
         return
     chat_id = call.from_user.id
     await call.message.answer(texts.BROADCAST_PREVIEW_HEADER)
-    await broadcast.send_draft(bot, chat_id, chat_id, draft)
+    try:
+        await broadcast.send_draft(bot, chat_id, chat_id, draft)
+    except Exception:
+        logger.exception("broadcast preview failed")
+        await call.message.answer(texts.BROADCAST_PREVIEW_FAILED)
+        return
     kb = InlineKeyboardBuilder()
     kb.button(
         text=texts.BTN_BROADCAST_ALL.format(count=len(broadcast.audience("all"))),
