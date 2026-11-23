@@ -550,6 +550,57 @@ def test_a_bf_invoice_receipt_marks_it_paid_and_books_it_once(ledger, granted):
     assert (row.kind, row.amount, row.list_amount) == ("invoice", 2_400_000, 2_900_000)
 
 
+def _traffic_invoice_request(ledger):
+    invoice = ledger.create_invoice(
+        telegram_id=ALICE, amount=2_000_000, description="x", due_at=None,
+        admin_username="alice", traffic_gb=1000,
+    )
+    request = ledger.create_request(
+        admin_telegram_id=ALICE, admin_username=None, requested_gb=0,
+        toman_amount=2_000_000, receipt_path="", kind="invoice", invoice_id=invoice,
+    )
+    return invoice, request
+
+
+def test_a_failed_invoice_grant_leaves_no_sale_row(ledger, monkeypatch):
+    monkeypatch.setattr(
+        panel_client_module, "topup", AsyncMock(side_effect=PanelClientError("down"))
+    )
+    invoice, request = _traffic_invoice_request(ledger)
+
+    assert not asyncio.run(approvals.approve_request(FakeBot(), request, 999)).ok
+
+    assert ledger.get_invoice(invoice).status != "paid"
+    assert ledger_rows(ledger, "invoice") == []
+
+
+def test_a_re_approved_traffic_invoice_books_one_row_with_its_gb(ledger, monkeypatch):
+    invoice, request = _traffic_invoice_request(ledger)
+    monkeypatch.setattr(
+        panel_client_module, "topup", AsyncMock(side_effect=PanelClientError("down"))
+    )
+    assert not asyncio.run(approvals.approve_request(FakeBot(), request, 999)).ok
+    monkeypatch.setattr(
+        panel_client_module, "topup", AsyncMock(return_value={"new_traffic_bytes": GB})
+    )
+
+    assert asyncio.run(approvals.approve_request(FakeBot(), request, 999)).ok
+
+    [row] = ledger_rows(ledger, "invoice")
+    assert (row["gb"], row["amount"], row["username"]) == (1000, 2_000_000, "alice")
+
+
+def test_a_manual_invoice_is_booked_without_gb_or_panel(ledger, granted):
+    invoice = ledger.create_invoice(telegram_id=ALICE, amount=50_000, description="x", due_at=None)
+    request = ledger.create_request(
+        admin_telegram_id=ALICE, admin_username=None, requested_gb=0,
+        toman_amount=50_000, receipt_path="", kind="invoice", invoice_id=invoice,
+    )
+    assert asyncio.run(approvals.approve_request(FakeBot(), request, 999)).ok
+    [row] = ledger_rows(ledger, "invoice")
+    assert (row["gb"], row["username"]) == (0, None)
+
+
 def test_a_normal_invoice_receipt_writes_no_discount(ledger, granted):
     invoice = ledger.create_invoice(telegram_id=ALICE, amount=50_000, description="x", due_at=None)
     request = ledger.create_request(
