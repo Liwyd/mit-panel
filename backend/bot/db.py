@@ -305,6 +305,24 @@ def init_db() -> None:
             """
         )
 
+        # One row per completed Black Friday purchase or discounted settlement.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS black_friday_purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER,
+                username TEXT,
+                kind TEXT NOT NULL,
+                paid_gb REAL NOT NULL DEFAULT 0,
+                gift_gb REAL NOT NULL DEFAULT 0,
+                amount INTEGER NOT NULL DEFAULT 0,
+                list_amount INTEGER NOT NULL DEFAULT 0,
+                method TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
         # Columns added after the tables above first shipped.
         _ensure_column(conn, "topup_requests", "kind", "TEXT NOT NULL DEFAULT 'topup'")
         _ensure_column(conn, "bot_users", "is_linked", "INTEGER NOT NULL DEFAULT 0")
@@ -312,6 +330,11 @@ def init_db() -> None:
         _ensure_column(conn, "tutorials", "source_message_id", "INTEGER")
         _ensure_column(conn, "debts", "overdue_since", "TEXT")
         _ensure_column(conn, "topup_requests", "invoice_id", "INTEGER")
+        # Black Friday requests: what was paid for, what was gifted, and the
+        # list-price amount (a top-up) or the debt/invoice amount it settles.
+        _ensure_column(conn, "topup_requests", "bf_paid_gb", "REAL")
+        _ensure_column(conn, "topup_requests", "bf_gift_gb", "REAL")
+        _ensure_column(conn, "topup_requests", "bf_credit_amount", "INTEGER")
         # When a non-payment warning was last sent for a bill.
         _ensure_column(conn, "invoices", "last_warned_at", "TEXT")
         _ensure_column(conn, "debts", "last_warned_at", "TEXT")
@@ -556,6 +579,9 @@ class TopupRequest:
     reviewed_at: str | None
     kind: str = "topup"
     invoice_id: int | None = None
+    bf_paid_gb: float | None = None
+    bf_gift_gb: float | None = None
+    bf_credit_amount: int | None = None
 
 
 def create_request(
@@ -567,6 +593,9 @@ def create_request(
     receipt_path: str,
     kind: str = "topup",
     invoice_id: int | None = None,
+    bf_paid_gb: float | None = None,
+    bf_gift_gb: float | None = None,
+    bf_credit_amount: int | None = None,
 ) -> int:
     now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
@@ -574,8 +603,8 @@ def create_request(
             """
             INSERT INTO topup_requests
                 (admin_telegram_id, admin_username, requested_gb, toman_amount, receipt_path,
-                 status, created_at, kind, invoice_id)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                 status, created_at, kind, invoice_id, bf_paid_gb, bf_gift_gb, bf_credit_amount)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
             """,
             (
                 admin_telegram_id,
@@ -586,6 +615,9 @@ def create_request(
                 now,
                 kind,
                 invoice_id,
+                bf_paid_gb,
+                bf_gift_gb,
+                bf_credit_amount,
             ),
         )
         return cur.lastrowid
@@ -1865,10 +1897,17 @@ WALLET_CHARGE_METHOD = "wallet_charge"
 # Traffic the superadmin handed over without charging: part of a panel's
 # history, but not a sale.
 GRANT_METHOD = "grant"
+# Black Friday purchases: real takings, kept apart from "card"/"wallet" so the
+# event can be reported on its own.
+BF_CARD_METHOD = "bf_card"
+BF_WALLET_METHOD = "bf_wallet"
+# What a Black Friday settlement waived: a negative ledger row so profit can be
+# worked out, never takings.
+BF_DISCOUNT_METHOD = "bf_discount"
 # Ledger entries that are payments rather than sales, kept out of the takings.
 PAYMENT_METHODS = (SETTLEMENT_METHOD, WALLET_CHARGE_METHOD)
 # Everything in the ledger that isn't takings.
-NOT_SALES = (GRANT_METHOD, *PAYMENT_METHODS)
+NOT_SALES = (GRANT_METHOD, *PAYMENT_METHODS, BF_DISCOUNT_METHOD)
 
 
 @dataclass
@@ -1907,11 +1946,58 @@ def list_sales_for(username: str, limit: int = 20) -> list[Sale]:
     so they stay out of it."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM sales WHERE username = ? AND method != ? "
+            "SELECT * FROM sales WHERE username = ? AND method NOT IN (?, ?) "
             "ORDER BY created_at DESC LIMIT ?",
-            (username, SETTLEMENT_METHOD, limit),
+            (username, SETTLEMENT_METHOD, BF_DISCOUNT_METHOD, limit),
         ).fetchall()
         return [Sale(**dict(r)) for r in rows]
+
+
+@dataclass
+class BlackFridayPurchase:
+    id: int
+    telegram_id: int | None
+    username: str | None
+    kind: str  # 'topup' | 'settlement' | 'invoice'
+    paid_gb: float
+    gift_gb: float
+    amount: int  # money actually paid
+    list_amount: int  # what it would have cost at the admin's own price
+    method: str  # 'card' | 'wallet'
+    created_at: str
+
+
+def insert_black_friday_purchase(
+    *,
+    telegram_id: int | None,
+    username: str | None,
+    kind: str,
+    paid_gb: float,
+    gift_gb: float,
+    amount: int,
+    list_amount: int,
+    method: str,
+) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO black_friday_purchases "
+            "(telegram_id, username, kind, paid_gb, gift_gb, amount, list_amount, method, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (telegram_id, username, kind, paid_gb, gift_gb, amount, list_amount, method, now),
+        )
+        return cur.lastrowid
+
+
+def list_black_friday_purchases(since: str | None = None) -> list[BlackFridayPurchase]:
+    query = "SELECT * FROM black_friday_purchases"
+    params: tuple = ()
+    if since is not None:
+        query += " WHERE created_at >= ?"
+        params = (since,)
+    query += " ORDER BY created_at, id"
+    with _connect() as conn:
+        return [BlackFridayPurchase(**dict(r)) for r in conn.execute(query, params).fetchall()]
 
 
 def backfill_sales_from_requests() -> int:
