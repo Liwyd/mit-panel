@@ -1,11 +1,16 @@
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
-from backend.bot import texts
+from backend.bot import black_friday, texts
 
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()
+    # While the event runs the red button sits alone on a first row; the rest of
+    # the layout below is exactly what it is the rest of the year.
+    bf_active = black_friday.is_active()
+    if bf_active:
+        kb.row(KeyboardButton(text=texts.BTN_BLACK_FRIDAY, style="danger"))
     kb.button(text=texts.BTN_TOPUP)
     kb.button(text=texts.BTN_MY_PANELS)
     kb.button(text=texts.BTN_WALLET)
@@ -18,7 +23,10 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     kb.button(text=texts.BTN_REQUEST_REFERRAL)
     kb.button(text=texts.BTN_PANEL_PREVIEW)
     kb.button(text=texts.BTN_SUPPORT)
-    kb.adjust(2, 2, 2, 2, 2, 1)
+    if bf_active:
+        kb.adjust(1, 2, 2, 2, 2, 2, 1)
+    else:
+        kb.adjust(2, 2, 2, 2, 2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -112,8 +120,9 @@ def finance_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_GRANT_WALLET,
         texts.BTN_TOGGLE_DELAYED,
         texts.BTN_TOGGLE_CONSUMPTION,
+        texts.BTN_BF_STATS,
         texts.BTN_BACK,
-        layout=(2, 2, 2, 2),
+        layout=(2, 2, 2, 2, 1, 1),
     )
 
 
@@ -197,6 +206,67 @@ def payment_methods_kb() -> InlineKeyboardMarkup:
     kb.button(text=texts.BTN_PAY_WALLET, callback_data="pay_method:wallet")
     kb.button(text=texts.BTN_PAY_DELAYED, callback_data="pay_method:weekly")
     kb.button(text=texts.BTN_PAY_CONSUMPTION, callback_data="pay_method:consumption")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_payment_methods_kb() -> InlineKeyboardMarkup:
+    """Black Friday takes a card receipt or the wallet and nothing else: no
+    delayed and no consumption credit, so this is its own keyboard with its own
+    callbacks and is never mixed with payment_methods_kb()."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_PAY_CARD, callback_data="bf_pay:card")
+    kb.button(text=texts.BTN_PAY_WALLET, callback_data="bf_pay:wallet")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_packages_kb(quotes, custom: bool = True) -> InlineKeyboardMarkup:
+    """One button per package (label shows the gift when there is one), plus the
+    free-form amount."""
+    kb = InlineKeyboardBuilder()
+    for quote in quotes:
+        if quote.gift_gb:
+            label = texts.BF_PACKAGE_LABEL.format(paid=int(quote.paid_gb), gift=int(quote.gift_gb))
+        else:
+            label = texts.BF_PACKAGE_LABEL_NO_GIFT.format(paid=int(quote.paid_gb))
+        kb.button(text=f"{label} · {quote.total:,}", callback_data=f"bf_pkg:{int(quote.paid_gb)}")
+    if custom:
+        kb.button(text=texts.BTN_BF_CUSTOM, callback_data="bf_pkg:custom")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_items_kb(items) -> InlineKeyboardMarkup:
+    """A pay button per open debt/invoice, showing the event-rate amount."""
+    kb = InlineKeyboardBuilder()
+    for item in items:
+        if item.kind == "debt":
+            label = texts.BF_BTN_PAY_DEBT.format(username=item.ref, amount=item.discounted)
+            data = f"bf_item:d:{item.ref}"
+        else:
+            label = texts.BF_BTN_PAY_INVOICE.format(id=item.ref, amount=item.discounted)
+            data = f"bf_item:i:{item.ref}"
+        kb.button(text=label, callback_data=data)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def bf_open_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_BF_OPEN, callback_data="bf_open")
+    return kb.as_markup()
+
+
+def forecast_kb(username: str, show_buy: bool) -> InlineKeyboardMarkup | None:
+    """The daily forecast's buttons. Outside the event this is exactly the old
+    «شارژ پنل» button (or none); during it the Black Friday entry joins it."""
+    if not black_friday.is_active():
+        return topup_panel_kb(username) if show_buy else None
+    kb = InlineKeyboardBuilder()
+    if show_buy:
+        kb.button(text=texts.BTN_TOPUP_THIS_PANEL, callback_data=f"pick:topup:{username}")
+    kb.button(text=texts.BTN_BF_OPEN, callback_data="bf_open")
     kb.adjust(1)
     return kb.as_markup()
 
