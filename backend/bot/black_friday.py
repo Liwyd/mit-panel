@@ -40,8 +40,11 @@ CUSTOM_MAX_GB = 6000
 KIND_TOPUP = "bf_topup"
 KIND_SETTLEMENT = "bf_settlement"
 PURCHASE_TOPUP = "topup"
+PURCHASE_NEW_PANEL = "new_panel"
 PURCHASE_SETTLEMENT = "settlement"
 PURCHASE_INVOICE = "invoice"
+# Rows that count as purchases of traffic in the stats (the rest are settlements).
+PURCHASE_KINDS = (PURCHASE_TOPUP, PURCHASE_NEW_PANEL)
 METHOD_CARD = "card"
 METHOD_WALLET = "wallet"
 
@@ -390,6 +393,21 @@ def request_caption(req) -> str:
     )
 
 
+def panel_request_caption(req: dict) -> str:
+    """What the superadmin reads for a Black Friday new-panel request (a
+    `panel_requests` row). Built from the stored quote, never recomputed."""
+    method = texts.BF_NEW_METHOD_WALLET if req.get("paid_method") == METHOD_WALLET else texts.BF_NEW_METHOD_CARD
+    paid_gb = req.get("bf_paid_gb") or 0
+    gift_gb = req.get("bf_gift_gb") or 0
+    return texts.BF_NEW_PANEL_CAPTION.format(
+        id=req["id"], telegram_id=req["telegram_id"],
+        server=escape(req.get("panel_name") or "—"),
+        username=escape(req.get("desired_username") or "—"),
+        paid_gb=paid_gb, gift_gb=gift_gb, granted_gb=req["traffic_gb"],
+        total=req.get("bf_total") or 0, method=method,
+    )
+
+
 # ---- forecast ------------------------------------------------------------------
 
 def forecast_block(telegram_id: int, username: str) -> str:
@@ -433,7 +451,7 @@ def stats_text() -> str:
         text += texts.BF_STATS_INACTIVE
 
     rows = db.list_black_friday_purchases()
-    purchases = [r for r in rows if r.kind == PURCHASE_TOPUP]
+    purchases = [r for r in rows if r.kind in PURCHASE_KINDS]
     settlements = [r for r in rows if r.kind in (PURCHASE_SETTLEMENT, PURCHASE_INVOICE)]
     if not rows:
         return text + texts.BF_STATS_NONE

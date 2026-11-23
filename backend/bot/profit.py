@@ -152,7 +152,7 @@ def black_friday_summary() -> dict:
     rows = db.list_black_friday_purchases()
     # Same split as the bot's own stats: top-ups are purchases; settled debts
     # and paid invoices are "settlements".
-    purchases = [r for r in rows if r.kind == "topup"]
+    purchases = [r for r in rows if r.kind in ("topup", "new_panel")]
     settlements = [r for r in rows if r.kind in ("settlement", "invoice")]
     waived = [r for r in rows if r.kind == "settlement"]
     amount = sum(r.amount for r in purchases)
