@@ -82,18 +82,6 @@ def event_rate_price(username: str) -> float | None:
     return price if price and price > BF_PRICE_PER_GB else None
 
 
-def discounted_amount(original: int, price: float) -> int:
-    """`original` toman billed at `price`/GB, re-priced at the event rate and
-    rounded up (the customer is never undercharged by a rounding step).
-    Exact fraction arithmetic: a float factor could tip an exact product over."""
-    return math.ceil(Fraction(original * BF_PRICE_PER_GB) / Fraction(str(price)))
-
-
-def original_for_paid(paid: int, price: float) -> int:
-    """The inverse: how much debt `paid` toman of event-rate money retires."""
-    return math.ceil(Fraction(paid) * Fraction(str(price)) / BF_PRICE_PER_GB)
-
-
 @dataclass(frozen=True)
 class Quote:
     paid_gb: float
@@ -156,15 +144,55 @@ def has_open_bills(telegram_id: int) -> bool:
 
 # ---- settling what is already owed ---------------------------------------------
 
+def debt_parts(username: str, amount: int) -> list[tuple[int, Fraction | None]]:
+    """What `amount` toman of a panel's weekly debt was priced at, per GB.
+
+    A weekly debt only ever grows by delayed-credit sales (`weekly` rows in the
+    ledger, each with its GB and money), and payments retire the oldest money
+    first, so what is still owed is the newest of those sales. Walking them
+    newest-first gives the real price of every toman still owed — the price on
+    the day of the sale, not today's, which may be higher (that would discount
+    a debt below the event rate) or lower. Anything older than the ledger is
+    priced at the panel's current price, the only figure left.
+
+    Returns [(toman, price per GB or None if unknown)].
+    """
+    parts: list[tuple[int, Fraction | None]] = []
+    remaining = amount
+    for sale in db.list_weekly_sales_for(username):
+        if remaining <= 0:
+            break
+        if sale.amount <= 0 or not sale.gb or sale.gb <= 0:
+            continue
+        take = min(remaining, sale.amount)
+        parts.append((take, Fraction(sale.amount) / Fraction(str(sale.gb))))
+        remaining -= take
+    if remaining > 0:
+        current = db.get_effective_price(username)
+        parts.append((remaining, Fraction(str(current)) if current and current > 0 else None))
+    return parts
+
+
+def _discount_parts(parts: list[tuple[int, Fraction | None]]) -> int:
+    """The event-rate amount for those parts: each part priced above the rate is
+    re-priced at it (rounded up); anything at or below it, or of unknown price,
+    stays as it is."""
+    total = 0
+    for toman, price in parts:
+        if price is not None and price > BF_PRICE_PER_GB:
+            total += math.ceil(Fraction(toman * BF_PRICE_PER_GB) / price)
+        else:
+            total += toman
+    return total
+
+
 def debt_quote(username: str) -> tuple[int, int, int]:
-    """(original, discounted, saving) for a panel's weekly/delayed debt, re-priced
-    from the admin's current price."""
+    """(original, discounted, saving) for a panel's weekly/delayed debt, each
+    part re-priced from what it was actually sold at (see debt_parts)."""
     original = db.get_debt(username)
     if original <= 0:
         return 0, 0, 0
-    price = event_rate_price(username)
-    discounted = discounted_amount(original, price) if price else original
-    discounted = min(discounted, original)
+    discounted = min(original, _discount_parts(debt_parts(username, original)))
     return original, discounted, original - discounted
 
 
@@ -174,7 +202,9 @@ def invoice_quote(invoice) -> tuple[int, int, int]:
     are shown at full amount."""
     original = invoice.amount
     if invoice.admin_username and invoice.traffic_gb and invoice.traffic_gb > 0:
-        discounted = min(original, round(invoice.traffic_gb * bf_price(invoice.admin_username)))
+        # The event caps the invoice at 2,400/GB; it never re-prices it at the
+        # admin's current price, which may be lower than what was billed.
+        discounted = min(original, round(invoice.traffic_gb * BF_PRICE_PER_GB))
     else:
         discounted = original
     return original, discounted, original - discounted
@@ -305,18 +335,28 @@ def drain_wallet_into_debt(telegram_id: int, debt: dict) -> dict | None:
     event-rate amount and the matching share of the original debt is retired.
 
     Returns {username, paid, remaining} like the normal drain, or None when the
-    wallet had nothing to give. Only called for debts whose owner pays more than
-    the event rate; everyone else drains exactly as before."""
+    wallet had nothing to give. Only called for debts that are cheaper at the
+    event rate; everyone else drains exactly as before."""
     username = debt["username"]
-    price = event_rate_price(username)
-    amount = debt["amount"]
-    needed = discounted_amount(amount, price)
+    original, needed, _ = debt_quote(username)
+    if original <= 0:
+        return None
     paid = db.drain_wallet(telegram_id, needed)
     if paid <= 0:
         return None
-    credit = min(amount, original_for_paid(paid, price))
+    # Paying all of the event-rate amount retires all of it; part of it retires
+    # the same share of the debt, rounded up in the customer's favour only up to
+    # what is owed.
+    credit = original if paid >= needed else min(
+        original, math.ceil(Fraction(paid * original, needed))
+    )
     result = settle_debt(telegram_id, username, paid, credit, METHOD_WALLET)
     return {"username": username, "paid": paid, "remaining": result.remaining}
+
+
+def has_debt_saving(username: str) -> bool:
+    """Whether settling this panel's debt at the event rate costs less."""
+    return debt_quote(username)[2] > 0
 
 
 # ---- superadmin captions ---------------------------------------------------------
@@ -360,7 +400,7 @@ def forecast_block(telegram_id: int, username: str) -> str:
             text += texts.BF_FORECAST_DEBT
             # A saving is only worth mentioning to someone who pays more than the
             # event rate; for everyone else the settlement is just a settlement.
-            if event_rate_price(username):
+            if event_rate_price(username) or has_debt_saving(username):
                 saving = total_saving(telegram_id)
                 if saving > 0:
                     text += texts.BF_FORECAST_SAVING.format(saving=saving)

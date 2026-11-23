@@ -1941,6 +1941,18 @@ def list_sales_since(stamp: str) -> list[Sale]:
         return [Sale(**dict(r)) for r in rows]
 
 
+def list_weekly_sales_for(username: str, limit: int = 1000) -> list[Sale]:
+    """One panel's delayed-credit purchases, newest first. A weekly debt is
+    made of exactly these, so they tell what each toman of it was priced at."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM sales WHERE username = ? AND method = 'weekly' "
+            "ORDER BY created_at DESC, id DESC LIMIT ?",
+            (username, limit),
+        ).fetchall()
+        return [Sale(**dict(r)) for r in rows]
+
+
 def list_sales_for(username: str, limit: int = 20) -> list[Sale]:
     """One panel's traffic history, newest first. Debt payments add no traffic,
     so they stay out of it."""

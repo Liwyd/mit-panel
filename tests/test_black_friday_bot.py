@@ -26,6 +26,9 @@ from backend.bot import (
     texts,
 )
 from backend.bot.panel_client import PanelClientError
+
+# The real grant, kept before any fixture swaps it for a mock.
+_real_topup = panel_client_module.topup
 from backend.bot.routers import black_friday as bf_router
 from backend.db.model import Admins
 
@@ -1121,3 +1124,126 @@ def test_an_invoice_receipt_is_a_plain_invoice_request_at_the_discounted_amount(
     assert (req.kind, req.invoice_id, req.toman_amount, req.bf_credit_amount) == (
         "invoice", invoice, 2_400_000, 2_900_000,
     )
+
+
+# ---- debt priced from its own sales, not from today's price ---------------------------------
+
+def _weekly_sale(ledger, gb, amount, username="alice"):
+    ledger.record_sale(telegram_id=ALICE, username=username, gb=gb, amount=amount, method="weekly")
+    ledger.add_debt(username, ALICE, amount)
+
+
+def test_a_debt_bought_below_the_rate_gets_no_discount_after_a_price_rise(ledger):
+    # Bought 1000 GB on credit at 2,000/GB; the price is 2,900 today. Re-pricing
+    # from today's price would settle it at ~1,655/GB, below the event rate.
+    _weekly_sale(ledger, 1000, 2_000_000)
+    priced(ledger, special=2900)
+    assert black_friday.debt_quote("alice") == (2_000_000, 2_000_000, 0)
+    assert not black_friday.has_debt_saving("alice")
+
+
+def test_a_debt_bought_above_the_rate_is_discounted_even_after_a_price_cut(ledger):
+    _weekly_sale(ledger, 1000, 2_900_000)
+    priced(ledger, special=2000)
+    assert black_friday.debt_quote("alice") == (2_900_000, 2_400_000, 500_000)
+
+
+def test_a_partly_paid_debt_is_priced_from_its_newest_sales(ledger):
+    _weekly_sale(ledger, 1000, 2_000_000)  # older, at 2,000
+    _weekly_sale(ledger, 1000, 2_900_000)  # newer, at 2,900
+    ledger.reduce_debt("alice", 2_000_000)  # the oldest money is paid
+    priced(ledger, special=2900)
+    # What is left is the 2,900 sale: 1000 GB at 2,400.
+    assert black_friday.debt_quote("alice") == (2_900_000, 2_400_000, 500_000)
+
+
+def test_debt_older_than_the_ledger_falls_back_to_the_current_price(ledger):
+    _weekly_sale(ledger, 1000, 2_900_000)
+    ledger.add_debt("alice", ALICE, 290_000)  # no sale row behind this part
+    priced(ledger, special=2900)
+    original, discounted, saving = black_friday.debt_quote("alice")
+    assert (original, discounted) == (3_190_000, 2_400_000 + 240_000)
+    assert saving == 550_000
+
+
+def test_the_auto_drain_leaves_a_cheap_old_debt_at_full_price(ledger, event):
+    event(True)
+    _weekly_sale(ledger, 1000, 2_000_000)
+    priced(ledger, special=2900)
+    ledger.add_wallet_balance(ALICE, 2_000_000)
+    billing.apply_wallet_to_debts(ALICE)
+    assert ledger.get_debt("alice") == 0
+    assert ledger.get_wallet_balance(ALICE) == 0
+    assert ledger_rows(ledger, "bf_discount") == []
+
+
+def test_the_auto_drain_settles_an_expensive_debt_at_the_rate(ledger, event):
+    event(True)
+    _weekly_sale(ledger, 1000, 2_900_000)
+    priced(ledger, special=2900)
+    ledger.add_wallet_balance(ALICE, 3_000_000)
+    billing.apply_wallet_to_debts(ALICE)
+    assert ledger.get_debt("alice") == 0
+    assert ledger.get_wallet_balance(ALICE) == 600_000
+    assert [r["amount"] for r in ledger_rows(ledger, "bf_discount")] == [-500_000]
+
+
+def test_a_partial_auto_drain_retires_the_same_share_of_the_debt(ledger, event):
+    event(True)
+    _weekly_sale(ledger, 1000, 2_900_000)
+    priced(ledger, special=2900)
+    ledger.add_wallet_balance(ALICE, 1_200_000)  # half of the 2,400,000 event price
+    billing.apply_wallet_to_debts(ALICE)
+    assert ledger.get_wallet_balance(ALICE) == 0
+    assert ledger.get_debt("alice") == 1_450_000  # half of 2,900,000 is retired
+    # Conservation: money in + waiver == debt retired.
+    retired = 2_900_000 - ledger.get_debt("alice")
+    waived = -sum(r["amount"] for r in ledger_rows(ledger, "bf_discount"))
+    assert 1_200_000 + waived == retired
+
+
+def test_an_invoice_is_capped_at_the_rate_not_at_a_lower_current_price(ledger):
+    priced(ledger, special=2000)
+    invoice_id = ledger.create_invoice(
+        telegram_id=ALICE, amount=2_900_000, description="x", due_at=None,
+        admin_username="alice", traffic_gb=1000,
+    )
+    assert black_friday.invoice_quote(ledger.get_invoice(invoice_id)) == (2_900_000, 2_400_000, 500_000)
+
+
+# ---- the grant's error contract: PanelClientError means nothing was credited ---------------
+
+def test_a_failed_grant_is_a_panel_client_error(admin, monkeypatch):
+    from backend.db import crud as crud_module
+
+    admin()
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(crud_module, "grant_admin_traffic", boom)
+    with pytest.raises(PanelClientError):
+        asyncio.run(panel_client_module.topup(ALICE, 10, username="alice"))
+
+
+def test_the_wallet_is_refunded_when_the_grant_fails_for_any_reason(handlers, monkeypatch):
+    from backend.db import crud as crud_module
+
+    priced(handlers.ledger, special=2900)
+    handlers.ledger.add_wallet_balance(ALICE, 3_000_000)
+    # Use the real grant path so the error comes from inside it.
+    monkeypatch.setattr(panel_client_module, "topup", _real_topup)
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(crud_module, "grant_admin_traffic", boom)
+    _pay_wallet(FakeCall(ALICE), _topup_state(handlers.ledger))
+    assert handlers.ledger.get_wallet_balance(ALICE) == 3_000_000
+    assert ledger_rows(handlers.ledger, "bf_wallet") == []
+
+
+def test_a_successful_grant_still_reports_the_new_total(admin):
+    admin(traffic=100 * GB)
+    result = asyncio.run(_real_topup(ALICE, 10, username="alice"))
+    assert result["new_traffic_bytes"] == 110 * GB
