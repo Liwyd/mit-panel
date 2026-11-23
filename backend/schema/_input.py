@@ -128,6 +128,8 @@ class SettingsInput(BaseModel):
     black_friday_enabled: Optional[bool] = None
     black_friday_ends_at: Optional[str] = None
     cost_per_gb: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    fixed_monthly_cost: Optional[float] = Field(default=None, ge=0, le=1_000_000_000_000)
+    monthly_revenue_target: Optional[float] = Field(default=None, ge=0, le=1_000_000_000_000)
 
     @field_validator("black_friday_ends_at")
     @classmethod
