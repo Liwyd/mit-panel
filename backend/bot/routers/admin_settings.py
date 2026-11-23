@@ -13,7 +13,6 @@ from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
 from backend.bot.states import (
-    Broadcast,
     ClearAdminPrice,
     CreateAdmin,
     CreatePanel,
@@ -966,34 +965,6 @@ async def finish_grant_wallet(message: Message, state: FSMContext, bot: Bot) -> 
         )
     except Exception:
         pass
-
-
-@router.message(F.text == texts.BTN_BROADCAST)
-async def start_broadcast(message: Message, state: FSMContext) -> None:
-    await state.set_state(Broadcast.text)
-    await message.answer(texts.ASK_BROADCAST_TEXT, reply_markup=keyboards.cancel_kb())
-
-
-@router.message(Broadcast.text, ~F.text.in_(ALL_MENU_TEXTS))
-async def finish_broadcast(message: Message, state: FSMContext, bot: Bot) -> None:
-    await state.clear()
-    body = message.text or ""
-    if not body.strip():
-        await message.answer(texts.INVALID_PASSWORD, reply_markup=superadmin_kb(message.from_user.id))
-        return
-
-    sent = failed = 0
-    for telegram_id in db.list_known_users():
-        try:
-            await bot.send_message(telegram_id, texts.BROADCAST_PREFIX + body)
-            sent += 1
-        except Exception:
-            failed += 1
-
-    await message.answer(
-        texts.BROADCAST_RESULT.format(sent=sent, failed=failed),
-        reply_markup=superadmin_kb(message.from_user.id),
-    )
 
 
 @router.message(F.text == texts.BTN_SYNC_TELEGRAM_IDS)

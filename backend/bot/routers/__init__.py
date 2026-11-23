@@ -11,11 +11,15 @@ from .approval import router as approval_router
 from .bot_provision import router as bot_provision_router
 
 from .maintenance import router as maintenance_router
+from .broadcast import router as broadcast_router
 
 from .photo_fallback import router as photo_fallback_router
 
 all_routers = [
     maintenance_router,
+    # Before everything that takes photos or free text: while the superadmin
+    # is collecting a broadcast, every message belongs to the queue.
+    broadcast_router,
     start_router,
     topup_router,
     change_password_router,
