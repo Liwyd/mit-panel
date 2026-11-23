@@ -61,6 +61,7 @@ import {
 } from '@/components/ui/dialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { PageLayout } from '@/components/PageLayout'
+import { BlackFridayCountdown } from '@/components/BlackFridayCountdown'
 
 function NewsSlide({ item }: { item: NewsFeedItem }) {
     const bannerUrl = useBannerImage(item.id, item.has_banner)
@@ -643,6 +644,9 @@ export function DashboardPage() {
             }
         >
             <div className="space-y-6 p-4 md:p-6 max-w-full overflow-x-hidden">
+            {/* Black Friday countdown, only while the theme is on */}
+            <BlackFridayCountdown />
+
             {/* Error Message */}
             {error && (
                 <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive border border-destructive/20">
