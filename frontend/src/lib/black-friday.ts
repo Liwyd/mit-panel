@@ -13,11 +13,10 @@ import { settingsAPI, type BrandingInfo } from '@/lib/api'
 export interface BlackFriday {
     active: boolean
     endsAt: Date | null
-    message: string
 }
 
 const STORAGE_KEY = 'bf-until'
-const OFF: BlackFriday = { active: false, endsAt: null, message: '' }
+const OFF: BlackFriday = { active: false, endsAt: null }
 
 let current: BlackFriday = readCached()
 let request: Promise<BrandingInfo> | null = null
@@ -27,7 +26,7 @@ const listeners = new Set<(state: BlackFriday) => void>()
 function readCached(): BlackFriday {
     try {
         const until = Number(localStorage.getItem(STORAGE_KEY))
-        if (until && until > Date.now()) return { active: true, endsAt: new Date(until), message: '' }
+        if (until && until > Date.now()) return { active: true, endsAt: new Date(until) }
     } catch {
         // Storage blocked: the fetch below decides.
     }
@@ -57,11 +56,11 @@ function publish(next: BlackFriday) {
 }
 
 function fromBranding(branding: BrandingInfo | null): BlackFriday {
-    const bf = branding?.black_friday ?? (current.active ? { active: true, ends_at: current.endsAt?.toISOString() ?? null, message: current.message } : null)
+    const bf = branding?.black_friday ?? (current.active ? { active: true, ends_at: current.endsAt?.toISOString() ?? null } : null)
     if (!bf?.active || !bf.ends_at) return OFF
     const endsAt = new Date(bf.ends_at)
     if (Number.isNaN(endsAt.getTime()) || endsAt.getTime() <= Date.now()) return OFF
-    return { active: true, endsAt, message: bf.message || '' }
+    return { active: true, endsAt }
 }
 
 /** The `bf` class swaps the palette; the panel is dark-only while it is on. */

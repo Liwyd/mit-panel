@@ -442,13 +442,11 @@ export interface PanelSettings {
     mitseller_server_cert: string
     black_friday_enabled: boolean
     black_friday_ends_at: string
-    black_friday_message: string
 }
 
 export interface BlackFridayState {
     active: boolean
     ends_at: string | null
-    message: string
 }
 
 export interface BrandingInfo {

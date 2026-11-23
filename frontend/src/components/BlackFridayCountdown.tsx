@@ -127,7 +127,7 @@ function formatEnd(date: Date): string {
 }
 
 export function BlackFridayCountdown() {
-    const { active, endsAt, message } = useBlackFriday()
+    const { active, endsAt } = useBlackFriday()
     const now = useNow(active)
 
     if (!active || !endsAt) return null
@@ -141,7 +141,7 @@ export function BlackFridayCountdown() {
             <div className="bf-cd-text">
                 <div className="bf-cd-k"><i />Black Friday</div>
                 <div className="bf-cd-t">Ends in</div>
-                {message && <div className="bf-cd-msg" dir="auto">{message}</div>}
+                <div className="bf-cd-msg" dir="rtl" lang="fa">برای دریافت تخفیف از ربات اقدام کنید</div>
                 <div className="bf-cd-end">{formatEnd(endsAt)}</div>
             </div>
             <div

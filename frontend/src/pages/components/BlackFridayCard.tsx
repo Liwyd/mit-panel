@@ -37,14 +37,12 @@ interface Props {
 export function BlackFridayCard({ settings, onSaved }: Props) {
     const [enabled, setEnabled] = useState(false)
     const [endsAt, setEndsAt] = useState('')
-    const [message, setMessage] = useState('')
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         if (!settings) return
         setEnabled(!!settings.black_friday_enabled)
         setEndsAt(toTehranInput(settings.black_friday_ends_at))
-        setMessage(settings.black_friday_message ?? '')
     }, [settings])
 
     const ended = !!endsAt && new Date(`${endsAt}:00${TEHRAN_OFFSET}`).getTime() <= Date.now()
@@ -59,7 +57,6 @@ export function BlackFridayCard({ settings, onSaved }: Props) {
             const data = await settingsAPI.updateSettings({
                 black_friday_enabled: enabled,
                 black_friday_ends_at: `${endsAt}:59${TEHRAN_OFFSET}`,
-                black_friday_message: message.trim(),
             })
             onSaved(data)
             await refreshBlackFriday()
@@ -93,32 +90,18 @@ export function BlackFridayCard({ settings, onSaved }: Props) {
                     />
                     Turn on the Black Friday theme
                 </label>
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="bf-ends">Ends at (Tehran time)</label>
-                        <Input
-                            id="bf-ends"
-                            type="datetime-local"
-                            value={endsAt}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndsAt(e.target.value)}
-                            disabled={!settings}
-                        />
-                        {enabled && ended && (
-                            <p className="text-xs text-destructive">This time has passed, so the theme stays off</p>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="bf-message">Countdown message</label>
-                        <Input
-                            id="bf-message"
-                            dir="auto"
-                            maxLength={200}
-                            placeholder="Optional, e.g. the discount you are running"
-                            value={message}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessage(e.target.value)}
-                            disabled={!settings}
-                        />
-                    </div>
+                <div className="space-y-2 md:max-w-sm">
+                    <label className="text-sm font-medium" htmlFor="bf-ends">Ends at (Tehran time)</label>
+                    <Input
+                        id="bf-ends"
+                        type="datetime-local"
+                        value={endsAt}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndsAt(e.target.value)}
+                        disabled={!settings}
+                    />
+                    {enabled && ended && (
+                        <p className="text-xs text-destructive">This time has passed, so the theme stays off</p>
+                    )}
                 </div>
                 <Button onClick={save} disabled={!settings || saving}>
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

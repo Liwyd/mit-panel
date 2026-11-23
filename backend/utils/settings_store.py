@@ -75,10 +75,9 @@ DEFAULTS = {
     # Temporary Black Friday theme: dark login page, dark panel and a
     # countdown on the dashboard. It switches itself off once ends_at passes,
     # so nobody has to remember to turn it off. ends_at is ISO 8601 with an
-    # offset; the message is optional copy shown under the countdown.
+    # offset.
     "black_friday_enabled": False,
     "black_friday_ends_at": "2026-11-30T23:59:59+03:30",
-    "black_friday_message": "",
 }
 
 
@@ -150,7 +149,6 @@ def black_friday_state(data: dict | None = None) -> dict:
     return {
         "active": active,
         "ends_at": end.isoformat() if end else None,
-        "message": str(data.get("black_friday_message") or "")[:200],
     }
 
 
