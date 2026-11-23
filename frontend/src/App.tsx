@@ -136,14 +136,14 @@ function Layout({ children }: { children: React.ReactNode }) {
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                    className="fixed inset-0 bg-black/50 z-40 md:hidden animate-in fade-in-0 duration-200"
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
 
             {/* Mobile Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-card border-r transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-card border-r transform transition-transform duration-[400ms] ease-drawer md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
                 <div className="flex items-center justify-between border-b px-4 pb-4 pt-[calc(env(safe-area-inset-top)_+_1rem)]">

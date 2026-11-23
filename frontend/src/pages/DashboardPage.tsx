@@ -160,7 +160,7 @@ function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
                                 onClick={() => goTo(i)}
                                 aria-label={`Go to slide ${i + 1}`}
                                 className={cn(
-                                    'h-1.5 rounded-full transition-all',
+                                    'h-1.5 rounded-full transition-[width,background-color,opacity] duration-200 ease-out',
                                     i === activeIndex ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30'
                                 )}
                             />
@@ -1525,7 +1525,7 @@ function DetailsRow({
                         <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
                             <div
                                 className={cn(
-                                    'h-full bg-primary transition-all',
+                                    'h-full bg-primary transition-[width] duration-500 ease-out',
                                     trafficPercent > 80 && 'bg-destructive',
                                     trafficPercent > 90 && 'bg-destructive'
                                 )}
@@ -1686,7 +1686,7 @@ function MobileUserCard({
                         <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div
                                 className={cn(
-                                    'h-full bg-primary transition-all',
+                                    'h-full bg-primary transition-[width] duration-500 ease-out',
                                     trafficPercent > 80 && 'bg-destructive'
                                 )}
                                 style={{ width: `${Math.min(trafficPercent, 100)}%` }}

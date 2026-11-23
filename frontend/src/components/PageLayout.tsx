@@ -21,8 +21,8 @@ interface PageLayoutProps {
 export function PageLayout({ header, children, footer, className }: PageLayoutProps) {
     return (
         <div className={`flex flex-col h-full min-h-0 ${className ?? ''}`}>
-            {header ? <div className="shrink-0">{header}</div> : null}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">{children}</div>
+            {header ? <div className="shrink-0 nx-page-enter">{header}</div> : null}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden nx-page-enter nx-page-enter-delay">{children}</div>
             {footer ? (
                 <div className="shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]">{footer}</div>
             ) : null}
