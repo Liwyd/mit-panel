@@ -443,6 +443,8 @@ export interface PanelSettings {
     black_friday_enabled: boolean
     black_friday_ends_at: string
     cost_per_gb: number
+    fixed_monthly_cost: number
+    monthly_revenue_target: number
 }
 
 export interface BlackFridayState {
@@ -600,7 +602,7 @@ export const serverAPI = {
     },
 }
 
-// Profit report (superadmin)
+// Profit page (superadmin)
 export interface ProfitAdminRow {
     username: string
     revenue: number
@@ -609,11 +611,11 @@ export interface ProfitAdminRow {
     avg_price_per_gb: number | null
     cost: number
     profit: number
+    margin: number | null
+    share: number | null
 }
 
-export interface ProfitMonth {
-    key: string
-    label_fa: string
+export interface ProfitFigures {
     revenue: number
     cost: number
     profit: number
@@ -623,7 +625,94 @@ export interface ProfitMonth {
     avg_price_per_gb: number | null
     unknown_gb_revenue: number
     bf_discount: number
+    fixed_cost: number
+    net_profit: number
+}
+
+export interface ProfitMonth extends ProfitFigures {
+    key: string
+    label_fa: string
+    active_buyers: number
+    new_buyers: number
+    lost_buyers: number
+}
+
+export interface ProfitDay {
+    day: number
+    date: string
+    revenue: number
+    gb_sold: number
+    future: boolean
+}
+
+export interface ProfitForecast {
+    month_to_date: number
+    days_elapsed: number
+    days_total: number
+    days_left: number
+    projected_revenue: number
+    projected_cost: number
+    projected_profit: number
+    projected_net_profit: number
+    target_progress: number | null
+    projected_target_progress: number | null
+}
+
+export interface ProfitMethod {
+    key: string
+    label: string
+    amount: number
+    count: number
+    share: number | null
+}
+
+export interface ProfitPriceBand {
+    key: string
+    label: string
+    min: number | null
+    max: number | null
+    gb: number
+    revenue: number
+    rows: number
+}
+
+export interface ProfitConsumption {
+    used_gb: number
+    use_to_sold: number | null
+    top_panels: { username: string; used_gb: number; share: number | null }[]
+}
+
+export interface ProfitSelected extends ProfitFigures {
+    key: string
+    label_fa: string
+    is_current: boolean
+    previous: ProfitFigures & { key: string; label_fa: string }
+    active_buyers: number
+    new_buyers: number
+    lost_buyers: number
+    arpu: number | null
+    net_profit_per_gb: number | null
+    target: { amount: number; progress: number } | null
+    break_even_gb: number | null
+    break_even_reached: boolean | null
     per_admin: ProfitAdminRow[]
+    concentration: { top1_share: number | null; top5_share: number | null; top1_username: string | null } | null
+    daily: ProfitDay[] | null
+    by_method: ProfitMethod[] | null
+    price_bands: ProfitPriceBand[] | null
+    forecast: ProfitForecast | null
+    consumption: ProfitConsumption | null
+}
+
+export interface ProfitReceivables {
+    debts_total: number
+    debts_count: number
+    invoices_total: number
+    invoices_count: number
+    total: number
+    aging: { key: string; label: string; amount: number; count: number }[]
+    wallet_total: number
+    wallet_count: number
 }
 
 export interface ProfitBlackFriday {
@@ -644,19 +733,28 @@ export interface ProfitBlackFriday {
     profit: number
 }
 
-export interface ProfitReport {
+export interface ProfitSettings {
     cost_per_gb: number
-    months: ProfitMonth[]
-    black_friday: ProfitBlackFriday
+    fixed_monthly_cost: number
+    monthly_revenue_target: number
+}
+
+/** Every section may be null: the server returns null for one that failed. */
+export interface ProfitOverview {
+    settings: ProfitSettings
+    months: ProfitMonth[] | null
+    selected: ProfitSelected | null
+    receivables: ProfitReceivables | null
+    black_friday: ProfitBlackFriday | null
 }
 
 export const profitAPI = {
-    get: async (months = 6): Promise<ProfitReport> => {
-        const response = await api.get<ResponseModel<ProfitReport>>(`/superadmin/profit`, {
-            params: { months },
+    overview: async (months = 12, month?: string | null): Promise<ProfitOverview> => {
+        const response = await api.get<ResponseModel<ProfitOverview>>(`/superadmin/profit/overview`, {
+            params: { months, ...(month ? { month } : {}) },
         })
         if (!response.data.success || !response.data.data) {
-            throw new Error(response.data.message || 'Failed to load the profit report')
+            throw new Error(response.data.message || 'Failed to load the profit overview')
         }
         return response.data.data
     },
