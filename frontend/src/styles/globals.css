@@ -215,6 +215,9 @@
        (darkest on light, lightest on dark); --pf-oN-ink is the label colour
        that reads on that step. Everything else is the app's own tokens. */
     .profit-page {
+        /* Profit is good news: green text, never the brand red, which in the
+           Black Friday theme is the accent and would read as a loss. */
+        --pf-positive: #15803d;
         --pf-s1: #2a78d6;
         --pf-s2: #eb6834;
         --pf-s3: #1baf7a;
@@ -233,6 +236,7 @@
     }
 
     .dark .profit-page {
+        --pf-positive: #4cc38a;
         --pf-s1: #3987e5;
         --pf-s2: #d95926;
         --pf-s3: #199e70;
