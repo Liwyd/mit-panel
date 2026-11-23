@@ -1493,6 +1493,15 @@ def list_known_users() -> list[int]:
         return [r["telegram_id"] for r in rows]
 
 
+def list_linked_users() -> list[int]:
+    """Telegram IDs of the users who own a panel (is_linked), read-only."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT telegram_id FROM bot_users WHERE is_linked = 1"
+        ).fetchall()
+        return [r["telegram_id"] for r in rows]
+
+
 @dataclass
 class Tutorial:
     id: int
