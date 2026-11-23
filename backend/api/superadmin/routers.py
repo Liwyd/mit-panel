@@ -67,6 +67,32 @@ async def get_profit_report(
     return ResponseModel(success=True, message="ok", data=data)
 
 
+def _build_profit_overview(months: int, month: str | None) -> dict:
+    from backend.bot import db as bot_db, profit
+
+    bot_db.init_db()
+    return profit.overview(months, month)
+
+
+@router.get(
+    "/profit/overview",
+    description="Everything the profit page shows: months, one month in depth, receivables",
+)
+async def get_profit_overview(
+    months: int = Query(12, ge=1, le=24),
+    month: str | None = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    admin: dict = Depends(get_current_superadmin),
+):
+    # Read-only. Sections that fail come back null; a total failure must not
+    # take the page down with it.
+    try:
+        data = await run_in_threadpool(_build_profit_overview, months, month)
+    except Exception:
+        logger.exception("Profit overview failed")
+        return ResponseModel(success=False, message="Profit overview is unavailable")
+    return ResponseModel(success=True, message="ok", data=data)
+
+
 @router.get("/admins", description="Get all admins")
 async def get_admins(
     db: Session = Depends(get_db), current_admin: dict = Depends(get_current_superadmin)
