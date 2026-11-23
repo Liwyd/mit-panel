@@ -442,6 +442,7 @@ export interface PanelSettings {
     mitseller_server_cert: string
     black_friday_enabled: boolean
     black_friday_ends_at: string
+    cost_per_gb: number
 }
 
 export interface BlackFridayState {
@@ -596,5 +597,67 @@ export const serverAPI = {
         if (!response.data.success) {
             throw new Error(response.data.message || 'Failed to reorder servers')
         }
+    },
+}
+
+// Profit report (superadmin)
+export interface ProfitAdminRow {
+    username: string
+    revenue: number
+    gb_sold: number
+    gb_free: number
+    avg_price_per_gb: number | null
+    cost: number
+    profit: number
+}
+
+export interface ProfitMonth {
+    key: string
+    label_fa: string
+    revenue: number
+    cost: number
+    profit: number
+    margin: number | null
+    gb_sold: number
+    gb_free: number
+    avg_price_per_gb: number | null
+    unknown_gb_revenue: number
+    bf_discount: number
+    per_admin: ProfitAdminRow[]
+}
+
+export interface ProfitBlackFriday {
+    active: boolean
+    ends_at: string | null
+    purchases: number
+    buyers: number
+    paid_gb: number
+    gift_gb: number
+    amount: number
+    discount: number
+    settlements: number
+    settlements_amount: number
+    settlements_discount: number
+    card_amount: number
+    wallet_amount: number
+    cost: number
+    profit: number
+}
+
+export interface ProfitReport {
+    cost_per_gb: number
+    months: ProfitMonth[]
+    black_friday: ProfitBlackFriday
+}
+
+export const profitAPI = {
+    get: async (months = 6): Promise<ProfitReport> => {
+        const response = await api.get<ResponseModel<ProfitReport>>(`/superadmin/profit`, {
+            params: { months },
+        })
+        if (!response.data.success || !response.data.data) {
+            throw new Error(response.data.message || 'Failed to load the profit report')
+        }
+        return response.data.data
     },
 }
