@@ -127,6 +127,7 @@ class SettingsInput(BaseModel):
     agent_base_url: Optional[str] = None
     black_friday_enabled: Optional[bool] = None
     black_friday_ends_at: Optional[str] = None
+    cost_per_gb: Optional[float] = Field(default=None, ge=0, le=1_000_000)
 
     @field_validator("black_friday_ends_at")
     @classmethod

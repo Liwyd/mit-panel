@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 import os
@@ -42,6 +43,28 @@ from backend.utils.telegram import send_backup_to_telegram
 from backend.utils.servers import server_status
 
 router = APIRouter(prefix="/superadmin", tags=["superadmin"])
+
+
+def _build_profit_report(months: int) -> dict:
+    from backend.bot import db as bot_db, profit
+
+    bot_db.init_db()
+    report = profit.monthly_report(months)
+    return {**report, "black_friday": profit.black_friday_summary()}
+
+
+@router.get("/profit", description="Monthly revenue, cost and profit from the sales ledger")
+async def get_profit_report(
+    months: int = Query(6, ge=1, le=24),
+    admin: dict = Depends(get_current_superadmin),
+):
+    # Read-only. A broken ledger must not take the dashboard down with it.
+    try:
+        data = await run_in_threadpool(_build_profit_report, months)
+    except Exception:
+        logger.exception("Profit report failed")
+        return ResponseModel(success=False, message="Profit report is unavailable")
+    return ResponseModel(success=True, message="ok", data=data)
 
 
 @router.get("/admins", description="Get all admins")
