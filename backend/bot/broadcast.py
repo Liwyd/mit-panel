@@ -61,7 +61,13 @@ async def send_draft(bot: Bot, chat_id: int, from_chat_id: int, draft: list[dict
 
 
 def audience(kind: str) -> list[int]:
-    return db.list_linked_users() if kind == "linked" else db.list_known_users()
+    """Who receives it. Superadmins are left out: they already saw the
+    preview, and the counts on the buttons should match what is sent."""
+    from backend.bot.config import bot_config
+
+    users = db.list_linked_users() if kind == "linked" else db.list_known_users()
+    admins = set(bot_config.superadmin_id_list)
+    return [u for u in users if u not in admins]
 
 
 def is_running() -> bool:
