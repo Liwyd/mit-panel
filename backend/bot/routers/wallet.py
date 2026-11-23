@@ -19,7 +19,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from backend.bot import auto_approve, keyboards, notify, texts
+from backend.bot import auto_approve, black_friday, keyboards, notify, texts
 from backend.bot.bills import open_bills, render_for_customer, urgency
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.states import DebtPayment, InvoicePayment, WalletTopUp
@@ -221,6 +221,19 @@ async def my_invoices(message: Message) -> None:
         )
     for bill in bills:
         await message.answer(render_for_customer(bill), reply_markup=keyboards.bill_pay_kb(bill))
+
+    # During the event the same bills are cheaper through the Black Friday
+    # section; say so here too, or someone paying from this list overpays.
+    try:
+        if black_friday.is_active():
+            saving = black_friday.total_saving(message.from_user.id)
+            if saving > 0:
+                await message.answer(
+                    texts.BF_MY_INVOICES_HINT.format(saving=saving),
+                    reply_markup=keyboards.bf_open_kb(),
+                )
+    except Exception:
+        logger.exception("black friday hint failed for %s", message.from_user.id)
 
 
 @router.callback_query(F.data.startswith("pay_invoice:"))
