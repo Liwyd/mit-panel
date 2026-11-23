@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from aiogram import Bot
 
-from backend.bot import texts
+from backend.bot import black_friday, texts
 from backend.bot import db
 from backend.bot import access_lock
 from backend.bot.billing import apply_wallet_to_debts
@@ -132,6 +132,26 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
                 db.revert_to_pending(request_id)
                 return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
 
+        # Paid at the Black Friday rate: write the waived amount down, now that
+        # nothing can still revert this approval. Only requests raised by the
+        # event's flow carry a credit amount.
+        if req.bf_credit_amount:
+            discount = req.bf_credit_amount - req.toman_amount
+            if discount > 0:
+                black_friday.record_discount(
+                    telegram_id=customer,
+                    username=invoice.admin_username if invoice else None,
+                    discount=discount,
+                )
+                black_friday.record_purchase(
+                    telegram_id=customer,
+                    username=invoice.admin_username if invoice else None,
+                    kind=black_friday.PURCHASE_INVOICE,
+                    amount=req.toman_amount,
+                    list_amount=req.bf_credit_amount,
+                    method=black_friday.METHOD_CARD,
+                )
+
         await _tell(
             bot,
             customer,
@@ -178,11 +198,75 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
         await _maybe_unlock(bot, req.admin_username)
         return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
+    if req.kind == black_friday.KIND_SETTLEMENT:
+        # Paid at the event rate for a debt that may have moved since the
+        # receipt was sent: settle_debt re-reads what is owed, retires no more
+        # than that, and puts any money it could not apply into the wallet.
+        paid = req.toman_amount
+        result = black_friday.settle_debt(
+            customer, req.admin_username, paid, req.bf_credit_amount or 0,
+            black_friday.METHOD_CARD,
+        )
+        text = texts.BF_SETTLEMENT_APPROVED_ADMIN.format(
+            paid=paid, username=req.admin_username, cancelled=result.cancelled
+        )
+        if result.remaining > 0:
+            text += texts.BF_SETTLEMENT_REMAINING.format(remaining=result.remaining)
+        if result.excess:
+            text += texts.BF_SETTLEMENT_EXCESS.format(
+                excess=result.excess, balance=db.get_wallet_balance(customer)
+            )
+        await _tell(bot, customer, text)
+        await _maybe_unlock(bot, req.admin_username)
+        return Outcome(True, texts.APPROVED_TOAST, finished=True)
+
+    if req.kind not in ("topup", black_friday.KIND_TOPUP):
+        # A kind this code does not know must not fall through to granting
+        # traffic. Put it back so it is neither lost nor half-handled.
+        logger.error("request #%s has an unknown kind %r", request_id, req.kind)
+        db.revert_to_pending(request_id)
+        return Outcome(False, texts.PANEL_ERROR_TOAST, alert=True)
+
     try:
         result = await panel_client.topup(customer, req.requested_gb, username=req.admin_username)
     except PanelClientError as exc:
         db.revert_to_pending(request_id)
         return Outcome(False, f"{texts.PANEL_ERROR_TOAST} ({exc})", alert=True)
+
+    if req.kind == black_friday.KIND_TOPUP:
+        # Same grant as a normal top-up, at the price locked into the request —
+        # honoured even if the event has ended since.
+        db.clear_warning_bucket(req.admin_username)
+        db.record_sale(
+            telegram_id=customer,
+            username=req.admin_username,
+            gb=req.requested_gb,
+            amount=req.toman_amount,
+            method=db.BF_CARD_METHOD,
+        )
+        paid_gb = req.bf_paid_gb if req.bf_paid_gb is not None else req.requested_gb
+        gift_gb = req.bf_gift_gb or 0.0
+        black_friday.record_purchase(
+            telegram_id=customer,
+            username=req.admin_username,
+            kind=black_friday.PURCHASE_TOPUP,
+            paid_gb=paid_gb,
+            gift_gb=gift_gb,
+            amount=req.toman_amount,
+            list_amount=req.bf_credit_amount or req.toman_amount,
+            method=black_friday.METHOD_CARD,
+        )
+        await _tell(
+            bot,
+            customer,
+            texts.BF_TOPUP_APPROVED_ADMIN.format(
+                paid_gb=paid_gb,
+                gift_part=texts.BF_GIFT_PART.format(gift_gb=gift_gb) if gift_gb else "",
+                added_gb=req.requested_gb,
+                new_balance_gb=bytes_to_gb(result.get("new_traffic_bytes")),
+            ),
+        )
+        return Outcome(True, texts.APPROVED_TOAST, finished=True)
 
     # A successful top-up rearms the low-traffic warnings for this panel.
     db.clear_warning_bucket(req.admin_username)
