@@ -206,6 +206,69 @@
 
 @layer components {
 
+    /* The profit page (/profit). Persian, so no letter-spacing anywhere and a
+       generous line height. The chart colours below are the only literal
+       colours on the page: the dataviz reference palette, checked with its
+       validator against the card surfaces (light #ffffff, dark #1a1a1a, Black
+       Friday #151313). --pf-s* are categorical slots 1-3 (series identity);
+       --pf-o1..o5 are one blue ordinal ramp, o5 being the most emphasised step
+       (darkest on light, lightest on dark); --pf-oN-ink is the label colour
+       that reads on that step. Everything else is the app's own tokens. */
+    .profit-page {
+        --pf-s1: #2a78d6;
+        --pf-s2: #eb6834;
+        --pf-s3: #1baf7a;
+        --pf-o1: #86b6ef;
+        --pf-o2: #5598e7;
+        --pf-o3: #2a78d6;
+        --pf-o4: #1c5cab;
+        --pf-o5: #104281;
+        --pf-o1-ink: #0b0b0b;
+        --pf-o2-ink: #0b0b0b;
+        --pf-o3-ink: #ffffff;
+        --pf-o4-ink: #ffffff;
+        --pf-o5-ink: #ffffff;
+        line-height: 1.7;
+        letter-spacing: 0;
+    }
+
+    .dark .profit-page {
+        --pf-s1: #3987e5;
+        --pf-s2: #d95926;
+        --pf-s3: #199e70;
+        --pf-o1: #184f95;
+        --pf-o2: #256abf;
+        --pf-o3: #3987e5;
+        --pf-o4: #6da7ec;
+        --pf-o5: #9ec5f4;
+        --pf-o1-ink: #ffffff;
+        --pf-o2-ink: #ffffff;
+        --pf-o3-ink: #ffffff;
+        --pf-o4-ink: #0b0b0b;
+        --pf-o5-ink: #0b0b0b;
+    }
+
+    .profit-page h1,
+    .profit-page h2,
+    .profit-page h3 {
+        letter-spacing: 0;
+        line-height: 1.6;
+    }
+
+    .profit-page .pf-caption {
+        font-size: 0.75rem;
+        line-height: 1.7;
+    }
+
+    .profit-page .pf-body {
+        font-size: 0.875rem;
+        line-height: 1.7;
+    }
+
+    .profit-page .pf-tip {
+        transition: opacity 150ms ease-out;
+    }
+
     /* Raised surface: soft gradient, hairline highlight along the top edge and
        a wide, low-opacity shadow. Used by Card and other panel surfaces. */
     .nx-surface {
