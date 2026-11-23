@@ -215,8 +215,10 @@
         transition: box-shadow 0.2s var(--ease-out);
     }
 
-    .nx-surface-hover:hover {
-        box-shadow: inset 0 1px 0 0 var(--surface-highlight), var(--surface-shadow-hover);
+    @media (hover: hover) and (pointer: fine) {
+        .nx-surface-hover:hover {
+            box-shadow: inset 0 1px 0 0 var(--surface-highlight), var(--surface-shadow-hover);
+        }
     }
 
     /* Sticky header: warm paper tint in light, deep navy in dark, both blurred. */
@@ -231,8 +233,10 @@
         color: #182536;
     }
 
-    .nx-gold:hover {
-        background-color: hsl(var(--brand-gold) / 0.85);
+    @media (hover: hover) and (pointer: fine) {
+        .nx-gold:hover {
+            background-color: hsl(var(--brand-gold) / 0.85);
+        }
     }
 }
 

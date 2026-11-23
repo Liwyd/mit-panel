@@ -180,9 +180,9 @@ export function PanelFormDialog({
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
                             <Label htmlFor="url">Panel URL *</Label>
-                            <div className="group relative">
+                            <div className="group relative" tabIndex={0} aria-label="More info">
                                 <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md">
+                                <div className="invisible group-hover:visible group-focus-within:visible absolute left-0 top-6 z-50 w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md">
                                     If your panel is Marzban, do not include the /urlpath.
                                 </div>
                             </div>
@@ -203,9 +203,9 @@ export function PanelFormDialog({
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
                             <Label htmlFor="sub_url">Subscription URL *</Label>
-                            <div className="group relative">
+                            <div className="group relative" tabIndex={0} aria-label="More info">
                                 <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md">
+                                <div className="invisible group-hover:visible group-focus-within:visible absolute left-0 top-6 z-50 w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md">
                                     {watch('panel_type') === 'marzban'
                                         ? 'For Marzban: Enter URL without prefix (e.g., https://sub.example.com)'
                                         : 'For 3x-ui/Sanaei: Enter URL with prefix (e.g., https://panel.example.com/sub)'}
