@@ -48,6 +48,44 @@ def to_jalali(year: int, month: int, day: int) -> tuple[int, int, int]:
     return jalali_year, 7 + ((days - 186) // 30), 1 + ((days - 186) % 30)
 
 
+def to_gregorian(year: int, month: int, day: int) -> tuple[int, int, int]:
+    """Jalali to Gregorian: the inverse of `to_jalali`."""
+    year += 1595
+    days = -355668 + (365 * year) + ((year // 33) * 8) + (((year % 33) + 3) // 4) + day
+    days += (month - 1) * 31 if month < 7 else ((month - 7) * 30) + 186
+    g_year = 400 * (days // 146097)
+    days %= 146097
+    if days > 36524:
+        days -= 1
+        g_year += 100 * (days // 36524)
+        days %= 36524
+        if days >= 365:
+            days += 1
+    g_year += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        g_year += (days - 1) // 365
+        days = (days - 1) % 365
+    g_day = days + 1
+    february = 29 if (g_year % 4 == 0 and g_year % 100 != 0) or g_year % 400 == 0 else 28
+    lengths = [0, 31, february, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    g_month = 0
+    while g_month < 13 and g_day > lengths[g_month]:
+        g_day -= lengths[g_month]
+        g_month += 1
+    return g_year, g_month, g_day
+
+
+def jalali_month_length(year: int, month: int) -> int:
+    """31 days for Farvardin-Shahrivar, 30 for Mehr-Bahman, and 29 or 30 for
+    Esfand depending on whether the Jalali year is a leap year."""
+    if month <= 6:
+        return 31
+    if month <= 11:
+        return 30
+    return 30 if to_jalali(*to_gregorian(year, 12, 30)) == (year, 12, 30) else 29
+
+
 def day_of(stamp: str):
     """The Tehran calendar day a stored UTC timestamp falls on."""
     try:
