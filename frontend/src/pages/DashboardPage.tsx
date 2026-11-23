@@ -64,7 +64,6 @@ import { UserFormDialog } from './components/UserFormDialog'
 import { PageLayout } from '@/components/PageLayout'
 import { BlackFridayCountdown } from '@/components/BlackFridayCountdown'
 import { DecorBoundary } from '@/components/DecorBoundary'
-import { ProfitSection } from './components/ProfitSection'
 
 function NewsSlide({ item }: { item: NewsFeedItem }) {
     const bannerUrl = useBannerImage(item.id, item.has_banner)
@@ -971,9 +970,6 @@ export function DashboardPage() {
                     </Card>
                 </div>
             )}
-
-            {/* Profit - superadmin only; a failure shows an inline note and nothing else */}
-            {userRole === 'superadmin' && <ProfitSection />}
 
             {/* System Stats Row - panel host resources */}
             {dashboardData?.system && (

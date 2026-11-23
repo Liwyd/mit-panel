@@ -15,6 +15,7 @@ import {
     Server,
     Bot,
     Lock,
+    Calculator,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { logout, getUserRole } from '@/lib/auth'
@@ -35,6 +36,12 @@ const navigationItems = [
         href: '/',
         icon: BarChart3,
         roles: ['admin', 'superadmin'],
+    },
+    {
+        label: 'محاسبه سود',
+        href: '/profit',
+        icon: Calculator,
+        roles: ['superadmin'],
     },
     {
         label: 'Analytics',

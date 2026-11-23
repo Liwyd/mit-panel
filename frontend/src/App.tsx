@@ -13,6 +13,7 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { BotsPage } from '@/pages/BotsPage'
 import { TopupBotPage } from '@/pages/TopupBotPage'
+import { ProfitPage } from '@/pages/ProfitPage'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppToaster } from '@/components/AppToaster'
@@ -49,6 +50,17 @@ function App() {
                         <ProtectedRoute>
                             <Layout>
                                 <AnalyticsPage />
+                            </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/profit"
+                    element={
+                        <ProtectedRoute allowedRoles={['superadmin']}>
+                            <Layout>
+                                <ProfitPage />
                             </Layout>
                         </ProtectedRoute>
                     }
