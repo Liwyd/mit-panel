@@ -35,7 +35,7 @@ function Tile({
             <p
                 className={cn(
                     'mt-1 text-[1.375rem] font-black leading-snug',
-                    tone === 'accent' && 'text-primary',
+                    tone === 'accent' && 'text-[color:var(--pf-positive)]',
                     tone === 'negative' && 'text-destructive'
                 )}
             >
@@ -468,7 +468,7 @@ export function BlackFridayCard({ bf }: { bf: ProfitBlackFriday }) {
                 <Stat label="سود رویداد">
                     <Money
                         value={bf.profit}
-                        className={cn('font-black', bf.profit < 0 ? 'text-destructive' : 'text-primary')}
+                        className={cn('font-black', bf.profit < 0 ? 'text-destructive' : 'text-[color:var(--pf-positive)]')}
                         unitClassName="pf-caption font-normal"
                     />
                 </Stat>
