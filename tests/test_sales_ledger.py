@@ -103,7 +103,7 @@ def test_settlements_are_recorded_but_stay_out_of_a_panels_history(ledger):
     # itself, so the settlement is visible there.
     everything = ledger.list_sales_since("1970-01-01T00:00:00+00:00")
     assert {s.method for s in everything} == {"weekly", "settlement"}
-    assert ledger.NOT_SALES == ("grant", "settlement", "wallet_charge")
+    assert ledger.NOT_SALES == ("grant", "settlement", "wallet_charge", "bf_discount")
 
 
 def test_to_jalali_turns_nowruz_into_the_first_of_the_year(ledger):
