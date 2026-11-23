@@ -38,7 +38,7 @@ class ChangePassword(StatesGroup):
 
 
 class Broadcast(StatesGroup):
-    text = State()
+    collect = State()
 
 
 class GrantTraffic(StatesGroup):

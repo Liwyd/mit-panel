@@ -767,9 +767,37 @@ OBSERVERS_NONE = "ℹ️ هیچ ناظری ثبت نشده است."
 OBSERVER_LINE = "• {admin}"
 
 BTN_BROADCAST = "📣 پیام همگانی"
-ASK_BROADCAST_TEXT = "📣 متن پیامی که برای همه‌ی کاربران ارسال شود را بنویسید:"
-BROADCAST_RESULT = "📣 پیام همگانی ارسال شد.\n✅ موفق: {sent}\n❌ ناموفق: {failed}"
-BROADCAST_PREFIX = "📣 اطلاعیه:\n\n"
+ASK_BROADCAST_COLLECT = (
+    "📣 <b>پیام همگانی</b>\n\n"
+    "یک یا چند پیام از هر نوع (متن، عکس، ویدیو، آلبوم، ویس، فایل، استیکر یا پیام فوروارد شده) "
+    "ارسال کنید. پیام‌ها در صف قرار می‌گیرند و دقیقاً به همان شکل برای کاربران فرستاده می‌شوند.\n\n"
+    "در پایان روی «👁 پیش‌نمایش و ارسال» بزنید."
+)
+BTN_BROADCAST_PREVIEW = "👁 پیش‌نمایش و ارسال"
+BTN_BROADCAST_CLEAR = "🗑 پاک کردن صف"
+BTN_BROADCAST_CANCEL = "❌ لغو"
+BROADCAST_QUEUED = "✅ به صف اضافه شد. تعداد پیام‌های صف: <b>{count}</b>"
+BROADCAST_QUEUE_FULL = "⚠️ صف پر است. حداکثر {limit} پیام در هر ارسال مجاز است."
+BROADCAST_QUEUE_EMPTY = "ℹ️ صف پیام خالی است. ابتدا یک یا چند پیام ارسال کنید."
+BROADCAST_CLEARED = "🗑 صف پیام پاک شد."
+BROADCAST_CANCELLED = "🚫 ارسال پیام همگانی لغو شد."
+BROADCAST_PREVIEW_HEADER = "👁 پیش‌نمایش پیام‌ها (به همین شکل ارسال می‌شود):"
+BROADCAST_CHOOSE_AUDIENCE = (
+    "📣 <b>{count}</b> پیام آماده ارسال است. مخاطبان را انتخاب کنید:"
+)
+BTN_BROADCAST_ALL = "📣 ارسال برای همه کاربران ربات ({count})"
+BTN_BROADCAST_LINKED = "👥 فقط نماینده‌های دارای پنل ({count})"
+BROADCAST_BUSY = "⏳ یک پیام همگانی در حال ارسال است. پس از پایان آن دوباره تلاش کنید."
+BROADCAST_STARTED = "🚀 ارسال پیام همگانی برای <b>{total}</b> کاربر شروع شد. گزارش پایان کار فرستاده می‌شود."
+BROADCAST_RESULT = (
+    "📣 <b>ارسال پیام همگانی تمام شد.</b>\n"
+    "✅ موفق: {sent}\n"
+    "🚫 مسدود کرده‌اند: {blocked}\n"
+    "❌ ناموفق: {failed}\n"
+    "👥 مجموع: {total}\n"
+    "⏱ مدت: {seconds} ثانیه"
+)
+BROADCAST_CRASHED = "❌ ارسال پیام همگانی با خطا متوقف شد. جزئیات در گزارش‌های سرور ثبت شده است."
 
 BTN_TUTORIALS = "📚 آموزش‌ها"
 NO_TUTORIALS = "ℹ️ هنوز آموزشی ثبت نشده است."
