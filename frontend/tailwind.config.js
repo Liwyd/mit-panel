@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    future: {
+        hoverOnlyWhenSupported: true,
+    },
     darkMode: ['class'],
     content: [
         './index.html',
@@ -55,6 +58,11 @@ export default {
                 md: 'calc(var(--radius) - 2px)',
                 sm: 'calc(var(--radius) - 4px)',
                 card: '1.75rem',
+            },
+            transitionTimingFunction: {
+                out: 'var(--ease-out)',
+                'in-out-strong': 'var(--ease-in-out)',
+                drawer: 'var(--ease-drawer)',
             },
             keyframes: {
                 'accordion-down': {
