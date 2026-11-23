@@ -1020,6 +1020,16 @@ def get_wallet_balance(telegram_id: int) -> int:
         return row["balance"] if row else 0
 
 
+def wallet_totals() -> tuple[int, int]:
+    """(money held in customer wallets, wallets holding any). Read-only."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(balance), 0) AS total, COUNT(*) AS n "
+            "FROM wallets WHERE balance > 0"
+        ).fetchone()
+        return int(row["total"]), int(row["n"])
+
+
 def add_wallet_balance(telegram_id: int, amount: int) -> int:
     """Credit the wallet and return the new balance."""
     now = datetime.now(timezone.utc).isoformat()
