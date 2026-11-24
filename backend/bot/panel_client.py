@@ -93,7 +93,7 @@ async def check_username_taken(username: str) -> bool:
     """Check if a username exists in MIT Panel DB or any Marzban panel."""
     # Fast check: MIT Panel DB
     with _session() as db:
-        if crud.get_admin_by_username(db, username):
+        if crud.admin_username_exists(db, username):
             return True
 
     # Check each Marzban panel via API
@@ -108,7 +108,8 @@ async def check_username_taken(username: str) -> bool:
         )
         try:
             admins = await sudo_api.get_admins()
-            if any(a.get("username") == username for a in admins):
+            wanted = username.lower()
+            if any(str(a.get("username") or "").lower() == wanted for a in admins):
                 return True
         except Exception:
             continue
@@ -258,10 +259,13 @@ async def create_admin(
     telegram_id: int | None,
 ) -> dict:
     """Create a new admin in Marzban and MIT Panel."""
-    if validation.has_space(username):
-        raise PanelClientError("A panel username cannot contain spaces")
+    if not validation.is_valid_username(username):
+        raise PanelClientError(
+            "A panel username may only use English letters, digits, _ . - "
+            "(3-50 characters, starting with a letter or digit)"
+        )
     with _session() as db:
-        if crud.get_admin_by_username(db, username):
+        if crud.admin_username_exists(db, username):
             raise PanelClientError("An admin with that username already exists")
 
         panel_obj = _require_marzban_panel(db, panel)
@@ -474,10 +478,13 @@ async def create_admin_for_shop(
     telegram_id: int,
 ) -> dict:
     """Create a new admin for a shop purchase — return traffic enabled, no expiry."""
-    if validation.has_space(username):
-        raise PanelClientError("A panel username cannot contain spaces")
+    if not validation.is_valid_username(username):
+        raise PanelClientError(
+            "A panel username may only use English letters, digits, _ . - "
+            "(3-50 characters, starting with a letter or digit)"
+        )
     with _session() as db:
-        if crud.get_admin_by_username(db, username):
+        if crud.admin_username_exists(db, username):
             raise PanelClientError("An admin with that username already exists")
 
         panel_obj = _require_marzban_panel(db, panel)

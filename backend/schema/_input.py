@@ -2,6 +2,19 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
+from backend.bot.validation import is_valid_username
+
+
+def _check_new_username(value: str) -> str:
+    """A newly created panel's username must pass the MIT Panel login form's
+    rule, or the panel can never be logged into."""
+    if not is_valid_username(value):
+        raise ValueError(
+            "Username may only use English letters, digits, underscores, dots and "
+            "hyphens, 3-50 characters, starting with a letter or digit"
+        )
+    return value
+
 
 class AdminInput(BaseModel):
     username: str
@@ -18,6 +31,11 @@ class AdminInput(BaseModel):
     delete_return_traffic: bool = False
     expiry_date: datetime | None
     telegram_id: Optional[int] = None
+
+    @field_validator("username")
+    @classmethod
+    def _valid_username(cls, value: str) -> str:
+        return _check_new_username(value)
 
 
 class AdminUpdateInput(BaseModel):
@@ -103,12 +121,17 @@ class BotGrantInput(BaseModel):
 class BotCreateAdminInput(BaseModel):
     """Superadmin provisioning a new reseller panel from the bot."""
 
-    username: str = Field(min_length=1, pattern=r"^\S+$")
-    password: str = Field(min_length=1)
+    username: str
+    password: str = Field(min_length=1, max_length=100)
     panel: str
     traffic_gb: float = Field(ge=0)
     expiry_days: Optional[int] = None
     telegram_id: Optional[int] = None
+
+    @field_validator("username")
+    @classmethod
+    def _valid_username(cls, value: str) -> str:
+        return _check_new_username(value)
 
 
 class SettingsInput(BaseModel):

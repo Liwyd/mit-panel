@@ -111,7 +111,7 @@ async def create_admin(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_current_superadmin),
 ):
-    if crud.get_admin_by_username(db, admin_input.username):
+    if crud.admin_username_exists(db, admin_input.username):
         logger.warning(
             f"Attempt to create admin with duplicate username: {admin_input.username}"
         )

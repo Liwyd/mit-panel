@@ -333,7 +333,7 @@ async def create_admin(
     db: Session = Depends(get_db),
     _: None = Depends(verify_bot_api_key),
 ):
-    if crud.get_admin_by_username(db, payload.username):
+    if crud.admin_username_exists(db, payload.username):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"success": False, "message": "An admin with that username already exists"},

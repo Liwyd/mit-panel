@@ -72,6 +72,20 @@ def get_admin_by_username(db: Session, username: str):
     return db.query(Admins).filter(Admins.username == username).first()
 
 
+def admin_username_exists(db: Session, username: str) -> bool:
+    """True when any admin already has this username, ignoring case.
+
+    Used before creating a panel, so `Ali` cannot be created next to `ali`.
+    Login keeps the exact match in `get_admin_by_username`.
+    """
+    return (
+        db.query(Admins.id)
+        .filter(func.lower(Admins.username) == username.lower())
+        .first()
+        is not None
+    )
+
+
 def get_admin_by_id(db: Session, admin_id: int):
     return db.query(Admins).filter(Admins.id == admin_id).first()
 
