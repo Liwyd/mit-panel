@@ -1478,7 +1478,12 @@ def test_the_new_username_follows_the_shop_rules(newpanel, monkeypatch):
 
     spaced = RecMessage(NEWBIE, text="my name")
     asyncio.run(bf_router.get_new_username(spaced, state))
-    assert spaced.answers == [texts.USERNAME_NO_SPACE]
+    assert spaced.answers == [texts.USERNAME_INVALID]
+
+    at_sign = RecMessage(NEWBIE, text="ali@shop")
+    asyncio.run(bf_router.get_new_username(at_sign, state))
+    assert at_sign.answers == [texts.USERNAME_INVALID]
+    assert "bf_new_username" not in state.data
 
     monkeypatch.setattr(bf_router.panel_client, "check_username_taken", AsyncMock(return_value=True))
     taken = RecMessage(NEWBIE, text="alice")
