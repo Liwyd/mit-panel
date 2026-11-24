@@ -63,6 +63,7 @@ NEW_START_NOTIFICATION_UNLINKED = (
     "آیدی عددی: <code>{telegram_id}</code>\n"
     "وضعیت: متصل نشده ⚠️"
 )
+NEW_START_NOT_JOINED_YET = "\n📢 هنوز عضو کانال نشده است."
 
 SUPERADMIN_WELCOME = (
     "با سلام سوپرادمین محترم 👋\n"
@@ -74,7 +75,7 @@ BTN_PENDING_REQUESTS = "📋 درخواست‌های در انتظار"
 NO_PENDING_REQUESTS = "ℹ️ در حال حاضر درخواست شارژ در انتظاری وجود ندارد."
 
 FORCE_JOIN_TEXT = "📢 برای استفاده از ربات، ابتدا در کانال زیر عضو شوید و سپس «✅ عضو شدم» را بزنید."
-FORCE_JOIN_CONFIRMED = "✅ عضویت شما تأیید شد. برای ادامه، دستور /start را ارسال نمایید."
+FORCE_JOIN_CONFIRMED = "✅ عضویت شما تأیید شد."
 BTN_TOGGLE_FORCE_JOIN = "🔀 روشن/خاموش‌کردن جوین اجباری"
 BTN_SET_FORCE_JOIN_CHANNEL = "📢 تنظیم کانال جوین اجباری"
 ASK_FORCE_JOIN_CHANNEL = "📢 لطفاً آیدی کانال را وارد نمایید (مثال: @channelusername):"
@@ -1264,6 +1265,22 @@ MAINT_PREVIOUS = "صفحه قبل"
 
 # --- Black Friday ---
 BTN_BLACK_FRIDAY = "بلک‌فرایدی 🎁"
+BF_START_PROMO = (
+    "🎁 <b>جشنواره‌ی بلک‌فرایدی MIT Panel در جریان است!</b>\n"
+    "━━━━━━━━━━━━━━━\n"
+    "⏳ زمان باقی‌مانده تا پایان جشنواره: <b>{left}</b>\n\n"
+    "{offer}\n\n"
+    "برای دیدن بسته‌ها، دکمه‌ی زیر یا «بلک‌فرایدی 🎁» در منو را بزنید."
+)
+BF_START_OFFER_GIFT = (
+    "اگر همین حالا پنل تهیه کنید، هم از <b>تخفیف ویژه</b> بهره‌مند می‌شوید "
+    "و هم <b>حجم هدیه</b> دریافت می‌کنید. 🎉"
+)
+BF_START_OFFER_PLAIN = "اگر همین حالا پنل تهیه کنید، از <b>تخفیف ویژه</b> بهره‌مند می‌شوید. 🎉"
+BF_TIME_LEFT_DAYS_HOURS = "{days} روز و {hours} ساعت"
+BF_TIME_LEFT_DAYS = "{days} روز"
+BF_TIME_LEFT_HOURS = "{hours} ساعت"
+BF_TIME_LEFT_UNDER_HOUR = "کمتر از یک ساعت"
 BTN_BF_STATS = "📊 آمار بلک‌فرایدی"
 BTN_BF_OPEN = "🎁 ورود به بخش بلک‌فرایدی"
 BTN_BF_CUSTOM = "✏️ حجم دلخواه"

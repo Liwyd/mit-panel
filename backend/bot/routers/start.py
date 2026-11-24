@@ -4,6 +4,7 @@ user ever starts the bot."""
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 
@@ -13,7 +14,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.media_group import MediaGroupBuilder
 
-from backend.bot import keyboards, sales, texts
+from backend.bot import black_friday, keyboards, sales, texts
 from backend.bot import panel_client
 from backend.bot.panel_client import PanelClientError
 from backend.bot.filters import SuperadminFilter
@@ -30,22 +31,27 @@ from backend.bot import db
 from backend.bot.config import bot_config as settings
 
 router = Router(name="start")
+logger = logging.getLogger(__name__)
 
 
-async def _notify_superadmins_of_new_user(bot: Bot, message: Message, admins: list[dict]) -> None:
-    user = message.from_user
+async def _notify_superadmins_of_new_user(
+    bot: Bot, user, admins: list[dict], extra: str = ""
+) -> None:
     username = f"@{user.username}" if user.username else "—"
+    full_name = html.escape(user.full_name or "—")
+    username = html.escape(username)
     if admins:
         text = texts.NEW_START_NOTIFICATION_LINKED.format(
-            full_name=user.full_name,
+            full_name=full_name,
             username=username,
             telegram_id=user.id,
-            admin_username="، ".join(a["username"] for a in admins),
+            admin_username=html.escape("، ".join(a["username"] for a in admins)),
         )
     else:
         text = texts.NEW_START_NOTIFICATION_UNLINKED.format(
-            full_name=user.full_name, username=username, telegram_id=user.id
+            full_name=full_name, username=username, telegram_id=user.id
         )
+    text += extra
     for superadmin_id in settings.superadmin_id_list:
         try:
             await bot.send_message(
@@ -55,36 +61,90 @@ async def _notify_superadmins_of_new_user(bot: Bot, message: Message, admins: li
             continue
 
 
-@router.message(CommandStart())
-async def start(message: Message, bot: Bot) -> None:
-    is_new_user = not db.user_exists(message.from_user.id)
-    db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.full_name)
+async def note_first_start(bot: Bot, user) -> None:
+    """Record a first-time /start that the force-join gate stopped, and tell the
+    superadmins right away — before the user has joined the channel.
 
-    if message.from_user.id in settings.superadmin_id_list:
+    Called from `ForceJoinMiddleware`. Because the user is recorded here, the
+    /start that follows their join is no longer "new" and nobody is told twice.
+    Never raises: the gate must keep working whatever happens here.
+    """
+    try:
+        if user is None or user.id in settings.superadmin_id_list:
+            return
+        if db.user_exists(user.id):
+            return
+        db.upsert_user(user.id, user.username, user.full_name)
+        try:
+            admins = await panel_client.get_admins(user.id)
+        except Exception:
+            admins = []
+        await _notify_superadmins_of_new_user(
+            bot, user, admins or [], extra=texts.NEW_START_NOT_JOINED_YET
+        )
+    except Exception:
+        logger.exception("could not record the first /start of %s", getattr(user, "id", None))
+
+
+async def _black_friday_promo(message: Message) -> None:
+    """While the event runs, everyone who starts the bot hears about it — with
+    the time left, and without a price."""
+    left = black_friday.time_left_text()
+    if left is None:
+        return
+    try:
+        # A new panel is quoted at the public price (""), so this says whether
+        # buying one now really comes with gift GB.
+        offer = (
+            texts.BF_START_OFFER_GIFT
+            if black_friday.gift_eligible("")
+            else texts.BF_START_OFFER_PLAIN
+        )
+        await message.answer(
+            texts.BF_START_PROMO.format(left=left, offer=offer),
+            reply_markup=keyboards.bf_open_kb(),
+        )
+    except Exception:
+        logger.exception("could not send the black friday start message")
+
+
+async def _welcome(bot: Bot, user, message: Message) -> None:
+    """Everything /start does, for `user`, answering in `message`'s chat. Shared
+    by /start itself and the «✅ عضو شدم» button, so joining the channel lands
+    the user straight in the bot instead of asking them to /start again."""
+    is_new_user = not db.user_exists(user.id)
+    db.upsert_user(user.id, user.username, user.full_name)
+
+    if user.id in settings.superadmin_id_list:
         # /start is a reset, so it also drops whichever section they were in.
-        forget_section(message.from_user.id)
+        forget_section(user.id)
         await message.answer(texts.SUPERADMIN_WELCOME, reply_markup=keyboards.superadmin_menu_kb())
         return
 
-    admins = await safe_get_admins(message)
+    admins = await safe_get_admins(message, user.id)
     if admins is None:
         return
     if is_new_user:
-        await _notify_superadmins_of_new_user(bot, message, admins)
+        await _notify_superadmins_of_new_user(bot, user, admins)
 
     if not admins:
         await message.answer(
             texts.START_UNLINKED,
-            reply_markup=await menu_kb_for(message.from_user.id),
+            reply_markup=await menu_kb_for(user.id),
         )
-        return
+    else:
+        # Deliberately no volume figures here: with several panels a combined
+        # total is meaningless, and per-panel numbers belong in «🗄 پنل‌های من».
+        await message.answer(
+            texts.START_LINKED.format(name=html.escape(user.full_name or "")),
+            reply_markup=keyboards.main_menu_kb(),
+        )
+    await _black_friday_promo(message)
 
-    # Deliberately no volume figures here: with several panels a combined total
-    # is meaningless, and per-panel numbers belong in «🗄 پنل‌های من».
-    await message.answer(
-        texts.START_LINKED.format(name=message.from_user.full_name),
-        reply_markup=keyboards.main_menu_kb(),
-    )
+
+@router.message(CommandStart())
+async def start(message: Message, bot: Bot) -> None:
+    await _welcome(bot, message.from_user, message)
 
 
 @router.message(F.text.in_({texts.BTN_MY_PANELS, texts.BTN_BALANCE}))
@@ -194,10 +254,17 @@ async def cancel(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "fj_check")
-async def recheck_join(call: CallbackQuery) -> None:
+async def recheck_join(call: CallbackQuery, bot: Bot, state: FSMContext) -> None:
     # ForceJoinMiddleware only lets this callback through once membership is
-    # confirmed (or the gate is off), so reaching this handler already means OK.
-    await call.answer(texts.FORCE_JOIN_CONFIRMED, show_alert=True)
+    # confirmed (or the gate is off), so reaching this handler already means OK:
+    # carry on exactly as /start would, without making them send it again.
+    await call.answer(texts.FORCE_JOIN_CONFIRMED)
+    try:
+        await call.message.delete()
+    except Exception:
+        pass  # too old to delete, or already gone — the welcome follows anyway
+    await state.clear()
+    await _welcome(bot, call.from_user, call.message)
 
 
 # ── Support button ────────────────────────────────────────────────────────
@@ -208,8 +275,6 @@ async def support_handler(message: Message) -> None:
 
 
 # ── Panel preview (media group) ──────────────────────────────────────────
-
-logger = logging.getLogger(__name__)
 
 # Resolve image paths once at import time
 _PANEL_PREVIEW_IMAGES: list[str] = []

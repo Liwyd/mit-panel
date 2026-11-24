@@ -60,6 +60,34 @@ def is_active() -> bool:
         return False
 
 
+def time_left_text(now: datetime | None = None) -> str | None:
+    """«N روز و M ساعت» until the event ends, or None when it is not running.
+    Never raises, for the same reason as `is_active`."""
+    try:
+        from backend.utils.settings_store import black_friday_state
+
+        state = black_friday_state()
+        if not state["active"] or not state.get("ends_at"):
+            return None
+        end = datetime.fromisoformat(state["ends_at"])
+        now = now or datetime.now(end.tzinfo)
+        seconds = int((end - now).total_seconds())
+        if seconds <= 0:
+            return None
+        days, rest = divmod(seconds, 86400)
+        hours = rest // 3600
+        if days and hours:
+            return texts.BF_TIME_LEFT_DAYS_HOURS.format(days=days, hours=hours)
+        if days:
+            return texts.BF_TIME_LEFT_DAYS.format(days=days)
+        if hours:
+            return texts.BF_TIME_LEFT_HOURS.format(hours=hours)
+        return texts.BF_TIME_LEFT_UNDER_HOUR
+    except Exception:
+        logger.exception("could not work out the black friday time left")
+        return None
+
+
 # ---- pricing -------------------------------------------------------------------
 
 def bf_price(username: str) -> float:
