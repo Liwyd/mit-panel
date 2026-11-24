@@ -57,4 +57,12 @@ class ForceJoinMiddleware(BaseMiddleware):
             # Nothing left to do if we can't even message them — swallowing it
             # keeps one blocked user from raising out of every update.
             pass
+
+        # A first /start stopped here must still reach the superadmins now, not
+        # only once the user has joined (the /start handler never runs for them).
+        text = getattr(event, "text", None)
+        if not isinstance(event, CallbackQuery) and isinstance(text, str) and text.startswith("/start"):
+            from backend.bot.routers.start import note_first_start
+
+            await note_first_start(bot, tg_user)
         return None
