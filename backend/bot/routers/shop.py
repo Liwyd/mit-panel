@@ -202,8 +202,8 @@ async def shop_get_username(message: Message, state: FSMContext) -> None:
     if not username:
         await message.answer(texts.SHOP_ASK_USERNAME)
         return
-    if validation.has_space(username):
-        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
+    if not validation.is_valid_username(username):
+        await message.answer(texts.USERNAME_INVALID, reply_markup=keyboards.cancel_kb())
         return
 
     # Check if username is already taken (MIT Panel DB + all Marzban panels)

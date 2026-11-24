@@ -689,8 +689,8 @@ async def create_admin_username(message: Message, state: FSMContext) -> None:
     if not username:
         await message.answer(texts.ASK_NEW_ADMIN_USERNAME)
         return
-    if validation.has_space(username):
-        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
+    if not validation.is_valid_username(username):
+        await message.answer(texts.USERNAME_INVALID, reply_markup=keyboards.cancel_kb())
         return
     # Check if username is already taken (MIT Panel DB + all Marzban panels)
     try:
@@ -711,7 +711,7 @@ async def create_admin_password(message: Message, state: FSMContext) -> None:
     if not password:
         await message.answer(texts.INVALID_PASSWORD)
         return
-    if len(password) < 8 or not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+    if not validation.is_strong_password(password):
         await message.answer(texts.SHOP_PASSWORD_WEAK)
         return
     await state.update_data(new_password=password)

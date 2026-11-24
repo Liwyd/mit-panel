@@ -426,8 +426,8 @@ async def get_new_username(message: Message, state: FSMContext) -> None:
     if not username:
         await message.answer(texts.SHOP_ASK_USERNAME)
         return
-    if validation.has_space(username):
-        await message.answer(texts.USERNAME_NO_SPACE, reply_markup=keyboards.cancel_kb())
+    if not validation.is_valid_username(username):
+        await message.answer(texts.USERNAME_INVALID, reply_markup=keyboards.cancel_kb())
         return
     if await _username_taken(username):
         await message.answer(texts.SHOP_USERNAME_TAKEN)
