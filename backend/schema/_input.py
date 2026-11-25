@@ -151,6 +151,9 @@ class SettingsInput(BaseModel):
     black_friday_enabled: Optional[bool] = None
     black_friday_ends_at: Optional[str] = None
     cost_per_gb: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    # 0.1-10 on purpose: a typo such as 14 for 1.4 is refused rather than
+    # silently cutting every cost on the profit page by ten.
+    traffic_multiplier: Optional[float] = Field(default=None, ge=0.1, le=10)
     fixed_monthly_cost: Optional[float] = Field(default=None, ge=0, le=1_000_000_000_000)
     monthly_revenue_target: Optional[float] = Field(default=None, ge=0, le=1_000_000_000_000)
 

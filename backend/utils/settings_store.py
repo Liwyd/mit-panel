@@ -81,6 +81,11 @@ DEFAULTS = {
     # What one GB of traffic costs the business, in toman. The profit report
     # subtracts it from the revenue of every GB sold or given away.
     "cost_per_gb": 1000,
+    # Traffic multiplier on the panels: when it is 1.4, 1 MB a user really
+    # uses takes 1.4 MB of their credit. One GB of credit sold therefore costs
+    # only 1 / 1.4 GB of real traffic, so the profit report divides cost_per_gb
+    # by it. 1 means no multiplier.
+    "traffic_multiplier": 1,
     # Fixed costs of running the business per month (servers, infrastructure,
     # staff), in toman. The profit page subtracts it from gross profit to get
     # net profit.
