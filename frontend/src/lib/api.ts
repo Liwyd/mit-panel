@@ -443,6 +443,7 @@ export interface PanelSettings {
     black_friday_enabled: boolean
     black_friday_ends_at: string
     cost_per_gb: number
+    traffic_multiplier: number
     fixed_monthly_cost: number
     monthly_revenue_target: number
 }
@@ -734,7 +735,12 @@ export interface ProfitBlackFriday {
 }
 
 export interface ProfitSettings {
+    /** As saved: what one GB of real traffic costs. */
     cost_per_gb: number
+    /** Credit used per unit of real traffic (1.4 → 1 MB used costs 1.4 MB of credit). */
+    traffic_multiplier: number
+    /** cost_per_gb / traffic_multiplier: what one GB of credit sold really costs. */
+    cost_per_credit_gb: number
     fixed_monthly_cost: number
     monthly_revenue_target: number
 }

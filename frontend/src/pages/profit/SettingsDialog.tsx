@@ -6,12 +6,22 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { fa, parseNumber } from './format'
+import { fa, faFactor, parseNumber } from './format'
 
-const FIELDS: { key: keyof ProfitSettings; label: string; hint: string }[] = [
-    { key: 'cost_per_gb', label: 'هزینه هر گیگ', hint: 'تومان؛ بهای تمام‌شده‌ی هر گیگ ترافیک' },
-    { key: 'fixed_monthly_cost', label: 'هزینه‌های ثابت ماهانه', hint: 'تومان؛ سرور، زیرساخت و حقوق در هر ماه' },
-    { key: 'monthly_revenue_target', label: 'هدف فروش ماهانه', hint: 'تومان؛ صفر یعنی بدون هدف' },
+type EditableKey = 'cost_per_gb' | 'traffic_multiplier' | 'fixed_monthly_cost' | 'monthly_revenue_target'
+
+const FIELDS: { key: EditableKey; label: string; hint: string; min: number; max: number; decimal?: boolean }[] = [
+    { key: 'cost_per_gb', label: 'هزینه هر گیگ', hint: 'تومان؛ بهای تمام‌شده‌ی هر گیگ ترافیک واقعی', min: 0, max: 1_000_000 },
+    {
+        key: 'traffic_multiplier',
+        label: 'ضریب ترافیک',
+        hint: 'اگر با مصرف ۱ مگابایت، ۱٫۴ مگابایت از اعتبار کم می‌شود، ۱٫۴ وارد کنید؛ ۱ یعنی بدون ضریب',
+        min: 0.1,
+        max: 10,
+        decimal: true,
+    },
+    { key: 'fixed_monthly_cost', label: 'هزینه‌های ثابت ماهانه', hint: 'تومان؛ سرور، زیرساخت و حقوق در هر ماه', min: 0, max: 1_000_000_000_000 },
+    { key: 'monthly_revenue_target', label: 'هدف فروش ماهانه', hint: 'تومان؛ صفر یعنی بدون هدف', min: 0, max: 1_000_000_000_000 },
 ]
 
 export function SettingsDialog({
@@ -36,19 +46,24 @@ export function SettingsDialog({
 }
 
 function Form({ settings, onClose, onSaved }: { settings: ProfitSettings; onClose: () => void; onSaved: () => void }) {
-    const [values, setValues] = useState<Record<keyof ProfitSettings, string>>({
+    const [values, setValues] = useState<Record<EditableKey, string>>({
         cost_per_gb: fa(settings.cost_per_gb).replace(/٬/g, ''),
+        traffic_multiplier: faFactor(settings.traffic_multiplier || 1),
         fixed_monthly_cost: fa(settings.fixed_monthly_cost).replace(/٬/g, ''),
         monthly_revenue_target: fa(settings.monthly_revenue_target).replace(/٬/g, ''),
     })
     const [saving, setSaving] = useState(false)
 
     const save = async () => {
-        const parsed = {} as ProfitSettings
+        const parsed = {} as Record<EditableKey, number>
         for (const field of FIELDS) {
             const value = parseNumber(values[field.key])
-            if (!Number.isFinite(value) || value < 0) {
-                toast.error(`«${field.label}» باید عددی صفر یا بزرگ‌تر باشد`)
+            if (!Number.isFinite(value) || value < field.min || value > field.max) {
+                toast.error(
+                    field.decimal
+                        ? `«${field.label}» باید عددی بین ${faFactor(field.min)} و ${faFactor(field.max)} باشد`
+                        : `«${field.label}» باید عددی صفر یا بزرگ‌تر باشد`,
+                )
                 return
             }
             parsed[field.key] = value
@@ -71,7 +86,7 @@ function Form({ settings, onClose, onSaved }: { settings: ProfitSettings; onClos
             <DialogHeader className="mt-5 text-start">
                 <DialogTitle className="tracking-normal">تنظیمات محاسبه</DialogTitle>
                 <DialogDescription className="pf-body">
-                    این سه عدد در همه‌ی محاسبه‌های سود این صفحه به کار می‌روند.
+                    این اعداد در همه‌ی محاسبه‌های سود این صفحه به کار می‌روند.
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -82,7 +97,7 @@ function Form({ settings, onClose, onSaved }: { settings: ProfitSettings; onClos
                         </Label>
                         <Input
                             id={`profit-${field.key}`}
-                            inputMode="numeric"
+                            inputMode={field.decimal ? 'decimal' : 'numeric'}
                             autoComplete="off"
                             value={values[field.key]}
                             onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}

@@ -8,7 +8,7 @@ import type {
 } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { fa, faPercent, versus, versusPoints } from './format'
+import { fa, faFactor, faPercent, versus, versusPoints } from './format'
 import { Gb, Money, Num, Quiet, SectionCard, Stat } from './parts'
 import { RankedBars, type RankedRow } from './RankedBars'
 import { StackedBar } from './StackedBar'
@@ -411,8 +411,13 @@ export function UnitEconomicsCard({ s, settings }: { s: ProfitSelected; settings
                         />
                     )}
                 </Stat>
-                <Stat label="هزینه‌ی هر گیگ">
-                    <Money value={settings.cost_per_gb} unitClassName="pf-caption font-normal" />
+                <Stat label="هزینه‌ی هر گیگ فروخته‌شده">
+                    <Money value={settings.cost_per_credit_gb ?? settings.cost_per_gb} unitClassName="pf-caption font-normal" />
+                    {settings.traffic_multiplier && settings.traffic_multiplier !== 1 && (
+                        <p className="pf-caption mt-0.5 font-normal text-muted-foreground">
+                            <Num>{fa(settings.cost_per_gb)}</Num> ÷ ضریب <Num>{faFactor(settings.traffic_multiplier)}</Num>
+                        </p>
+                    )}
                 </Stat>
             </dl>
 

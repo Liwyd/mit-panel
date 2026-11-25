@@ -24,6 +24,13 @@ export function faDec(value: number): string {
     return faDecimal.format(value)
 }
 
+const faFactorFormat = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 3, useGrouping: false })
+
+/** A multiplier as typed: 1.4 -> ۱٫۴, 1.25 -> ۱٫۲۵ (no grouping, up to 3 decimals). */
+export function faFactor(value: number): string {
+    return faFactorFormat.format(value)
+}
+
 /** 0.123 -> ۱۲٪ (null shows a dash). */
 export function faPercent(value: number | null | undefined, digits = 0): string {
     if (value === null || value === undefined || !Number.isFinite(value)) return '—'
