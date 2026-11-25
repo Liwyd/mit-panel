@@ -474,8 +474,64 @@ def test_an_unreadable_ledger_nulls_the_ledger_sections(ledger, settings, monkey
 def test_settings_in_the_overview(ledger, settings):
     settings.update(fixed_monthly_cost=5, monthly_revenue_target=9)
     assert ov()["settings"] == {
-        "cost_per_gb": 1000, "fixed_monthly_cost": 5, "monthly_revenue_target": 9,
+        "cost_per_gb": 1000, "traffic_multiplier": 1.0, "cost_per_credit_gb": 1000.0,
+        "fixed_monthly_cost": 5, "monthly_revenue_target": 9,
     }
+
+
+# --- traffic multiplier ----------------------------------------------------
+# With a multiplier of 1.4 on the panels, 1 GB of real traffic uses up 1.4 GB
+# of credit, so 1 GB of credit sold costs cost_per_gb / 1.4.
+
+def test_the_multiplier_divides_the_cost_of_every_credit_gb(ledger, settings):
+    settings.update(traffic_multiplier=1.4, cost_per_gb=1400)
+    add(ledger, "card", 3_000_000, gb=1000)
+
+    data = ov()
+    month = by_key(data, AZAR)
+    assert month["cost"] == 1_000_000          # 1000 GB × 1400 / 1.4
+    assert month["profit"] == 2_000_000
+    assert data["settings"]["cost_per_gb"] == 1400  # as saved, for the form
+    assert data["settings"]["traffic_multiplier"] == 1.4
+    assert data["settings"]["cost_per_credit_gb"] == pytest.approx(1000)
+    assert data["selected"]["cost"] == 1_000_000
+    # The monthly report and the Black Friday summary use the same unit cost.
+    assert profit.monthly_report(1, now=NOW)["months"][0]["cost"] == 1_000_000
+
+
+def test_break_even_uses_the_credit_cost(ledger, settings):
+    settings.update(traffic_multiplier=2, cost_per_gb=2000, fixed_monthly_cost=1_000_000)
+    add(ledger, "card", 3_000_000, gb=1000)  # 3000 per GB sold, 1000 real cost per GB
+
+    assert ov()["selected"]["break_even_gb"] == 500  # 1,000,000 / (3000 - 1000)
+
+
+def test_without_a_multiplier_nothing_changes(ledger, settings):
+    add(ledger, "card", 3_000_000, gb=1000)
+    assert by_key(ov(), AZAR)["cost"] == 1_000_000
+
+
+@pytest.mark.parametrize("stored", [None, "", "x", 0, -1, 0.05, 11, "1e9"])
+def test_an_unusable_multiplier_reads_as_one(ledger, monkeypatch, stored):
+    monkeypatch.setattr(
+        profit.settings_store, "get_settings",
+        lambda: {"cost_per_gb": 1000, "traffic_multiplier": stored},
+    )
+    assert profit.traffic_multiplier() == 1.0
+    assert profit.credit_cost_per_gb() == 1000
+
+
+def test_multiplier_setting_default_and_validation():
+    from pydantic import ValidationError
+
+    from backend.schema._input import SettingsInput
+    from backend.utils import settings_store
+
+    assert settings_store.DEFAULTS["traffic_multiplier"] == 1
+    assert SettingsInput(traffic_multiplier=1.4).traffic_multiplier == 1.4
+    for bad in (0, -1, 0.05, 14, 100):
+        with pytest.raises(ValidationError):
+            SettingsInput(traffic_multiplier=bad)
 
 
 def test_unusable_money_settings_read_as_zero(ledger, monkeypatch):
