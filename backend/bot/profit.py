@@ -3,7 +3,9 @@
 Revenue is what the ledger booked: takings (everything not in db.NOT_SALES)
 plus the negative `bf_discount` rows, which waive money on weekly debts that
 was already booked as revenue. Cost is every GB handed out, sold or granted,
-at the `cost_per_gb` setting. Months are Jalali months in Tehran time.
+at `credit_cost_per_gb()`: the `cost_per_gb` setting divided by the
+`traffic_multiplier` setting, since with a multiplier of 1.4 a GB of credit is
+only 1 / 1.4 GB of real traffic. Months are Jalali months in Tehran time.
 """
 
 from __future__ import annotations
@@ -36,6 +38,22 @@ def cost_per_gb() -> float:
     except (TypeError, ValueError):
         return float(DEFAULT_COST_PER_GB)
     return value if value >= 0 else float(DEFAULT_COST_PER_GB)
+
+
+def traffic_multiplier() -> float:
+    """How much credit 1 unit of real traffic uses up (1.4 → 1 MB used costs
+    1.4 MB of credit). Anything missing or unusable reads as 1, i.e. no
+    multiplier — never 0, which would divide by zero."""
+    try:
+        value = float(settings_store.get_settings().get("traffic_multiplier", 1) or 1)
+    except (TypeError, ValueError):
+        return 1.0
+    return value if 0.1 <= value <= 10 else 1.0
+
+
+def credit_cost_per_gb() -> float:
+    """What one GB of credit (what is sold and granted) really costs."""
+    return cost_per_gb() / traffic_multiplier()
 
 
 def _amount_setting(name: str) -> float:
@@ -143,7 +161,7 @@ def _wanted_months(months: int, now: datetime | None) -> tuple[datetime, list[tu
 def monthly_report(months: int = 6, now: datetime | None = None) -> dict:
     """The last `months` Jalali months, newest first, empty ones included."""
     months = max(1, int(months))
-    unit_cost = cost_per_gb()
+    unit_cost = credit_cost_per_gb()
     today, wanted = _wanted_months(months, now)
     wanted_keys = {month_key(*ym) for ym in wanted}
 
@@ -170,7 +188,12 @@ def monthly_report(months: int = 6, now: datetime | None = None) -> dict:
             **_figures(totals[key], unit_cost),
             "per_admin": _admin_rows(admins[key], unit_cost, totals[key]["revenue"]),
         })
-    return {"cost_per_gb": unit_cost, "months": result}
+    return {
+        "cost_per_gb": cost_per_gb(),
+        "traffic_multiplier": traffic_multiplier(),
+        "cost_per_credit_gb": unit_cost,
+        "months": result,
+    }
 
 
 def black_friday_summary() -> dict:
@@ -182,7 +205,7 @@ def black_friday_summary() -> dict:
     in full when it was made); only what it waived reduces profit. Paid
     invoices are left out of profit: their purchase row records no GB, so
     their revenue could not be costed."""
-    unit_cost = cost_per_gb()
+    unit_cost = credit_cost_per_gb()
     rows = db.list_black_friday_purchases()
     # Same split as the bot's own stats: top-ups are purchases; settled debts
     # and paid invoices are "settlements".
@@ -638,9 +661,13 @@ def overview(
     current_key = month_key_of(wanted[0])
     selected_key = month_key or current_key
     parse_month_key(selected_key)  # ValueError on a malformed key
-    unit_cost = cost_per_gb()
+    unit_cost = credit_cost_per_gb()
     settings = {
-        "cost_per_gb": unit_cost,
+        # As configured, so the settings form shows what was saved; the figures
+        # use cost_per_credit_gb.
+        "cost_per_gb": cost_per_gb(),
+        "traffic_multiplier": traffic_multiplier(),
+        "cost_per_credit_gb": unit_cost,
         "fixed_monthly_cost": fixed_monthly_cost(),
         "monthly_revenue_target": monthly_revenue_target(),
     }
