@@ -9,6 +9,7 @@ from .tutorials import router as tutorials_router
 from .shop import router as shop_router
 from .approval import router as approval_router
 from .bot_provision import router as bot_provision_router
+from .suspend import router as suspend_router
 
 from .maintenance import router as maintenance_router
 from .broadcast import router as broadcast_router
@@ -26,6 +27,7 @@ all_routers = [
     wallet_router,
     black_friday_router,
     admin_settings_router,
+    suspend_router,
     user_search_router,
     tutorials_router,
     shop_router,

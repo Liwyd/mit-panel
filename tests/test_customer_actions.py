@@ -48,10 +48,12 @@ def test_the_card_offers_one_action_per_debt_however_many(ledger):
         texts.BTN_MARK_PAID,
         texts.BTN_DELETE_CUSTOMER_BILL,
         texts.BTN_MESSAGE_USER,
+        texts.BTN_SUSPEND_CUSTOMER,
     ]
     assert kb.inline_keyboard[0][0].callback_data.startswith("warnall:")
     assert kb.inline_keyboard[0][1].callback_data.startswith("paidpick:")
     assert kb.inline_keyboard[1][0].callback_data.startswith("delpick:")
+    assert kb.inline_keyboard[2][0].callback_data == "suspcust:111"
 
 
 def test_writing_off_needs_a_second_tap_and_says_so_to_both_sides(ledger):
