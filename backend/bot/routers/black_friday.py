@@ -20,7 +20,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from backend.bot import (
-    approvals, auto_approve, black_friday, db, keyboards, notify, panel_client, texts, validation,
+    approvals, auto_approve, black_friday, db, keyboards, metering, notify, panel_client, texts,
+    validation,
 )
 from backend.bot.config import bot_config as settings
 from backend.bot.filters import SuperadminFilter
@@ -236,6 +237,13 @@ def _quote_for(username: str, selection: dict) -> black_friday.Quote | None:
 async def _show_quote(
     message: Message, state: FSMContext, username: str, quote: black_friday.Quote
 ) -> None:
+    if metering.is_metered_username(username):
+        await state.clear()
+        await message.answer(
+            texts.METERED_NO_TOPUP.format(username=html.escape(username)),
+            reply_markup=await menu_kb_for(message.chat.id),
+        )
+        return
     await state.update_data(
         panel_username=username, bf={"kind": "topup", "panel_username": username, "quote": asdict(quote)}
     )
@@ -494,6 +502,13 @@ async def _revalidate(message: Message, state: FSMContext, user_id: int, bf: dic
             await _show_items(message, user_id)
             return False
         username = bf["panel_username"]
+        if metering.is_metered_username(username):
+            await state.clear()
+            await message.answer(
+                texts.METERED_NO_TOPUP.format(username=html.escape(username)),
+                reply_markup=await menu_kb_for(user_id),
+            )
+            return False
         if not await owned_panel(user_id, username):
             await state.clear()
             await message.answer(texts.NOT_LINKED_RETRY, reply_markup=await menu_kb_for(user_id))

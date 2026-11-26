@@ -7,6 +7,7 @@ receipt -> submitted for review.
 
 from __future__ import annotations
 
+import html
 import os
 import uuid
 
@@ -19,7 +20,7 @@ from backend.bot import auto_approve, keyboards, notify, texts
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for
 from backend.bot.panels import choose_panel, owned_panel
 from backend.bot.states import TopUp
-from backend.bot import consumption, db
+from backend.bot import consumption, db, metering
 from backend.bot.consumption_ledger import BillingDeferred
 from backend.services.marzban.api import MarzbanAPIError
 from backend.bot.config import bot_config as settings
@@ -31,6 +32,14 @@ router = Router(name="topup")
 
 
 async def _ask_amount(message: Message, state: FSMContext, username: str) -> None:
+    if metering.is_metered_username(username):
+        # Billed for real usage: buying GB would only be paid for twice.
+        await state.clear()
+        await message.answer(
+            texts.METERED_NO_TOPUP.format(username=html.escape(username)),
+            reply_markup=await menu_kb_for(message.chat.id),
+        )
+        return
     await state.update_data(panel_username=username)
     await state.set_state(TopUp.amount_gb)
     await message.answer(
@@ -93,6 +102,13 @@ async def get_amount_gb(message: Message, state: FSMContext) -> None:
 async def _price_and_invoice(message: Message, state: FSMContext, amount: float) -> None:
     data = await state.get_data()
     panel_username = data.get("panel_username", "")
+    if metering.is_metered_username(panel_username):
+        await state.clear()
+        await message.answer(
+            texts.METERED_NO_TOPUP.format(username=html.escape(panel_username)),
+            reply_markup=await menu_kb_for(message.chat.id),
+        )
+        return
     price_per_gb = db.get_effective_price(panel_username)
     if not price_per_gb:
         await state.clear()

@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from backend.bot import auto_approve, bills, digest, keyboards, sales, texts, validation
-from backend.bot import access_lock
+from backend.bot import access_lock, metering
 from backend.bot.filters import SuperadminFilter
 from backend.bot.invoices import describe_due, due_at_for
 from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, superadmin_kb
@@ -908,6 +908,14 @@ async def finish_toggle_payment_mode(message: Message, state: FSMContext) -> Non
         return
 
     current_mode = db.get_weekly_mode(username)
+
+    if current_mode != mode and metering.is_metered_username(username):
+        # Billed for real usage already; a second billing model would charge twice.
+        await message.answer(
+            texts.METERED_NO_OTHER_MODE.format(username=username),
+            reply_markup=superadmin_kb(message.from_user.id),
+        )
+        return
 
     if current_mode == mode:
         # Already in this mode -> disable
