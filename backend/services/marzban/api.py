@@ -657,6 +657,36 @@ class APIService:
             stamp = stamp.replace(tzinfo=timezone.utc)
         return stamp
 
+    async def get_admin_usages(self) -> dict[str, int]:
+        """Every admin's lifetime `users_usage` counter, by username.
+
+        Billing-grade, unlike get_admins: anything other than a complete,
+        well-formed answer raises, so an unreachable panel can never read as
+        "nobody used anything". Requires sudo credentials.
+        """
+        await self._login()
+        response = await self._call(
+            self.session.get,
+            f"{self.url}api/admins", headers=self.headers, timeout=REQUEST_TIMEOUT
+        )
+        if response.status_code != 200:
+            raise MarzbanAPIError(f"Marzban returned status {response.status_code} for /api/admins")
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise MarzbanAPIError("Unexpected /api/admins payload")
+        usages: dict[str, int] = {}
+        for admin in payload:
+            if not isinstance(admin, dict) or not admin.get("username"):
+                raise MarzbanAPIError("Malformed admin in /api/admins")
+            raw = admin.get("users_usage")
+            if raw is None:
+                raise MarzbanAPIError("This Marzban does not report users_usage")
+            try:
+                usages[str(admin["username"])] = max(int(raw), 0)
+            except (TypeError, ValueError) as exc:
+                raise MarzbanAPIError("Unreadable users_usage") from exc
+        return usages
+
     async def get_admins(self) -> list[dict]:
         """List every admin as Marzban itself has them recorded (username,
         telegram_id, is_sudo, ...). Requires sudo credentials."""
