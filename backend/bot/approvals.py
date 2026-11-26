@@ -131,12 +131,13 @@ async def approve_request(bot: Bot, request_id: int, reviewer_id: int) -> Outcom
 
         # Booked only now that nothing can revert this approval, so a failed
         # grant followed by a re-approval cannot count the payment twice. An
-        # invoice that bought traffic carries its GB and panel into the ledger
-        # so the profit report can cost it; a manual one has neither.
+        # invoice is booked under its panel with the GB it sold (see
+        # db.invoice_ledger_fields), so the profit report can cost it.
+        panel, sold_gb = db.invoice_ledger_fields(invoice, grants_gb)
         db.record_sale(
             telegram_id=customer,
-            username=invoice.admin_username if grants_gb else None,
-            gb=invoice.traffic_gb if grants_gb else 0,
+            username=panel,
+            gb=sold_gb,
             amount=req.toman_amount,
             method="invoice",
         )

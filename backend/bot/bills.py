@@ -183,10 +183,13 @@ def mark_paid(bill: Bill) -> tuple[str, str] | None:
     if bill.kind == "invoice":
         if not db.mark_invoice_paid(bill.invoice_id):
             return None
+        # Paid outside the bot, so nothing was granted here; the panel and any
+        # billed usage still belong in the ledger.
+        panel, sold_gb = db.invoice_ledger_fields(db.get_invoice(bill.invoice_id), grants_gb=False)
         db.record_sale(
             telegram_id=bill.telegram_id,
-            username=None,
-            gb=0,
+            username=panel,
+            gb=sold_gb,
             amount=bill.amount,
             method="invoice",
         )

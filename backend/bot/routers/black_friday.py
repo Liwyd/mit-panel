@@ -781,9 +781,9 @@ async def _wallet_invoice(call: CallbackQuery, state: FSMContext, bot: Bot, bf: 
             )
             return
 
-    panel = invoice.admin_username if invoice else None
+    panel, sold_gb = db.invoice_ledger_fields(invoice, grants_gb)
     db.record_sale(
-        telegram_id=user_id, username=panel, gb=invoice.traffic_gb if grants_gb else 0,
+        telegram_id=user_id, username=panel, gb=sold_gb,
         amount=discounted, method="invoice",
     )
     # No ledger discount row here: an invoice's revenue is booked when it is
