@@ -27,6 +27,9 @@ class AdminOutput(BaseModel):
     # Why the bot locked this admin's login; None for everyone else. Shown as
     # a badge on the Admins page (see backend/bot/access_lock.py).
     suspended_reason: Optional[str] = None
+    # «ادمین ویژه»: billed for real usage (backend/bot/metering.py). Filled
+    # in by the superadmin admin list; False everywhere else.
+    metered: bool = False
 
     class Config:
         from_attributes = True

@@ -141,6 +141,8 @@ export interface AdminOutput {
     telegram_id?: number | null
     /** Why the bot locked this admin's login; null/absent when not locked. */
     suspended_reason?: string | null
+    /** «ادمین ویژه»: billed for real usage instead of a prepaid balance. */
+    metered?: boolean
 }
 
 // Panel Form
@@ -353,8 +355,18 @@ export interface NewsFeedItem {
     has_banner: boolean
 }
 
+/** «ادمین ویژه»: billed for real usage (backend/bot/metering.py). GB only. */
+export interface MeteredUsage {
+    since: string | null
+    used_bytes: number
+    unsettled_bytes: number
+    prepaid_bytes: number
+    read_at: string | null
+}
+
 export interface DashboardData {
     can_revoke_subscription?: boolean
+    metered?: MeteredUsage
     remaining_traffic?: number
     initial_traffic?: number
     expiry_time?: string

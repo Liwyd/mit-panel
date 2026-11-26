@@ -18,6 +18,19 @@ from backend.config import __version__
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
+def _metered_usage(admin_id: int) -> dict | None:
+    from backend.bot import metering
+
+    try:
+        return metering.usage(admin_id)
+    except Exception as exc:
+        # The dashboard must never break over the usage tile.
+        from backend.utils.logger import logger
+
+        logger.warning(f"metered usage unavailable for admin {admin_id}: {exc}")
+        return None
+
+
 @router.get("/", description="Get dashboard data")
 async def read_dashboard_data(
     db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)
@@ -60,6 +73,9 @@ async def read_dashboard_data(
                 "sub_url": panel_data.sub_url,
                 "can_revoke_subscription": panel_data.panel_type == "marzban",
                 "users": users,
+                # «ادمین ویژه»: billed for real usage. Only GB, never prices;
+                # absent for everyone else, so their dashboard is unchanged.
+                **({"metered": metered} if (metered := _metered_usage(admin_data.id)) else {}),
             },
         )
 

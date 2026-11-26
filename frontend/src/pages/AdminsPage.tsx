@@ -350,6 +350,11 @@ function AdminDetailsRow({
                     <Badge variant={admin.is_active ? 'default' : 'destructive'}>
                         {admin.is_active ? 'Active' : 'Inactive'}
                     </Badge>
+                    {admin.metered && (
+                        <Badge className="ml-2" variant="secondary">
+                            Usage-billed
+                        </Badge>
+                    )}
                     {admin.suspended_reason && (
                         <Badge className="ml-2" variant="destructive">
                             {suspendedLabel(admin.suspended_reason)}
@@ -433,6 +438,11 @@ function MobileAdminCard({
                     <Badge variant={admin.is_active ? 'default' : 'destructive'} className="text-xs">
                         {admin.is_active ? 'Active' : 'Inactive'}
                     </Badge>
+                    {admin.metered && (
+                        <Badge variant="secondary" className="text-xs">
+                            Usage-billed
+                        </Badge>
+                    )}
                     {admin.suspended_reason && (
                         <Badge variant="destructive" className="text-xs">
                             {suspendedLabel(admin.suspended_reason)}

@@ -53,6 +53,19 @@ def _build_profit_report(months: int) -> dict:
     return {**report, "black_friday": profit.black_friday_summary()}
 
 
+def _with_metered(rows: list[AdminOutput]) -> list[AdminOutput]:
+    """Mark usage-billed («ادمین ویژه») admins: one query for the whole list."""
+    from backend.bot import metering
+
+    try:
+        ids = {acct["admin_id"] for acct in metering.enabled_accounts()}
+    except Exception:
+        return rows
+    for row in rows:
+        row.metered = row.id in ids
+    return rows
+
+
 @router.get("/profit", description="Monthly revenue, cost and profit from the sales ledger")
 async def get_profit_report(
     months: int = Query(6, ge=1, le=24),
@@ -101,7 +114,7 @@ async def get_admins(
     return ResponseModel(
         success=True,
         message="Admins retrieved successfully",
-        data=[AdminOutput.from_orm(admin) for admin in all_admins],
+        data=_with_metered([AdminOutput.from_orm(admin) for admin in all_admins]),
     )
 
 

@@ -27,7 +27,7 @@ import { dashboardAPI, userAPI, serverAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
 import { formatDate, formatExpiryWithDays, cn } from '@/lib/utils'
 import { getUserRole } from '@/lib/auth'
-import { DashboardData, ClientsOutput, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, MarzbanNodeStatus, NewsFeedItem, ServerOutput } from '@/types'
+import { DashboardData, ClientsOutput, MeteredUsage, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, MarzbanNodeStatus, NewsFeedItem, ServerOutput } from '@/types'
 import { useBannerImage } from '@/hooks/useBannerImage'
 import { ManageServersDialog } from './components/ManageServersDialog'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
@@ -1133,7 +1133,9 @@ export function DashboardPage() {
             {/* Admin Stats Row - Only for admin role */}
             {userRole === 'admin' && dashboardData && (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {/* Remaining Traffic */}
+                    {dashboardData.metered ? (
+                        <MeteredUsageCard usage={dashboardData.metered} />
+                    ) : (
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Remaining Traffic</CardTitle>
@@ -1156,6 +1158,7 @@ export function DashboardPage() {
                             </p>
                         </CardContent>
                     </Card>
+                    )}
 
                     {/* Expiry Date */}
                     <Card>
@@ -1830,5 +1833,34 @@ function MobileUserCard({
                 </div>
             )}
         </div>
+    )
+}
+
+
+/** Usage-billed («ادمین ویژه») admins see what they used, not a balance. */
+function MeteredUsageCard({ usage }: { usage: MeteredUsage }) {
+    const since = usage.since ? new Date(usage.since).toLocaleDateString() : null
+    const readAt = usage.read_at
+        ? new Date(usage.read_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : null
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Traffic Used</CardTitle>
+                <Zap className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{bytesToGB(usage.used_bytes).toFixed(2)} GB</div>
+                <p className="text-xs text-muted-foreground">
+                    {since ? `Since ${since}` : 'Usage-billed'} · this week {bytesToGB(usage.unsettled_bytes).toFixed(2)} GB
+                </p>
+                {usage.prepaid_bytes > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                        Prepaid left: {bytesToGB(usage.prepaid_bytes).toFixed(2)} GB
+                    </p>
+                )}
+                {readAt && <p className="text-xs text-muted-foreground">Updated {readAt}</p>}
+            </CardContent>
+        </Card>
     )
 }
