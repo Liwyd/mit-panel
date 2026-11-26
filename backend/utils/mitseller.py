@@ -88,6 +88,24 @@ def _pinned_context(pem_path: str) -> ssl.SSLContext:
     return ctx
 
 
+def _provisioner() -> tuple[str, str, ssl.SSLContext]:
+    """The provisioner's address, its bearer token and the pinned TLS context."""
+    s = get_settings()
+    server = (s.get("mitseller_server") or "").strip()
+    bearer = (s.get("mitseller_provision_token") or "").strip()
+    if not server or not bearer:
+        raise MitSellerError("سرور mit-seller در تنظیمات پنل ثبت نشده است")
+    cert = _provision_cert()
+    if cert is None:
+        # No certificate pinned yet: refuse rather than send a BotFather token
+        # over a connection nobody has vouched for.
+        raise MitSellerError(
+            "گواهی سرور mit-seller در تنظیمات پنل ثبت نشده است "
+            "(install.sh provisioner-print را روی سرور اجرا کنید)"
+        )
+    return server, bearer, _pinned_context(cert)
+
+
 async def provision_bot(
     *,
     token: str,
@@ -105,25 +123,11 @@ async def provision_bot(
     Returns the provisioner's data: the bot's address, its two API keys, the
     management code and the number it was installed as.
     """
-    s = get_settings()
-    server = (s.get("mitseller_server") or "").strip()
-    bearer = (s.get("mitseller_provision_token") or "").strip()
-    if not server or not bearer:
-        raise MitSellerError("سرور mit-seller در تنظیمات پنل ثبت نشده است")
+    server, bearer, verify = _provisioner()
     if not token or not domain:
         raise MitSellerError("توکن یا دامنه خالی است")
     if not admin_id:
         raise MitSellerError("آیدی عددی ادمین خالی است")
-
-    cert = _provision_cert()
-    if cert is None:
-        # No certificate pinned yet: refuse rather than send a BotFather token
-        # over a connection nobody has vouched for.
-        raise MitSellerError(
-            "گواهی سرور mit-seller در تنظیمات پنل ثبت نشده است "
-            "(install.sh provisioner-print را روی سرور اجرا کنید)"
-        )
-    verify: ssl.SSLContext | bool = _pinned_context(cert)
 
     body = {
         "token": token,
@@ -156,6 +160,48 @@ async def provision_bot(
 
     if res.status_code != 200 or not payload.get("ok"):
         raise MitSellerError(payload.get("error") or f"ساخت ربات ناموفق بود (HTTP {res.status_code})")
+    return payload.get("data") or {}
+
+
+# Removing a bot exports and sends a final backup first, which for a large
+# bot takes a few minutes.
+REMOVE_TIMEOUT = httpx.Timeout(420.0, connect=10.0)
+
+
+async def deprovision_bot(*, domain: str, final_backup: bool = True) -> dict:
+    """Ask the mit-seller server to delete the bot served on `domain`.
+
+    Everything it keeps there goes: the service, config, nginx site,
+    certificate, database and backups. With `final_backup` one last bundle is
+    sent to the bot's admin in Telegram first, and nothing is deleted when
+    that fails. Raises MitSellerError on any refusal.
+    """
+    domain = (domain or "").strip().lower()
+    if not domain:
+        raise MitSellerError("دامنه ربات خالی است")
+    server, bearer, verify = _provisioner()
+    url = f"https://{server}:{PROVISION_PORT}/deprovision"
+    try:
+        async with httpx.AsyncClient(timeout=REMOVE_TIMEOUT, verify=verify) as client:
+            res = await client.post(
+                url,
+                json={"domain": domain, "final_backup": bool(final_backup)},
+                headers={"Authorization": f"Bearer {bearer}"},
+            )
+    except httpx.HTTPError as exc:
+        raise MitSellerError(f"سرور mit-seller در دسترس نیست: {exc.__class__.__name__}") from exc
+    if res.status_code == 405:
+        raise MitSellerError(
+            "سرور mit-seller هنوز حذف ربات را نمی‌شناسد؛ اول mitseller و install.sh را روی آن به‌روز کنید"
+        )
+    try:
+        payload = res.json()
+    except ValueError as exc:
+        raise MitSellerError(f"پاسخ نامعتبر از سرور mit-seller (HTTP {res.status_code})") from exc
+    if res.status_code == 404 and not payload.get("ok"):
+        raise MitSellerError("رباتی با این دامنه روی سرور mit-seller نصب نیست")
+    if res.status_code != 200 or not payload.get("ok"):
+        raise MitSellerError(payload.get("error") or f"حذف ربات ناموفق بود (HTTP {res.status_code})")
     return payload.get("data") or {}
 
 
