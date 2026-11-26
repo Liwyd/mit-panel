@@ -3,74 +3,26 @@
 
   # MIT Panel
 
-  **A multi-panel admin manager for Marzban, 3x-ui, Tx-ui and Guard — with role-based access, a unified dashboard, custom login branding, and automatic Telegram backups.**
-
-  <p align="center">
-    <img src="https://img.shields.io/badge/license-MIT-3DA639?style=for-the-badge" alt="MIT License" />
-    <img src="https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Ready" />
-  </p>
+  **A multi-panel admin manager for Marzban, 3x-ui, Tx-ui and Guard.**
 </div>
 
 ---
 
-## Overview
-
-MIT Panel is a self-hosted dashboard for managing the **admins** of your VPN panels from one place. Create sub-admins with traffic and expiry limits, monitor usage, and manage users across multiple panels with role-based access (**SuperAdmin** / **Admin**).
+MIT Panel is a self-hosted dashboard to manage your VPN panels from one place. It supports **Marzban**, **3x-ui**, **Tx-ui** and **Guard** (S-ui coming soon), lets you create sub-admins with traffic and expiry limits, monitor usage, customize the login page, and back up the database to Telegram automatically.
 
 ---
 
-## Supported panels
+## Installation
 
-- [x] **Marzban**
-- [x] **3x-ui**
-- [x] **Tx-ui**
-- [x] **Guard**
-- [ ] **S-ui**
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **Role-based access** | SuperAdmin & Admin roles with granular permissions |
-| **Unified dashboard** | Monitor all your panels from a single interface |
-| **Admin & user management** | Create, edit and limit admins/users across panels |
-| **Traffic & quota** | Per-admin traffic budgets, with automatic return-on-delete |
-| **Custom branding** | Set the login page **title and logo** right from Settings |
-| **Telegram backups** | Auto-send the database to a Telegram chat on a schedule |
-| **PWA** | Install on a phone home screen with a custom name & icon |
-| **Dark / Light mode** | Theme-aware UI |
-| **Docker ready** | One-command deployment |
-
----
-
-## Quick start
-
-### One-line install (recommended)
+One-line install (recommended):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liwyd/mit-panel/main/install.sh | sudo bash
 ```
 
-This will:
-- Install Docker (if not present)
-- Download all required files
-- Build and start the panel
-- Set up the `mit-panel` CLI command for easy management
+It installs Docker if needed, downloads the files, builds the panel and sets up the `mit-panel` command.
 
-After installation, use `mit-panel` to manage your panel:
-
-```bash
-mit-panel           # Show management menu
-mit-panel update    # Update to latest version
-mit-panel restart   # Restart the panel
-mit-panel logs      # View container logs
-mit-panel stop      # Stop the panel
-mit-panel start     # Start the panel
-```
-
-### Manual install
+Manual install:
 
 ```bash
 git clone https://github.com/liwyd/mit-panel.git
@@ -79,53 +31,71 @@ cp .env.example .env        # set ADMIN_USERNAME / ADMIN_PASSWORD / JWT_SECRET_K
 docker compose up -d --build
 ```
 
-Then open:
-
-```
-http://<your-server>:<PORT>/<URLPATH>/login
-```
-
-(default `URLPATH` is `dashboard`).
-
-> **HTTPS:** put MIT Panel behind a reverse proxy (Nginx/Caddy) pointed at the panel port, or set `SSL_KEYFILE` / `SSL_CERTFILE` in `.env`.
+Then open `http://<your-server>:<PORT>/<URLPATH>/login` (default `URLPATH` is `dashboard`).
 
 ---
 
-## Settings
-
-From **Settings** (SuperAdmin) you can:
-
-- **Login branding** — change the login page **title** and **upload a logo**.
-- **Telegram backup** — enable automatic backups and set the **bot token**, **numeric chat id** and **interval (hours)**; a **Send test backup now** button lets you verify it instantly.
-
-The backup is the panel database (`mitpanel.db`), sent as a document to your Telegram chat.
-
----
-
-## Monthly bot maintenance
-
-Optional EUR-denominated hosting invoices are managed per bot from the
-superadmin dashboard and Telegram finance menu. Billing starts disabled.
-See [billing behavior, manual update and rollback](docs/bot-maintenance.md).
-
----
-
-## Tests
+## Uninstallation
 
 ```bash
-uv run --with pytest pytest -q
+mit-panel uninstall
 ```
 
-`--with pytest` is required: pytest is deliberately not a project dependency, so without it `uv run` uses the interpreter on `PATH`, which does not have `aiogram` and the rest of the project's own packages.
+It asks for confirmation, then removes the containers, the database and the `mit-panel` command.
 
 ---
 
-## Contributing
+## mit-panel commands
 
-Issues and pull requests are welcome.
+```bash
+mit-panel           # Show management menu
+mit-panel status    # Show panel status
+mit-panel start     # Start the panel
+mit-panel stop      # Stop the panel
+mit-panel restart   # Restart the panel
+mit-panel update    # Update to latest version
+mit-panel logs      # View container logs
+mit-panel settings  # Show current settings
+mit-panel set-username    # Change admin username
+mit-panel set-password    # Change admin password
+mit-panel set-port        # Change panel port
+mit-panel set-urlpath     # Change URL path
+mit-panel set-bot-token   # Set Telegram bot token
+mit-panel edit-env        # Open .env in editor
+mit-panel uninstall       # Remove the panel completely
+mit-panel help            # Show help
+```
 
 ---
 
-## Credits & license
+## Development guide
 
-MIT Panel is built on top of [whale-panel](https://github.com/primeZdev/whale-panel) by primeZdev, and is released under the **MIT License** (see [LICENSE](./LICENSE)). The original copyright notice is retained as required by the license.
+Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node 20+.
+
+```bash
+git clone https://github.com/liwyd/mit-panel.git
+cd mit-panel
+cp .env.example .env
+```
+
+Run the backend:
+
+```bash
+uv run python main.py
+```
+
+Run the frontend (in another terminal):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Checks before pushing:
+
+```bash
+uv run --with pytest pytest -q     # backend tests (--with pytest is required)
+npm run lint                       # frontend lint
+npm run type-check                 # frontend types
+```
