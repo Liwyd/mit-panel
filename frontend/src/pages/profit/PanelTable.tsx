@@ -22,7 +22,7 @@ const COLUMNS: { key: SortKey; label: string; numeric: boolean }[] = [
     { key: 'margin', label: 'حاشیه سود', numeric: true },
 ]
 
-const displayName = (row: ProfitAdminRow) => (row.username === '—' ? 'بدون پنل' : row.username)
+const displayName = (row: ProfitAdminRow) => (row.username === '—' ? 'بدون پنل (نگهداری ربات، فاکتور آزاد)' : row.username)
 
 export function PanelTable({ rows }: { rows: ProfitAdminRow[] }) {
     const [query, setQuery] = useState('')
