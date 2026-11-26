@@ -28,8 +28,12 @@ def _session():
 
 def _admin_to_dict(a: Admins) -> dict:
     """Serialize an Admins ORM object to the dict format the bot expects."""
+    from backend.bot import metering  # imports this module's neighbours
+
     return {
+        "id": a.id,
         "username": a.username,
+        "metered": metering.is_metered(a.id),
         "telegram_id": a.telegram_id,
         "traffic": a.traffic or 0,
         "initial_traffic": a.initial_traffic or 0,

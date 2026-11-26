@@ -13,7 +13,7 @@ import logging
 
 from aiogram import Bot
 
-from backend.bot import keyboards, texts
+from backend.bot import keyboards, metering, texts
 from backend.bot.forecast import today_stamp
 from backend.bot import db
 from backend.bot.config import bot_config as settings
@@ -66,6 +66,10 @@ async def scan_once(bot: Bot) -> int:
             int(admin.get("traffic") or 0),
             int(admin.get("initial_traffic") or 0),
         )
+
+        if metering.is_metered(admin.get("id")):
+            # Billed for real usage: there is no balance to run out of.
+            continue
 
         remaining_gb = bytes_to_gb(admin.get("traffic"))
         result = bucket_for(remaining_gb)

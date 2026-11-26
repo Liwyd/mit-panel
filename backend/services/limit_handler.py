@@ -5,10 +5,27 @@ from backend.db import crud
 
 
 class AdminLimiter:
+    """The one place a reseller's traffic balance is checked and moved.
+
+    A metered sub-admin («ادمین ویژه», backend/bot/metering.py) is billed for
+    the traffic their users really use, so for them nothing here limits or
+    charges anything: every check passes and every charge or refund is a
+    no-op. Their balance is only drawn down by the weekly settlement.
+    """
+
     def __init__(self, db: Session, admin_username: str):
         self.db = db
         self.admin_username = admin_username
         self.admin = crud.get_admin_by_username(db, username=admin_username)
+        self._metered: bool | None = None
+
+    @property
+    def metered(self) -> bool:
+        if self._metered is None:
+            from backend.bot import metering  # the bot package imports services
+
+            self._metered = bool(self.admin) and metering.is_metered(self.admin.id)
+        return self._metered
 
     def admin_is_active(self) -> bool:
         if self.admin.expiry_date is None:
@@ -24,17 +41,23 @@ class AdminLimiter:
 
     def check_traffic_limit(self, required_traffic: int) -> bool:
         """Check if the admin has enough traffic to perform an operation."""
+        if self.metered:
+            return True
         if self.admin.traffic < required_traffic:
             return False
         return True
 
     def reduce_usage(self, total_traffic: int, usage_traffic: int) -> None:
+        if self.metered:
+            return
         if self.admin.update_return_traffic:
             crud.reduce_admin_traffic(self.db, self.admin, usage_traffic)
             return
         crud.reduce_admin_traffic(self.db, self.admin, total_traffic)
 
     def increase_usage(self, traffic: int) -> None:
+        if self.metered:
+            return
         if self.admin.delete_return_traffic:
             crud.increase_admin_traffic(self.db, self.admin, traffic)
 
@@ -44,6 +67,8 @@ class AdminLimiter:
         never refunded, so lowering the limit of a used-up user refunds nothing,
         and raising it only charges the part above what's already committed.
         (e.g. a fully-used 80 GB user: 80->20 refunds 0, then 20->100 charges 20.)"""
+        if self.metered:
+            return
         delta = max(new_total, used) - max(old_total, used)
         if delta > 0:
             crud.reduce_admin_traffic(self.db, self.admin, delta)
@@ -54,5 +79,5 @@ class AdminLimiter:
         """Unconditionally deduct traffic from the admin's budget. Used on reset:
         resetting a user's usage frees the already-consumed traffic for re-use,
         so that amount is charged back regardless of the return-traffic flags."""
-        if amount > 0:
+        if amount > 0 and not self.metered:
             crud.reduce_admin_traffic(self.db, self.admin, amount)

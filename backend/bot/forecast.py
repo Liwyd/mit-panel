@@ -110,6 +110,8 @@ async def send_daily_forecasts(bot: Bot) -> int:
         username, telegram_id = admin.get("username"), admin.get("telegram_id")
         if not username or not telegram_id or not admin.get("is_active", True):
             continue
+        if admin.get("metered"):
+            continue  # billed for real usage: nothing runs out, nothing to buy
 
         rendered = render(username, admin.get("traffic") or 0)
         if rendered is None:

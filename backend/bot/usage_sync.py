@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from backend.bot import consumption, db, texts
+from backend.bot import consumption, db, metering, texts
 from backend.bot.config import bot_config
 from backend.bot.invoices import due_at_for
 from backend.bot.units import bytes_to_gb
@@ -264,6 +264,10 @@ def _sync_panel(session, panel, ledger_all, observers: set[str]) -> list[str]:
         if admin is None:
             continue
         if consumption.enrollment(session, admin.id):
+            continue
+        if metering.is_metered(admin.id):
+            # Billed for real usage (backend/bot/metering.py): a user made
+            # straight on Marzban is paid for through that usage, not here.
             continue
         if owner in observers:
             # Frozen: no ledger churn, no traffic drawdown, no invoice. The

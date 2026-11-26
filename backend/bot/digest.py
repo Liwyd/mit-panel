@@ -109,7 +109,9 @@ async def build(now: datetime | None = None) -> str:
         (
             (a["username"], bytes_to_gb(a.get("traffic")))
             for a in admins
-            if a.get("is_active") and bytes_to_gb(a.get("traffic")) < LOW_TRAFFIC_GB
+            # A usage-billed panel has no balance to run low.
+            if a.get("is_active") and not a.get("metered")
+            and bytes_to_gb(a.get("traffic")) < LOW_TRAFFIC_GB
         ),
         key=lambda entry: entry[1],
     )
