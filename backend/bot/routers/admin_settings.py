@@ -387,6 +387,15 @@ async def _finish_invoice(call, state, bot, data, due_key, selected_admin) -> No
         ),
         reply_markup=superadmin_kb(call.from_user.id),
     )
+    # Credit purchases are booked as sales the day they happen, so an invoice
+    # raised to collect that same debt would count the money a second time.
+    debt = db.get_debt(selected_admin.username) if selected_admin else 0
+    if debt > 0:
+        await call.message.answer(
+            texts.INVOICE_PANEL_HAS_DEBT.format(
+                username=selected_admin.username, debt=debt, id=invoice_id
+            )
+        )
     if not delivered:
         await call.message.answer(texts.INVOICE_CREATE_NOT_DELIVERED)
     elif not was_customer:
