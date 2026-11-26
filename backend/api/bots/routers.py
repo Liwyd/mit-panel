@@ -30,6 +30,7 @@ from backend.db.engin import get_db
 from backend.db.model import Admins, TelegramBots
 from backend.schema._input import TelegramBotInput, TelegramBotUpdateInput
 from backend.schema.output import ResponseModel, TelegramBotOutput
+from backend.utils import bot_removal
 from backend.utils.logger import logger
 from backend.utils.settings_store import DATA_DIR
 
@@ -231,6 +232,22 @@ async def delete_bot(bot_id: int, db: Session = Depends(get_db), user: dict = De
     if not crud.remove_bot(db, bot_id):
         return _fail(404, "Bot not found")
     return ResponseModel(success=True, message="Bot disconnected")
+
+
+@router.post(
+    "/manage/{bot_id}/destroy",
+    description="Delete a bot for good: from its mit-seller server (service, database, site, "
+    "certificate, backups) and then from this panel (superadmin)",
+)
+async def destroy_bot(bot_id: int, body: dict | None = None, user: dict = Depends(get_current_admin)):
+    if not _is_superadmin(user):
+        return _fail(status.HTTP_403_FORBIDDEN, "Access denied. Only superadmin can access this endpoint")
+    final_backup = bool((body or {}).get("final_backup", True))
+    try:
+        removed = await bot_removal.remove_bot_completely(bot_id, final_backup=final_backup)
+    except bot_removal.BotRemovalError as exc:
+        return _fail(status.HTTP_502_BAD_GATEWAY, str(exc))
+    return ResponseModel(success=True, message="Bot deleted", data=removed)
 
 
 SHARED_IDS_PATH = os.path.join(DATA_DIR, "shared-admin-ids.json")
