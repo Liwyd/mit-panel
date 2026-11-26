@@ -60,9 +60,36 @@ def format_panel_line(admin: dict, metadata: dict | None = None) -> str:
         panel_number=metadata.get("panel_number", "—"),
         password=escape(str(admin.get("marzban_password") or "—")),
         note_line=texts.PANEL_NOTE_LINE.format(note=escape(note)) if note else "",
-        remaining_gb=bytes_to_gb(admin.get("traffic")),
-        initial_gb=bytes_to_gb(admin.get("initial_traffic")),
+        balance_line=_balance_line(admin),
         expiry_line=format_expiry(admin.get("expiry_date")),
+    )
+
+
+def _balance_line(admin: dict) -> str:
+    """The prepaid balance, or for a usage-billed panel what it has used."""
+    usage = None
+    if admin.get("metered"):
+        from backend.bot import metering
+
+        try:
+            usage = metering.usage(admin["id"])
+        except Exception:
+            usage = None
+    if usage is None:
+        return texts.PANEL_BALANCE_LINE.format(
+            remaining_gb=bytes_to_gb(admin.get("traffic")),
+            initial_gb=bytes_to_gb(admin.get("initial_traffic")),
+        )
+    from backend.bot.sales import day_of, format_day
+
+    day = day_of(usage["since"] or "")
+    since = format_day(day) if day else "—"
+    prepaid = usage["prepaid_bytes"]
+    return texts.PANEL_METERED_LINE.format(
+        since=since,
+        used_gb=bytes_to_gb(usage["used_bytes"]),
+        week_gb=bytes_to_gb(usage["unsettled_bytes"]),
+        prepaid=texts.PANEL_METERED_PREPAID.format(prepaid_gb=bytes_to_gb(prepaid)) if prepaid > 0 else "",
     )
 
 

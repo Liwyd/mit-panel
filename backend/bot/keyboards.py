@@ -112,6 +112,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_CREATE_BOT_FOR_ADMIN,
         texts.BTN_BOT_REQUESTS,
         texts.BTN_DELETE_BOT,
+        texts.BTN_METERED_ADMIN,
         texts.BTN_ADD_PANEL,
         texts.BTN_GRANT_TRAFFIC,
         texts.BTN_PANEL_HISTORY,
@@ -119,7 +120,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_DELETE_ADMIN,
         texts.BTN_DELETE_TUTORIAL,
         texts.BTN_BACK,
-        layout=(2, 2, 1, 2, 2, 2, 1),
+        layout=(2, 2, 2, 2, 2, 2, 1),
     )
 
 
@@ -729,5 +730,26 @@ def confirm_unsuspend_kb(username: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=texts.BTN_UNSUSPEND_CONFIRM, callback_data=f"unsuspok:{username}")
     kb.button(text=texts.BTN_SUSPEND_CANCEL, callback_data="susp_no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def metered_admins_kb(admins, metered_ids: set[int]) -> InlineKeyboardMarkup:
+    """«⚡ ادمین ویژه»: one button per Marzban sub-admin, ✅ on metered ones."""
+    kb = InlineKeyboardBuilder()
+    for a in admins:
+        mark = "✅ " if a.id in metered_ids else ""
+        kb.button(text=f"{mark}{a.username}", callback_data=f"met:{a.id}")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def confirm_metered_kb(admin_id: int, turning_on: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if turning_on:
+        kb.button(text=texts.BTN_METERED_ON, callback_data=f"meton:{admin_id}")
+    else:
+        kb.button(text=texts.BTN_METERED_OFF, callback_data=f"metoff:{admin_id}")
+    kb.button(text=texts.BTN_METERED_CANCEL, callback_data="met_no")
     kb.adjust(1)
     return kb.as_markup()

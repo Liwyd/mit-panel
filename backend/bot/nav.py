@@ -72,6 +72,7 @@ ALL_MENU_TEXTS = {
     texts.BTN_CREATE_BOT_FOR_ADMIN,
     texts.BTN_BOT_REQUESTS,
     texts.BTN_DELETE_BOT,
+    texts.BTN_METERED_ADMIN,
     texts.BTN_SUSPEND_ADMIN,
     texts.BTN_UNSUSPEND_ADMIN,
     texts.BTN_REQUEST_BOT,

@@ -70,6 +70,7 @@ async def _run_bot() -> None:
 
     from backend.bot import db
     from backend.bot.consumption import run_scheduler as run_consumption_scheduler
+    from backend.bot.metering import run_scheduler as run_metering_scheduler
     from backend.bot import access_lock
     from backend.bot.middlewares import ForceJoinMiddleware
     from backend.bot.maintenance import run_scheduler as run_maintenance_scheduler
@@ -113,6 +114,7 @@ async def _run_bot() -> None:
         asyncio.create_task(_supervised("warning_scanner", partial(run_warning_scanner, bot))),
         asyncio.create_task(_supervised("weekly_scheduler", partial(run_weekly_scheduler, bot))),
         asyncio.create_task(_supervised("consumption_scheduler", partial(run_consumption_scheduler, bot))),
+        asyncio.create_task(_supervised("metering_scheduler", partial(run_metering_scheduler, bot))),
         asyncio.create_task(_supervised("forecast_scheduler", partial(run_forecast_scheduler, bot))),
         asyncio.create_task(_supervised("auto_approver", partial(run_auto_approver, bot))),
         asyncio.create_task(_supervised("usage_sync", partial(run_usage_sync, bot))),
