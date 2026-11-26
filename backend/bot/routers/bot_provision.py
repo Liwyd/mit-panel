@@ -17,6 +17,7 @@ asking is the only thing it can do.
 
 from __future__ import annotations
 
+import html
 import re
 import socket
 
@@ -32,7 +33,7 @@ from backend.bot.nav import ALL_MENU_TEXTS, menu_kb_for, remember_section, super
 from backend.bot.states import CreateBot, CreateBotPickAdmin
 from backend.db import crud
 from backend.db.engin import sessionLocal
-from backend.utils import mitseller
+from backend.utils import bot_removal, mitseller
 from backend.utils.logger import logger
 from backend.utils.settings_store import get_settings
 
@@ -741,4 +742,75 @@ async def open_bot_request(call: CallbackQuery, state: FSMContext) -> None:
         requester.username if requester is not None else (req.get("username") or ""),
         admin_telegram_id=telegram_id,
         request_id=request_id,
+    )
+
+
+# ---------------------------------------------------------------- deleting a bot for good
+
+
+@router.message(F.text == texts.BTN_DELETE_BOT, SuperadminFilter())
+async def start_delete_bot(message: Message, state: FSMContext) -> None:
+    remember_section(message.from_user.id, "panels")
+    await state.clear()
+    if not mitseller.provision_configured():
+        await message.answer(texts.BOT_NOT_CONFIGURED, reply_markup=superadmin_kb(message.from_user.id))
+        return
+    with sessionLocal() as session:
+        bots = crud.get_all_bots(session)
+    if not bots:
+        await message.answer(texts.NO_BOTS_TO_DELETE, reply_markup=superadmin_kb(message.from_user.id))
+        return
+    await message.answer(texts.ASK_PICK_BOT_TO_DELETE, reply_markup=keyboards.bots_to_delete_kb(bots))
+
+
+@router.callback_query(F.data.startswith("botdel:"))
+async def pick_bot_to_delete(call: CallbackQuery) -> None:
+    if not _is_superadmin(call.from_user.id):
+        await call.answer()
+        return
+    bot_id = int(call.data.split(":", 1)[1])
+    with sessionLocal() as session:
+        row = crud.get_bot_by_id(session, bot_id)
+        name = row.name if row else ""
+        url = row.url if row else ""
+    if not name:
+        await call.answer(texts.DELETE_BOT_GONE, show_alert=True)
+        return
+    await call.answer()
+    await call.message.edit_text(
+        texts.CONFIRM_DELETE_BOT.format(name=html.escape(name), domain=bot_removal.bot_domain(url) or url),
+        reply_markup=keyboards.confirm_delete_bot_kb(bot_id),
+    )
+
+
+@router.callback_query(F.data == "botdel_no")
+async def cancel_delete_bot(call: CallbackQuery) -> None:
+    await call.answer()
+    await call.message.edit_text(texts.DELETE_BOT_CANCELLED)
+
+
+@router.callback_query(F.data.startswith("botdelok:"))
+async def confirm_delete_bot(call: CallbackQuery) -> None:
+    if not _is_superadmin(call.from_user.id):
+        await call.answer()
+        return
+    _, raw_id, raw_backup = call.data.split(":", 2)
+    bot_id, final_backup = int(raw_id), raw_backup == "1"
+    with sessionLocal() as session:
+        row = crud.get_bot_by_id(session, bot_id)
+        name = row.name if row else ""
+    if not name:
+        await call.answer(texts.DELETE_BOT_GONE, show_alert=True)
+        return
+    await call.answer()
+    # The buttons go at once: a second tap would ask the server to remove a
+    # bot that is already half gone.
+    await call.message.edit_text(texts.DELETE_BOT_RUNNING.format(name=html.escape(name)))
+    try:
+        removed = await bot_removal.remove_bot_completely(bot_id, final_backup=final_backup)
+    except bot_removal.BotRemovalError as exc:
+        await call.message.edit_text(texts.DELETE_BOT_FAILED.format(name=html.escape(name), error=html.escape(str(exc))[:3000]))
+        return
+    await call.message.edit_text(
+        texts.DELETE_BOT_DONE.format(name=html.escape(removed["name"]), domain=removed["domain"])
     )
