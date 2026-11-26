@@ -392,6 +392,22 @@ class APIService:
             raise MarzbanAPIError("Invalid revoke response")
         return user
 
+    async def set_user_status(self, username: str, status: str) -> int:
+        """Change only a user's status ("active" / "disabled").
+
+        Marzban applies a partial modify, so the limit, expiry and proxies stay
+        exactly as they are — unlike update_user, which rewrites all of them.
+        """
+        await self._login()
+        response = await self._call(
+            self.session.put,
+            f"{self.url}api/user/{quote(username, safe='')}",
+            headers=self.headers,
+            json={"status": status},
+            timeout=REQUEST_TIMEOUT,
+        )
+        return response.status_code
+
     async def delete_user(self, username: str) -> int:
         await self._login()
         response = await self._call(

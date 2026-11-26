@@ -122,6 +122,31 @@ class APIService:
 
         return response.json()
 
+    async def set_client_enable(self, client: dict, enable: bool) -> bool:
+        """Turn one client on or off, keeping its own expiry, volume and sub id.
+
+        `client` is the client as get_clients returned it. update_client would
+        go through ClientUpdateInput, which refuses an unlimited (0) volume.
+        """
+        payload = {
+            "email": client.get("email"),
+            "enable": bool(enable),
+            "expiryTime": int(client.get("expiryTime") or 0),
+            "totalGB": int(client.get("totalGB") or 0),
+            "flow": client.get("flow") or "",
+            "subId": client.get("subId") or "",
+        }
+        response = await self.client.post(
+            f"/panel/api/clients/update/{client.get('email')}",
+            json=payload,
+        )
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError:
+            return True
+        return bool(data.get("success", True)) if isinstance(data, dict) else True
+
     async def reset_client_usage(
         self,
         email: str
