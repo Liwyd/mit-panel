@@ -568,6 +568,30 @@ def init_db() -> None:
                     "could not add admins.suspended_reason: %s", exc
                 )
 
+    with _connect() as conn:
+        # A sub-admin whose users the superadmin cut off over late payment,
+        # and exactly which users were disabled: unsuspending turns back on
+        # only these, never ones the sub-admin had disabled themselves.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS admin_suspensions (
+                admin_username TEXT PRIMARY KEY,
+                telegram_id INTEGER,
+                panel_type TEXT NOT NULL,
+                suspended_at TEXT NOT NULL,
+                suspended_by INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS admin_suspended_users (
+                admin_username TEXT NOT NULL,
+                user_key TEXT NOT NULL,
+                uuid TEXT,
+                disabled INTEGER NOT NULL DEFAULT 0,
+                restored INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (admin_username, user_key)
+            );
+            """
+        )
+
     # Outside the transaction above: it opens its own connection.
     backfill_sales_from_requests()
 
@@ -2090,3 +2114,101 @@ def backfill_sales_from_requests() -> int:
         )
         conn.execute("INSERT INTO bot_settings (key, value) VALUES ('sales_backfilled', '1')")
         return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# Sub-admin suspensions (late payment)
+# ---------------------------------------------------------------------------
+
+
+def get_suspension(admin_username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM admin_suspensions WHERE admin_username = ?", (admin_username,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def start_suspension(
+    admin_username: str, telegram_id: int | None, panel_type: str, suspended_by: int | None
+) -> None:
+    """Record the suspension; a second call keeps the first one's date."""
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO admin_suspensions"
+            " (admin_username, telegram_id, panel_type, suspended_at, suspended_by)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (admin_username, telegram_id, panel_type, now, suspended_by),
+        )
+
+
+def record_suspended_user(admin_username: str, user_key: str, uuid: str | None = None) -> None:
+    """Note a user about to be disabled, before the panel is asked to.
+
+    Written first so that a crash between the two can only leave a user that is
+    recorded but still active (unsuspend then just re-enables it), never one
+    that is disabled with nothing to bring it back.
+    """
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO admin_suspended_users (admin_username, user_key, uuid, disabled, restored)"
+            " VALUES (?, ?, ?, 0, 0)"
+            " ON CONFLICT(admin_username, user_key) DO UPDATE SET uuid = excluded.uuid, restored = 0",
+            (admin_username, user_key, uuid),
+        )
+
+
+def mark_user_disabled(admin_username: str, user_key: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE admin_suspended_users SET disabled = 1"
+            " WHERE admin_username = ? AND user_key = ?",
+            (admin_username, user_key),
+        )
+
+
+def drop_suspended_user(admin_username: str, user_key: str) -> None:
+    """Forget a user whose disable call failed: it was never turned off."""
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM admin_suspended_users WHERE admin_username = ? AND user_key = ?",
+            (admin_username, user_key),
+        )
+
+
+def pending_suspended_users(admin_username: str) -> list[dict]:
+    """Users recorded for this suspension that are not yet re-enabled."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT user_key, uuid FROM admin_suspended_users"
+            " WHERE admin_username = ? AND restored = 0 ORDER BY user_key",
+            (admin_username,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_user_restored(admin_username: str, user_key: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE admin_suspended_users SET restored = 1"
+            " WHERE admin_username = ? AND user_key = ?",
+            (admin_username, user_key),
+        )
+
+
+def end_suspension(admin_username: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM admin_suspended_users WHERE admin_username = ?", (admin_username,))
+        conn.execute("DELETE FROM admin_suspensions WHERE admin_username = ?", (admin_username,))
+
+
+def list_suspensions() -> list[dict]:
+    """Every suspended sub-admin with how many of their users are still off."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT s.*, (SELECT COUNT(*) FROM admin_suspended_users u"
+            "  WHERE u.admin_username = s.admin_username AND u.restored = 0) AS pending"
+            " FROM admin_suspensions s ORDER BY s.suspended_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
