@@ -1,9 +1,9 @@
 <div align="center">
-  <img width="160px" src="./media/mit-logo.png" alt="MIT Panel" />
+  <img width="160px" src="./newlogo-white.png" alt="MIT Panel" />
 
   # MIT Panel
 
-  **A multi-panel admin manager for Marzban, 3x-ui, Tx-ui and Guard.**
+  **A multi-panel admin manager**
 </div>
 
 ---
