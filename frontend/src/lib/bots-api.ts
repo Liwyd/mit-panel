@@ -56,6 +56,12 @@ export const botsAPI = {
         unwrap(await api.delete<ResponseModel<null>>(`/sales-bots/manage/${id}`))
     },
 
+    // Deletes the bot from its server (service, database, site, certificate,
+    // backups) and then from the panel. Cannot be undone.
+    destroy: async (id: number, finalBackup: boolean): Promise<void> => {
+        unwrap(await api.post<ResponseModel<null>>(`/sales-bots/manage/${id}/destroy`, { final_backup: finalBackup }))
+    },
+
     check: async (id: number): Promise<BotInfo> => unwrap(await api.post<ResponseModel<BotInfo>>(`/sales-bots/manage/${id}/check`)),
 
     apkInfo: async (): Promise<ApkInfo> => unwrap(await api.get<ResponseModel<ApkInfo>>('/sales-bots/autopay-app/info')),

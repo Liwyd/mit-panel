@@ -27,6 +27,7 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
     const [editing, setEditing] = useState<TelegramBot | null>(null)
     const [open, setOpen] = useState(false)
     const [toDelete, setToDelete] = useState<TelegramBot | null>(null)
+    const [finalBackup, setFinalBackup] = useState(true)
     const act = useAction()
 
     useEffect(() => {
@@ -58,6 +59,11 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
             <CardContent className="space-y-3">
                 <ErrorBox error={act.error} />
                 <Notice text={act.notice} />
+                {act.busy && (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner /> در حال انجام… حذف کامل با بکاپ نهایی ممکن است چند دقیقه طول بکشد.
+                    </p>
+                )}
                 {bots.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                         هنوز رباتی وصل نشده. آدرس ربات و دو کلید API_OWNER_KEY و API_MANAGER_KEY را از فایل تنظیمات ربات
@@ -97,7 +103,15 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
                             >
                                 <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => setToDelete(b)}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={act.busy}
+                                onClick={() => {
+                                    setFinalBackup(true)
+                                    setToDelete(b)
+                                }}
+                            >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                         </div>
@@ -119,15 +133,26 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
             <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
                 <AlertDialogContent dir="rtl">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>قطع اتصال {toDelete?.name}</AlertDialogTitle>
+                        <AlertDialogTitle>حذف {toDelete?.name}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            ربات خاموش نمی‌شود و اطلاعاتش سر جایش می‌ماند؛ فقط از این پنل جدا می‌شود.
+                            «قطع اتصال» ربات را فقط از این پنل جدا می‌کند؛ ربات روشن می‌ماند و اطلاعاتش سر جایش است.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <div className="flex justify-end gap-3">
+                    <div className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm">
+                        <p>
+                            <b className="text-destructive">«حذف کامل از سرور»</b> سرویس ربات، دیتابیس، سایت nginx، گواهی SSL و
+                            بکاپ‌هایش را از سرور mit-seller پاک می‌کند تا فضا آزاد شود. این کار برگشت ندارد.
+                        </p>
+                        <Switch
+                            checked={finalBackup}
+                            onChange={setFinalBackup}
+                            label="اول یک بکاپ نهایی در تلگرام برایم بفرست"
+                            hint="اگر ارسال بکاپ نشود، هیچ چیزی پاک نمی‌شود. با bot-import قابل بازگردانی است."
+                        />
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
                         <AlertDialogCancel>انصراف</AlertDialogCancel>
                         <AlertDialogAction
-                            className="bg-destructive"
                             onClick={async () => {
                                 const b = toDelete
                                 setToDelete(null)
@@ -135,6 +160,23 @@ export function ManageBots({ bots, onChange }: { bots: TelegramBot[]; onChange: 
                             }}
                         >
                             قطع اتصال
+                        </AlertDialogAction>
+                        <AlertDialogAction
+                            className="bg-destructive"
+                            onClick={async () => {
+                                const b = toDelete
+                                setToDelete(null)
+                                if (
+                                    b &&
+                                    (await act.run(
+                                        () => botsAPI.destroy(b.id, finalBackup),
+                                        `${b.name} به‌طور کامل از سرور حذف شد`,
+                                    ))
+                                )
+                                    onChange()
+                            }}
+                        >
+                            حذف کامل از سرور
                         </AlertDialogAction>
                     </div>
                 </AlertDialogContent>
