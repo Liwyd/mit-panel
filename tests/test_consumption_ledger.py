@@ -48,6 +48,8 @@ def test_bills_allocations_instead_of_grant_or_live_usage(billing_db):
     assert result.allocated == 100 * GB
     assert result.amount == 10_000
     assert billing_db.get_invoice(result.invoice_id).traffic_gb == 0
+    # Grants nothing, but the profit report costs the 100 GB it bills.
+    assert billing_db.get_invoice(result.invoice_id).usage_gb == 100
     assert settle() is None
 
 

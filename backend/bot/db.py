@@ -415,6 +415,11 @@ def init_db() -> None:
         # with admin_username it is the exact idempotency key — older invoices
         # carry neither and are matched only by the legacy description scan.
         _ensure_column(conn, "invoices", "week_stamp", "TEXT")
+        # GB a paid invoice is a sale of, for costing only: the traffic a
+        # weekly usage invoice bills was already used, so paying it grants
+        # nothing (traffic_gb stays 0), but the profit report must still cost
+        # it. Older invoices carry 0.
+        _ensure_column(conn, "invoices", "usage_gb", "REAL NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_admin_week
@@ -1250,6 +1255,9 @@ class Invoice:
     # for invoices raised by hand, which credit nothing.
     admin_username: str | None = None
     traffic_gb: float = 0.0
+    # GB this invoice sells for the profit report when it grants none itself
+    # (a weekly usage invoice: the traffic was used before it was billed).
+    usage_gb: float = 0.0
     # Persian-week stamp (settlement only): unique per (admin_username,
     # week_stamp), so a re-run can find last Friday's invoice instead of
     # raising a duplicate.
@@ -1265,12 +1273,13 @@ def create_invoice(
     admin_username: str | None = None,
     traffic_gb: float = 0.0,
     week_stamp: str | None = None,
+    usage_gb: float = 0.0,
 ) -> int:
     with _connect() as conn:
         return insert_invoice(
             conn, telegram_id=telegram_id, amount=amount, description=description,
             due_at=due_at, admin_username=admin_username, traffic_gb=traffic_gb,
-            week_stamp=week_stamp,
+            week_stamp=week_stamp, usage_gb=usage_gb,
         )
 
 
@@ -1284,18 +1293,36 @@ def insert_invoice(
     admin_username: str | None = None,
     traffic_gb: float = 0.0,
     week_stamp: str | None = None,
+    usage_gb: float = 0.0,
 ) -> int:
     now = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
         """
         INSERT INTO invoices
             (telegram_id, amount, description, due_at, status, created_at,
-             admin_username, traffic_gb, week_stamp)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+             admin_username, traffic_gb, week_stamp, usage_gb)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         """,
-        (telegram_id, amount, description, due_at, now, admin_username, traffic_gb, week_stamp),
+        (telegram_id, amount, description, due_at, now, admin_username, traffic_gb,
+         week_stamp, usage_gb),
     )
     return cur.lastrowid
+
+
+def invoice_ledger_fields(invoice: "Invoice | None", grants_gb: bool) -> tuple[str | None, float]:
+    """The panel and GB a paid invoice goes into the sales ledger with.
+
+    Every invoice that names a panel is booked under it, so the profit report
+    neither shows its money as panel-less (and 100% profit) nor leaves that
+    panel looking like a loss. The GB is what the invoice sells: the credit it
+    grants, or for a usage invoice the traffic it bills. A hand-written invoice
+    carries neither and is booked with 0 GB: whatever traffic it is for was
+    given — and costed — when it was granted.
+    """
+    if invoice is None:
+        return None, 0.0
+    gb = invoice.traffic_gb if grants_gb else (invoice.usage_gb or 0.0)
+    return (invoice.admin_username or None), float(gb or 0.0)
 
 
 def get_invoice(invoice_id: int) -> Invoice | None:

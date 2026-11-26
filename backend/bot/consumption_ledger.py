@@ -355,7 +355,7 @@ def settle(
         due_at = (now + timedelta(days=7)).isoformat()
         invoice_id = db.insert_invoice(
             conn, telegram_id=telegram_id, amount=amount, due_at=due_at, week_stamp=stamp,
-            admin_username=admin["username"],
+            admin_username=admin["username"], usage_gb=bytes_to_gb(net),
             description=texts.CONSUMPTION_LEDGER_DESCRIPTION.format(
                 username=admin["username"], stamp=stamp, allocated=bytes_to_gb(allocated),
                 discount=bytes_to_gb(discount), payable=bytes_to_gb(net),
