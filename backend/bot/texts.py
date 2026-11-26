@@ -1546,3 +1546,77 @@ BF_STATS_MONEY = (
 )
 BF_STATS_TOP_HEADER = "\n🏆 <b>پنج خریدار برتر</b>\n"
 BF_STATS_TOP_LINE = "{rank}. {name} · {amount:,} تومان\n"
+
+
+# ---------------------------------------------------------------------------
+# Deleting a sales bot for good (service, database, site, backups)
+# ---------------------------------------------------------------------------
+
+BTN_DELETE_BOT = "🗑 حذف کامل ربات"
+BTN_DELETE_BOT_WITH_BACKUP = "🗄 حذف + بکاپ نهایی"
+BTN_DELETE_BOT_NO_BACKUP = "🗑 حذف بدون بکاپ"
+BTN_DELETE_BOT_CANCEL = "❌ انصراف"
+NO_BOTS_TO_DELETE = "هیچ رباتی به پنل وصل نیست."
+ASK_PICK_BOT_TO_DELETE = "کدام ربات به‌طور کامل از سرور حذف شود؟"
+CONFIRM_DELETE_BOT = (
+    "⚠️ <b>حذف کامل {name}</b>\n"
+    "دامنه: <code>{domain}</code>\n\n"
+    "سرویس ربات، دیتابیس، سایت nginx، گواهی SSL و همه بکاپ‌هایش از سرور پاک می‌شود "
+    "و ربات از پنل هم حذف می‌شود. <b>این کار برگشت ندارد.</b>\n\n"
+    "با «حذف + بکاپ نهایی» اول یک بکاپ کامل در تلگرام برایتان فرستاده می‌شود "
+    "(با bot-import برمی‌گردد)؛ اگر ارسالش نشود هیچ چیزی پاک نمی‌شود."
+)
+DELETE_BOT_RUNNING = "⏳ در حال حذف {name}… ممکن است چند دقیقه طول بکشد."
+DELETE_BOT_DONE = "✅ <b>{name}</b> ({domain}) به‌طور کامل از سرور و پنل حذف شد."
+DELETE_BOT_FAILED = "❌ حذف {name} انجام نشد و ربات سر جایش ماند:\n{error}"
+DELETE_BOT_CANCELLED = "حذف لغو شد."
+DELETE_BOT_GONE = "این ربات دیگر وجود ندارد."
+
+
+# ---------------------------------------------------------------------------
+# Suspending a sub-admin's users over late payment
+# ---------------------------------------------------------------------------
+
+BTN_SUSPEND_ADMIN = "⛔ قطع کاربران ساب‌ادمین"
+BTN_UNSUSPEND_ADMIN = "✅ وصل کاربران ساب‌ادمین"
+BTN_SUSPEND_CUSTOMER = "⛔ قطع کاربران"
+BTN_SUSPEND_CONFIRM = "⛔ بله، همه را قطع کن"
+BTN_UNSUSPEND_CONFIRM = "✅ بله، وصل کن"
+BTN_SUSPEND_CANCEL = "❌ انصراف"
+NO_ADMINS_TO_SUSPEND = "هیچ ساب‌ادمینی روی پنل مرزبان یا 3x-ui نیست."
+ASK_PICK_ADMIN_TO_SUSPEND = "کاربران کدام ساب‌ادمین قطع شوند؟"
+NO_SUSPENDED_ADMINS = "هیچ ساب‌ادمینی قطع نیست."
+ASK_PICK_ADMIN_TO_UNSUSPEND = "کاربران کدام ساب‌ادمین دوباره وصل شوند؟"
+SUSPEND_COUNTING = "⏳ در حال شمردن کاربران فعال {username}…"
+CONFIRM_SUSPEND = (
+    "⛔ <b>قطع کاربران {username}</b>\n"
+    "پنل: {panel}\n"
+    "کاربران فعال: <b>{count}</b>\n\n"
+    "همه این کاربران غیرفعال می‌شوند و دیگر وصل نمی‌شوند. حجم و تاریخ‌شان دست نمی‌خورد "
+    "و با «✅ وصل کاربران ساب‌ادمین» فقط همین‌ها دوباره فعال می‌شوند."
+)
+CONFIRM_UNSUSPEND = (
+    "✅ <b>وصل کاربران {username}</b>\n"
+    "قطع‌شده در: {when}\n"
+    "کاربرانی که دوباره فعال می‌شوند: <b>{count}</b>"
+)
+SUSPEND_RUNNING = "⏳ در حال قطع کاربران {username}… ({done}/{total})"
+UNSUSPEND_RUNNING = "⏳ در حال وصل کاربران {username}… ({done}/{total})"
+SUSPEND_DONE = (
+    "⛔ کاربران <b>{username}</b> قطع شدند.\n"
+    "قطع‌شده: {done}\nناموفق: {failed}"
+)
+UNSUSPEND_DONE = (
+    "✅ کاربران <b>{username}</b> دوباره وصل شدند.\n"
+    "وصل‌شده: {done}\nحذف‌شده یا پیدا نشد: {skipped}\nناموفق: {failed}"
+)
+UNSUSPEND_PARTIAL = "\nکاربران ناموفق ثبت مانده‌اند؛ دوباره «✅ وصل کاربران ساب‌ادمین» را بزنید."
+SUSPEND_FAILED = "❌ قطع کاربران {username} انجام نشد:\n{error}"
+UNSUSPEND_FAILED = "❌ وصل کاربران {username} انجام نشد:\n{error}"
+SUSPEND_NOTHING = "کاربر فعالی برای {username} پیدا نشد؛ چیزی قطع نشد."
+SUSPEND_CANCELLED = "لغو شد."
+SUSPEND_ADMIN_NOTICE = (
+    "⛔ <b>کاربران پنل {username} به‌دلیل تأخیر در پرداخت موقتاً قطع شدند.</b>\n"
+    "بعد از پرداخت بدهی، کاربران دوباره وصل می‌شوند."
+)
+UNSUSPEND_ADMIN_NOTICE = "✅ کاربران پنل <b>{username}</b> دوباره وصل شدند."

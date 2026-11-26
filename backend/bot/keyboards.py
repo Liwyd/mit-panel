@@ -111,6 +111,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_CREATE_ADMIN,
         texts.BTN_CREATE_BOT_FOR_ADMIN,
         texts.BTN_BOT_REQUESTS,
+        texts.BTN_DELETE_BOT,
         texts.BTN_ADD_PANEL,
         texts.BTN_GRANT_TRAFFIC,
         texts.BTN_PANEL_HISTORY,
@@ -118,7 +119,7 @@ def panels_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_DELETE_ADMIN,
         texts.BTN_DELETE_TUTORIAL,
         texts.BTN_BACK,
-        layout=(2, 2, 2, 2, 1, 1),
+        layout=(2, 2, 1, 2, 2, 2, 1),
     )
 
 
@@ -133,8 +134,10 @@ def finance_section_kb() -> ReplyKeyboardMarkup:
         texts.BTN_TOGGLE_DELAYED,
         texts.BTN_TOGGLE_CONSUMPTION,
         texts.BTN_BF_STATS,
+        texts.BTN_SUSPEND_ADMIN,
+        texts.BTN_UNSUSPEND_ADMIN,
         texts.BTN_BACK,
-        layout=(2, 2, 2, 2, 1, 1),
+        layout=(2, 2, 2, 2, 1, 2, 1),
     )
 
 
@@ -396,7 +399,8 @@ def bill_actions_kb(customer) -> InlineKeyboardMarkup | None:
     kb.button(text=texts.BTN_MARK_PAID, callback_data=f"paidpick:{customer.telegram_id}")
     kb.button(text=texts.BTN_DELETE_CUSTOMER_BILL, callback_data=f"delpick:{customer.telegram_id}")
     kb.button(text=texts.BTN_MESSAGE_USER, callback_data=f"msg_user:{customer.telegram_id}")
-    kb.adjust(2, 2)
+    kb.button(text=texts.BTN_SUSPEND_CUSTOMER, callback_data=f"suspcust:{customer.telegram_id}")
+    kb.adjust(2, 2, 1)
     return kb.as_markup()
 
 
@@ -679,4 +683,51 @@ def referral_request_approval_kb(request_id: int) -> InlineKeyboardMarkup:
     kb.button(text=texts.BTN_APPROVE_REFERRAL, callback_data=f"ref_req_approve:{request_id}")
     kb.button(text=texts.BTN_REJECT_REFERRAL, callback_data=f"ref_req_reject:{request_id}")
     kb.adjust(2)
+    return kb.as_markup()
+
+
+def bots_to_delete_kb(bots) -> InlineKeyboardMarkup:
+    """One button per connected sales bot, for «حذف کامل ربات»."""
+    kb = InlineKeyboardBuilder()
+    for b in bots:
+        label = f"@{b.bot_username}" if b.bot_username else b.name
+        kb.button(text=label, callback_data=f"botdel:{b.id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_delete_bot_kb(bot_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_DELETE_BOT_WITH_BACKUP, callback_data=f"botdelok:{bot_id}:1")
+    kb.button(text=texts.BTN_DELETE_BOT_NO_BACKUP, callback_data=f"botdelok:{bot_id}:0")
+    kb.button(text=texts.BTN_DELETE_BOT_CANCEL, callback_data="botdel_no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_suspend_kb(admin_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_SUSPEND_CONFIRM, callback_data=f"suspok:{admin_id}")
+    kb.button(text=texts.BTN_SUSPEND_CANCEL, callback_data="susp_no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def suspended_admins_kb(rows) -> InlineKeyboardMarkup:
+    """One button per suspended sub-admin, for «وصل کاربران ساب‌ادمین»."""
+    kb = InlineKeyboardBuilder()
+    for r in rows:
+        kb.button(
+            text=f"{r['admin_username']} ({r['pending']})",
+            callback_data=f"unsusp:{r['admin_username']}",
+        )
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_unsuspend_kb(username: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=texts.BTN_UNSUSPEND_CONFIRM, callback_data=f"unsuspok:{username}")
+    kb.button(text=texts.BTN_SUSPEND_CANCEL, callback_data="susp_no")
+    kb.adjust(1)
     return kb.as_markup()
