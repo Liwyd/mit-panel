@@ -586,6 +586,38 @@ def init_db() -> None:
                 suspended_at TEXT NOT NULL,
                 suspended_by INTEGER
             );
+            CREATE TABLE IF NOT EXISTS metered_accounts (
+                -- A sub-admin billed for the traffic their users really use
+                -- («ادمین ویژه»), read from Marzban's per-admin users_usage.
+                -- Effective counter = offset + last_raw; it never goes down.
+                admin_id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                panel TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                enabled_at TEXT,
+                enabled_by INTEGER,
+                disabled_at TEXT,
+                baseline INTEGER NOT NULL DEFAULT 0,
+                "offset" INTEGER NOT NULL DEFAULT 0,
+                last_raw INTEGER NOT NULL DEFAULT 0,
+                last_read_at TEXT,
+                billed_through INTEGER NOT NULL DEFAULT 0,
+                -- Remaining quota of the users live at enabling: already paid
+                -- for, so it covers usage before the balance does.
+                credit INTEGER NOT NULL DEFAULT 0,
+                alert_reset_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_metered_enabled ON metered_accounts(enabled);
+            CREATE TABLE IF NOT EXISTS metered_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                bytes INTEGER NOT NULL DEFAULT 0,
+                invoice_id INTEGER,
+                at TEXT NOT NULL,
+                note TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_metered_events_admin ON metered_events(admin_id, at);
             CREATE TABLE IF NOT EXISTS admin_suspended_users (
                 admin_username TEXT NOT NULL,
                 user_key TEXT NOT NULL,
