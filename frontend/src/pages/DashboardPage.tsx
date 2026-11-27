@@ -20,11 +20,12 @@ import { QRCodeSVG } from 'qrcode.react'
 import { dashboardAPI, userAPI, serverAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
 import { formatDate, cn } from '@/lib/utils'
-import { getUserRole } from '@/lib/auth'
+import { getUserRole, getUsername } from '@/lib/auth'
 import { DashboardData, ClientsOutput, MeteredUsage, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, MarzbanNodeStatus, NewsFeedItem, ServerOutput } from '@/types'
 import { useBannerImage } from '@/hooks/useBannerImage'
 import { ManageServersDialog } from './components/ManageServersDialog'
 import { UserList } from './components/UserList'
+import { StatusFilter, type UserStatusFilter } from './components/StatusFilter'
 import { buildSubUrl, lastOnlineInfo } from '@/lib/users'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
 import { SegmentedBar } from '@/components/charts/SegmentedBar'
@@ -195,9 +196,26 @@ function ServerStatusDot({ status }: { status: string }) {
     )
 }
 
+// The last dashboard payload, in memory only (never written to storage: it
+// holds subscription links). Keyed by the signed-in username so switching
+// accounts never shows someone else's users.
+let dashboardCache: { owner: string; data: DashboardData } | null = null
+
+function readDashboardCache(): DashboardData | null {
+    const owner = getUsername()
+    return owner && dashboardCache?.owner === owner ? dashboardCache.data : null
+}
+
+function writeDashboardCache(data: DashboardData) {
+    const owner = getUsername()
+    dashboardCache = owner ? { owner, data } : null
+}
+
 export function DashboardPage() {
-    const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
-    const [loading, setLoading] = useState(true)
+    // Coming back to the dashboard shows what was last loaded straight away and
+    // refreshes underneath; the spinner is only for a first visit.
+    const [dashboardData, setDashboardData] = useState<DashboardData | null>(() => readDashboardCache())
+    const [loading, setLoading] = useState(() => readDashboardCache() === null)
     const [error, setError] = useState<string | null>(null)
     const [selectedUser, setSelectedUser] = useState<ClientsOutput | null>(null)
     const [showUserDialog, setShowUserDialog] = useState(false)
@@ -208,7 +226,7 @@ export function DashboardPage() {
     const [qrUser, setQrUser] = useState<ClientsOutput | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'online'>('all')
+    const [statusFilter, setStatusFilter] = useState<UserStatusFilter>('all')
     const [marzban, setMarzban] = useState<MarzbanOverview | null>(null)
     const [marzbanPeriod, setMarzbanPeriod] = useState<MarzbanPeriod>('1d')
     const [marzbanAdminsLoaded, setMarzbanAdminsLoaded] = useState(false)
@@ -357,9 +375,10 @@ export function DashboardPage() {
         }
     }
 
+    // Refreshes in place: after the first load the current list stays on screen
+    // (scroll position and open rows included) until the new data replaces it.
     const fetchDashboardData = async () => {
         try {
-            setLoading(true)
             const data = await dashboardAPI.getDashboardData()
 
             // Fetch system info if user is superadmin
@@ -373,6 +392,7 @@ export function DashboardPage() {
             }
 
             setDashboardData(data)
+            writeDashboardCache(data)
             setError(null)
         } catch (err: any) {
             console.error('Failed to fetch dashboard data:', err)
@@ -484,13 +504,22 @@ export function DashboardPage() {
         )
     }
 
+    // Search first, then sort each match into its status; the filter shows how
+    // many of the current search results fall into every status.
+    const query = searchQuery.toLowerCase()
+    const statusCounts: Record<UserStatusFilter, number> = { all: 0, online: 0, active: 0, inactive: 0 }
     const filteredUsers = (dashboardData?.users ?? []).filter(user => {
-        const matchesSearch = user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (user.uuid && user.uuid.toLowerCase().includes(searchQuery.toLowerCase()))
+        const matchesSearch = user.username.toLowerCase().includes(query) ||
+            (user.uuid && user.uuid.toLowerCase().includes(query))
         if (!matchesSearch) return false
+        const online = lastOnlineInfo(user.online_at).online
+        statusCounts.all++
+        if (online) statusCounts.online++
+        if (user.status && !online) statusCounts.active++
+        if (!user.status) statusCounts.inactive++
         if (statusFilter === 'all') return true
-        if (statusFilter === 'online') return lastOnlineInfo(user.online_at).online
-        if (statusFilter === 'active') return user.status && !lastOnlineInfo(user.online_at).online
+        if (statusFilter === 'online') return online
+        if (statusFilter === 'active') return user.status && !online
         if (statusFilter === 'inactive') return !user.status
         return true
     })
@@ -1146,22 +1175,17 @@ export function DashboardPage() {
                         </div>
 
                         {/* Search Bar and Filter */}
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <select
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <StatusFilter
                                 value={statusFilter}
-                                onChange={(e) => {
-                                    setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'online')
+                                counts={statusCounts}
+                                onChange={(value) => {
+                                    setStatusFilter(value)
                                     setCurrentPage(1)
                                 }}
-                                className="h-10 w-auto rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                                <option value="all">All</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="online">Online</option>
-                            </select>
+                            />
                             <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     type="text"
                                     placeholder="Search users by email or username..."
@@ -1170,7 +1194,7 @@ export function DashboardPage() {
                                         setSearchQuery(e.target.value)
                                         setCurrentPage(1)
                                     }}
-                                    className="pl-10"
+                                    className="h-10 rounded-xl border-border/70 bg-muted/30 pl-10 focus-visible:bg-card"
                                 />
                             </div>
                         </div>
