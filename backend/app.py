@@ -2,8 +2,10 @@ import asyncio
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.types import Scope
 
 from backend.config import config
 from backend.auth import auth_router
@@ -21,6 +23,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# The frontend bundle (~1 MB) and the user lists were sent uncompressed; gzip
+# shrinks both to roughly a third. Small responses aren't worth compressing.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 for router in roter_list:
@@ -28,11 +33,26 @@ for router in roter_list:
 app.include_router(auth_router, prefix=f"/{config.URLPATH}")
 
 
+class _HashedAssets(StaticFiles):
+    """Vite puts a content hash in every file name under /assets, so a name
+    never changes meaning: browsers may keep them for good and skip asking."""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 304):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
+# index.html names the current hashed bundle, so it must be re-checked on every
+# visit or a browser would keep loading the previous release after a deploy.
+_NO_CACHE = {"Cache-Control": "no-cache"}
+
 # Serve frontend
 frontend_build_path = Path(__file__).parent.parent / "frontend" / "dist"
 app.mount(
     f"/{config.URLPATH}/assets",
-    StaticFiles(directory=frontend_build_path / "assets"),
+    _HashedAssets(directory=frontend_build_path / "assets"),
     name="static",
 )
 index_html_path = frontend_build_path / "index.html"
@@ -69,7 +89,7 @@ async def serve_frontend(path_name: str = ""):
             media_type=_PUBLIC_MEDIA_TYPES.get(public_file.suffix),
         )
     if index_html_path.exists():
-        return FileResponse(index_html_path)
+        return FileResponse(index_html_path, headers=_NO_CACHE)
     return {"error": "Frontend build not found"}
 
 
