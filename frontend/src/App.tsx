@@ -1,19 +1,23 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Sidebar } from '@/components/Sidebar'
 import { BlackFridayDust } from '@/components/BlackFridayDust'
 import { DecorBoundary } from '@/components/DecorBoundary'
-import { LoginPage } from '@/pages/LoginPage'
-import { DashboardPage } from '@/pages/DashboardPage'
-import { AnalyticsPage } from '@/pages/AnalyticsPage'
-import { AdminsPage } from '@/pages/AdminsPage'
-import { PanelsPage } from '@/pages/PanelsPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-import { HelpPage } from '@/pages/HelpPage'
-import { BotsPage } from '@/pages/BotsPage'
-import { TopupBotPage } from '@/pages/TopupBotPage'
-import { ProfitPage } from '@/pages/ProfitPage'
+import { lazyPage } from '@/lib/lazyPage'
+
+// Each page is its own chunk, fetched when first visited, so opening the
+// panel downloads only what the current screen needs.
+const LoginPage = lazyPage(() => import('@/pages/LoginPage'), 'LoginPage')
+const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage')
+const AnalyticsPage = lazyPage(() => import('@/pages/AnalyticsPage'), 'AnalyticsPage')
+const AdminsPage = lazyPage(() => import('@/pages/AdminsPage'), 'AdminsPage')
+const PanelsPage = lazyPage(() => import('@/pages/PanelsPage'), 'PanelsPage')
+const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage')
+const HelpPage = lazyPage(() => import('@/pages/HelpPage'), 'HelpPage')
+const BotsPage = lazyPage(() => import('@/pages/BotsPage'), 'BotsPage')
+const TopupBotPage = lazyPage(() => import('@/pages/TopupBotPage'), 'TopupBotPage')
+const ProfitPage = lazyPage(() => import('@/pages/ProfitPage'), 'ProfitPage')
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppToaster } from '@/components/AppToaster'
@@ -30,7 +34,14 @@ function App() {
             <AppToaster />
             <Routes>
                 {/* Public Routes */}
-                <Route path="/login" element={<LoginPage />} />
+                <Route
+                    path="/login"
+                    element={
+                        <Suspense fallback={<PageSpinner />}>
+                            <LoginPage />
+                        </Suspense>
+                    }
+                />
 
                 {/* Protected Routes */}
                 <Route
@@ -201,9 +212,18 @@ function Layout({ children }: { children: React.ReactNode }) {
                 </header>
 
                 <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                    {children}
+                    {/* The sidebar stays put while a page's chunk loads. */}
+                    <Suspense fallback={<PageSpinner />}>{children}</Suspense>
                 </main>
             </div>
+        </div>
+    )
+}
+
+function PageSpinner() {
+    return (
+        <div className="flex flex-1 items-center justify-center min-h-[50vh]">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
         </div>
     )
 }

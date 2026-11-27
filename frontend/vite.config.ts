@@ -14,6 +14,18 @@ export default defineConfig({
         },
     },
 
+    build: {
+        rollupOptions: {
+            output: {
+                // React itself changes far less often than the app, so it gets
+                // its own chunk that browsers keep across deploys.
+                manualChunks: {
+                    react: ['react', 'react-dom', 'react-router-dom'],
+                },
+            },
+        },
+    },
+
     server: {
         port: 5173,
         open: true,
