@@ -211,7 +211,11 @@ function UserRow({
             </div>
 
             <Collapse id={panelId} open={open} reduced={reduced}>
-                <div className="mx-4 mb-4 md:mx-5 rounded-xl border border-border/60 bg-gradient-to-b from-muted/50 to-muted/10 p-4 space-y-4">
+                {/* Padding, not margin, around the box: the collapse measures
+                    this wrapper, and a child's bottom margin would escape the
+                    measurement and get clipped. */}
+                <div className="px-4 pb-4 md:px-5">
+                <div className="rounded-xl border border-border/60 bg-gradient-to-b from-muted/50 to-muted/10 p-4 space-y-4">
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs" data-stagger>
                         <Meta
                             icon={WifiHighIcon}
@@ -241,6 +245,7 @@ function UserRow({
                         )}
                     </div>
                 </div>
+                </div>
             </Collapse>
         </animated.div>
     )
@@ -251,23 +256,19 @@ function UserRow({
 function Identity({ user, online }: { user: ClientsOutput; online: boolean }) {
     const tone = online ? 'online' : user.status ? 'active' : 'inactive'
     return (
-        <div className="flex min-w-0 items-center gap-3">
-            <span className="relative shrink-0">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-muted to-secondary text-sm font-semibold uppercase text-foreground/80 ring-1 ring-border/70">
-                    {user.username.slice(0, 1)}
-                </span>
-                <span
-                    className={cn(
-                        'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card',
-                        tone === 'online' && 'bg-emerald-500',
-                        tone === 'active' && 'bg-foreground/30',
-                        tone === 'inactive' && 'bg-destructive',
-                    )}
-                >
-                    {tone === 'online' && (
-                        <span className="absolute inset-0 rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
-                    )}
-                </span>
+        <div className="flex min-w-0 items-center gap-2.5">
+            <span
+                aria-hidden
+                className={cn(
+                    'relative h-2 w-2 shrink-0 rounded-full',
+                    tone === 'online' && 'bg-emerald-500',
+                    tone === 'active' && 'bg-foreground/30',
+                    tone === 'inactive' && 'bg-destructive',
+                )}
+            >
+                {tone === 'online' && (
+                    <span className="absolute inset-0 rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
+                )}
             </span>
             <div className="min-w-0">
                 <div className="truncate font-mono text-sm font-medium tracking-tight">{user.username}</div>

@@ -41,23 +41,23 @@
         --popover-foreground: 0 0% 12%;
         --muted: 0 0% 95%;
         --muted-foreground: 0 0% 45%;
-        --accent: 0 70% 67%;
+        --accent: 0 76% 62%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 65% 58%;
+        --destructive: 0 72% 54%;
         --destructive-foreground: 0 0% 100%;
         --border: 0 0% 90%;
         --input: 0 0% 90%;
-        --primary: 0 70% 67%;
+        --primary: 0 76% 62%;
         --primary-foreground: 0 0% 100%;
         --secondary: 0 0% 94%;
         --secondary-foreground: 0 0% 15%;
-        --ring: 0 70% 67%;
+        --ring: 0 76% 62%;
         --radius: 0.75rem;
 
         /* Brand accents kept within the coral/red family so charts and the gold
            button read as part of the same theme. */
         --brand-blue: 12 76% 62%;
-        --brand-gold: 0 70% 67%;
+        --brand-gold: 0 76% 62%;
         --brand-green: 350 65% 60%;
 
         /* Surface treatment for cards and the sticky header */
@@ -83,20 +83,20 @@
         --popover-foreground: 0 0% 88%;
         --muted: 0 0% 20%;
         --muted-foreground: 0 0% 55%;
-        --accent: 0 45% 58%;
+        --accent: 0 55% 56%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 45% 55%;
+        --destructive: 0 58% 52%;
         --destructive-foreground: 0 0% 98%;
         --border: 0 0% 24%;
         --input: 0 0% 24%;
-        --primary: 0 45% 58%;
+        --primary: 0 55% 56%;
         --primary-foreground: 0 0% 100%;
         --secondary: 0 0% 20%;
         --secondary-foreground: 0 0% 88%;
-        --ring: 0 45% 58%;
+        --ring: 0 55% 56%;
 
         --brand-blue: 12 60% 55%;
-        --brand-gold: 0 45% 58%;
+        --brand-gold: 0 55% 56%;
         --brand-green: 350 55% 55%;
 
         --surface-gradient: linear-gradient(145deg, #1a1a1a 0%, #161616 50%, #131313 100%);
@@ -121,20 +121,20 @@
         --popover-foreground: 20 12% 92%;
         --muted: 0 4% 13%;
         --muted-foreground: 20 5% 63%;
-        --accent: 0 70% 67%;
+        --accent: 0 76% 62%;
         --accent-foreground: 0 40% 8%;
-        --destructive: 0 65% 58%;
+        --destructive: 0 72% 54%;
         --destructive-foreground: 0 0% 100%;
         --border: 0 4% 15%;
         --input: 0 4% 17%;
-        --primary: 0 70% 67%;
+        --primary: 0 76% 62%;
         --primary-foreground: 0 40% 8%;
         --secondary: 0 4% 13%;
         --secondary-foreground: 20 12% 92%;
-        --ring: 0 70% 67%;
+        --ring: 0 76% 62%;
 
         --brand-blue: 12 76% 62%;
-        --brand-gold: 0 70% 67%;
+        --brand-gold: 0 76% 62%;
         --brand-green: 350 65% 60%;
 
         --surface-gradient: linear-gradient(180deg, #181616 0%, #151313 100%);
