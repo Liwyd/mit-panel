@@ -4,46 +4,34 @@ import {
     Zap,
     Users,
     RefreshCw,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Plus,
     Edit2,
-    Trash2,
     RotateCcw,
     UserX,
     UserCog,
     Server,
     Clock,
     Wifi,
-    Copy,
-    Check,
-    QrCode,
     Search,
-    Power,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { dashboardAPI, userAPI, serverAPI } from '@/lib/api'
 import { bytesToGB, formatTraffic } from '@/lib/traffic-converter'
-import { formatDate, formatExpiryWithDays, cn } from '@/lib/utils'
+import { formatDate, cn } from '@/lib/utils'
 import { getUserRole } from '@/lib/auth'
 import { DashboardData, ClientsOutput, MeteredUsage, MarzbanOverview, MarzbanPeriod, MARZBAN_PERIODS, MarzbanNodeStatus, NewsFeedItem, ServerOutput } from '@/types'
 import { useBannerImage } from '@/hooks/useBannerImage'
 import { ManageServersDialog } from './components/ManageServersDialog'
+import { UserList } from './components/UserList'
+import { buildSubUrl, lastOnlineInfo } from '@/lib/users'
 import { Donut, Gauge, SEGMENT_COLORS } from '@/components/charts/Donut'
 import { SegmentedBar } from '@/components/charts/SegmentedBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -176,71 +164,6 @@ function NewsCarousel({ items }: { items: NewsFeedItem[] }) {
     )
 }
 
-    function buildSubUrl(subUrl?: string, subId?: string) {
-        if (!subUrl || !subId) return ''
-
-        if (subId.startsWith('http://') || subId.startsWith('https://')) {
-            return subId
-        }
-
-        const cleanBase = subUrl.replace(/\/+$/, '')
-        const cleanId = subId.replace(/^\/+/, '')
-
-        return `${cleanBase}/${cleanId}`
-    }
-
-
-function lastOnlineInfo(onlineAt?: string | null): { online: boolean; text: string } {
-    if (!onlineAt) return { online: false, text: 'Never online' }
-    const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(onlineAt) ? onlineAt : onlineAt + 'Z'
-    const t = new Date(iso).getTime()
-    if (isNaN(t)) return { online: false, text: '—' }
-    const diff = Date.now() - t
-    if (diff < 60000) return { online: true, text: 'Online' }
-    const m = Math.floor(diff / 60000)
-    if (m < 60) return { online: false, text: `${m}m ago` }
-    const h = Math.floor(m / 60)
-    if (h < 24) return { online: false, text: `${h}h ago` }
-    const d = Math.floor(h / 24)
-    return { online: false, text: `${d}d ago` }
-}
-
-function CopyButton({
-    text,
-    label,
-    iconClassName = 'h-4 w-4 mr-2',
-    className,
-    onClickCapture,
-}: {
-    text: string
-    label: string
-    iconClassName?: string
-    className?: string
-    onClickCapture?: (e: React.MouseEvent) => void
-}) {
-    const [copied, setCopied] = useState(false)
-    return (
-        <Button
-            size="sm"
-            variant="outline"
-            className={cn(
-                'transition-colors',
-                copied && 'border-emerald-500 text-emerald-500 hover:text-emerald-500',
-                className
-            )}
-            onClick={(e) => {
-                onClickCapture?.(e)
-                navigator.clipboard.writeText(text)
-                setCopied(true)
-                setTimeout(() => setCopied(false), 1500)
-            }}
-        >
-            {copied ? <Check className={iconClassName} /> : <Copy className={iconClassName} />}
-            {copied ? 'Copied!' : label}
-        </Button>
-    )
-}
-
 const SERVER_STATUS_META: Record<string, { dot: string; label: string }> = {
     connected: { dot: 'bg-emerald-500', label: 'Connected' },
     connecting: { dot: 'bg-amber-500', label: 'Connecting' },
@@ -272,15 +195,10 @@ function ServerStatusDot({ status }: { status: string }) {
     )
 }
 
-interface ExpandedRow {
-    [key: string]: boolean
-}
-
 export function DashboardPage() {
     const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [expandedRows, setExpandedRows] = useState<ExpandedRow>({})
     const [selectedUser, setSelectedUser] = useState<ClientsOutput | null>(null)
     const [showUserDialog, setShowUserDialog] = useState(false)
     const [userToDelete, setUserToDelete] = useState<string | null>(null)
@@ -1279,88 +1197,22 @@ export function DashboardPage() {
                             )
 
                             return (
-                                <>
-                                    {/* Mobile View - Cards */}
-                                    <div className="md:hidden space-y-3">
-                                        {paginatedUsers.map((user) => {
-                                            const userKey = `${user.uuid || user.id}-${user.username}`
-                                            return (
-                                                <MobileUserCard
-                                                    key={`mobile-${userKey}`}
-                                                    user={user}
-                                                    isExpanded={expandedRows[userKey] || false}
-                                                    subUrl={dashboardData.sub_url}
-                                                    onToggle={() => {
-                                                        setExpandedRows(prev => ({
-                                                            ...prev,
-                                                            [userKey]: !prev[userKey],
-                                                        }))
-                                                    }}
-                                                    onEdit={() => {
-                                                        setSelectedUser(user)
-                                                        setShowUserDialog(true)
-                                                    }}
-                                                    onDelete={() => setUserToDelete(`${user.uuid || '0'}|${user.username}|${user.id}`)}
-                                                    onResetUsage={() => handleResetUsage(user.username)}
-                                                    onRevoke={dashboardData.can_revoke_subscription ? () => setUserToRevoke(user.username) : undefined}
-                                                    onShowQr={(user) => {
-                                                        setQrUser(user)
-                                                        setShowQrDialog(true)
-                                                    }}
-                                                    onToggleStatus={() => handleToggleStatus(user)}
-                                                />
-                                            )
-                                        })}
-                                    </div>
-
-                                    {/* Desktop View - Table */}
-                                    <div className="hidden md:block overflow-x-auto">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="w-12"></TableHead>
-                                                    <TableHead>Email</TableHead>
-                                                    <TableHead>Traffic</TableHead>
-                                                    <TableHead>Expiry</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead className="text-right">Actions</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {paginatedUsers.map((user) => {
-                                                    const userKey = `${user.uuid || user.id}-${user.username}`
-                                                    return (
-                                                        <DetailsRow
-                                                            key={`desktop-${userKey}`}
-                                                            user={user}
-                                                            isExpanded={expandedRows[userKey] || false}
-                                                            subUrl={dashboardData.sub_url}
-                                                            onToggle={() => {
-                                                                setExpandedRows(prev => ({
-                                                                    ...prev,
-                                                                    [userKey]: !prev[userKey],
-                                                                }))
-                                                            }}
-                                                            onEdit={() => {
-                                                                setSelectedUser(user)
-                                                                setShowUserDialog(true)
-                                                            }}
-                                                            onDelete={() => setUserToDelete(`${user.uuid || '0'}|${user.username}|${user.id}`)}
-                                                            onResetUsage={() => handleResetUsage(user.username)}
-                                                            onRevoke={dashboardData.can_revoke_subscription ? () => setUserToRevoke(user.username) : undefined}
-                                                            onShowQr={(user) => {
-                                                                setQrUser(user)
-                                                                setShowQrDialog(true)
-                                                            }}
-                                                            onToggleStatus={() => handleToggleStatus(user)}
-                                                        />
-                                                    )
-                                                })}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-
-                                </>
+                                <UserList
+                                    users={paginatedUsers}
+                                    subUrl={dashboardData.sub_url}
+                                    onEdit={(user) => {
+                                        setSelectedUser(user)
+                                        setShowUserDialog(true)
+                                    }}
+                                    onDelete={(user) => setUserToDelete(`${user.uuid || '0'}|${user.username}|${user.id}`)}
+                                    onResetUsage={(user) => handleResetUsage(user.username)}
+                                    onRevoke={dashboardData.can_revoke_subscription ? (user) => setUserToRevoke(user.username) : undefined}
+                                    onShowQr={(user) => {
+                                        setQrUser(user)
+                                        setShowQrDialog(true)
+                                    }}
+                                    onToggleStatus={(user) => handleToggleStatus(user)}
+                                />
                             )
                         })()}
                     </CardContent>
@@ -1474,368 +1326,6 @@ export function DashboardPage() {
         </PageLayout>
     )
 }
-
-interface DetailsRowProps {
-    onRevoke?: () => void
-    user: ClientsOutput
-    isExpanded: boolean
-    subUrl?: string
-    onToggle: () => void
-    onEdit: () => void
-    onDelete: () => void
-    onResetUsage: () => void
-    onShowQr: (user: ClientsOutput) => void
-    onToggleStatus: () => void
-}
-
-function DetailsRow({
-    onRevoke,
-    user,
-    isExpanded,
-    subUrl,
-    onToggle,
-    onEdit,
-    onDelete,
-    onResetUsage,
-    onShowQr,
-    onToggleStatus,
-}: DetailsRowProps) {
-    const trafficUsed = user.used_data
-    const trafficPercent = (trafficUsed / user.data_limit) * 100
-    const online = lastOnlineInfo(user.online_at)
-
-    return (
-        <>
-            <TableRow>
-                <TableCell>
-                    <button
-                        onClick={onToggle}
-                        className="p-1 hover:bg-muted rounded"
-                    >
-                        <ChevronDown
-                            className={cn(
-                                'h-4 w-4 transition-transform',
-                                isExpanded && 'transform rotate-180'
-                            )}
-                        />
-                    </button>
-                </TableCell>
-                <TableCell className="font-mono text-sm">{user.username}</TableCell>
-                <TableCell>
-                    <div className="space-y-1">
-                        <div className="text-sm font-medium">
-                            {bytesToGB(trafficUsed).toFixed(2)} / {bytesToGB(user.data_limit).toFixed(2)} GB
-                        </div>
-                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                                className={cn(
-                                    'h-full bg-primary transition-[width] duration-500 ease-out',
-                                    trafficPercent > 80 && 'bg-destructive',
-                                    trafficPercent > 90 && 'bg-destructive'
-                                )}
-                                style={{ width: `${Math.min(trafficPercent, 100)}%` }}
-                            />
-                        </div>
-                    </div>
-                </TableCell>
-                <TableCell>
-                    {user.expiry_date_unix ? (
-                        <div className="space-y-1">
-                            <div className="text-sm">{formatDate(user.expiry_date_unix)}</div>
-                            <div className={cn(
-                                'text-xs',
-                                formatExpiryWithDays(user.expiry_date_unix).isExpired
-                                    ? 'text-destructive'
-                                    : formatExpiryWithDays(user.expiry_date_unix).daysLeft <= 7
-                                        ? 'text-yellow-500'
-                                        : 'text-muted-foreground'
-                            )}>
-                                {formatExpiryWithDays(user.expiry_date_unix).text}
-                            </div>
-                        </div>
-                    ) : (
-                        <span className="text-muted-foreground">No expiry</span>
-                    )}
-                </TableCell>
-                <TableCell>
-                    {online.online ? (
-                        <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">Online</Badge>
-                    ) : (
-                        <Badge variant={user.status ? 'default' : 'destructive'}>
-                            {user.status ? 'Active' : 'Inactive'}
-                        </Badge>
-                    )}
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={onToggleStatus}
-                        title={user.status ? 'Disable user' : 'Enable user'}
-                    >
-                        <Power className={cn("h-4 w-4", user.status ? "text-green-500" : "text-gray-400")} />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={onEdit}>
-                        <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={onDelete}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                </TableCell>
-            </TableRow>
-
-            {isExpanded && (
-                <TableRow className="bg-muted/30">
-                    <TableCell colSpan={6}>
-                        <div className="py-4 space-y-3">
-                            <div className="flex items-center gap-2 text-xs">
-                                <Wifi className={cn('h-3.5 w-3.5', online.online ? 'text-emerald-500' : 'text-muted-foreground')} />
-                                <span className="text-muted-foreground">Last online:</span>
-                                <span>{online.text}</span>
-                            </div>
-                            {subUrl && user.sub_id && (
-                                <div className="p-3 bg-background rounded-md border overflow-hidden">
-                                    <div className="text-xs text-muted-foreground mb-1">Subscription Link:</div>
-                                    <div className="text-xs font-mono break-all">{buildSubUrl(subUrl, user.sub_id)}</div>
-                                </div>
-                            )}
-                            <div className="flex flex-wrap gap-2 pt-2">
-                                <Button size="sm" variant="outline" onClick={onToggleStatus}>
-                                    <Power className={cn("h-4 w-4 mr-2", user.status ? "text-green-500" : "text-gray-400")} />
-                                    {user.status ? 'Disable' : 'Enable'}
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={onResetUsage}>
-                                    <RotateCcw className="h-4 w-4 mr-2" />
-                                    Reset Usage
-                                </Button>
-                                {onRevoke && <Button size="sm" variant="outline" onClick={onRevoke}>Revoke Subscription</Button>}
-                                {subUrl && user.sub_id && (
-                                    <CopyButton
-                                        text={buildSubUrl(subUrl, user.sub_id)}
-                                        label="Copy Subscription"
-                                        iconClassName="h-4 w-4 mr-2"
-                                    />
-                                )}
-                                {subUrl && user.sub_id && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => onShowQr(user)}
-                                    >
-                                        <QrCode className="h-4 w-4 mr-2" />
-                                        QR Code
-                                    </Button>
-                                )}
-                                <Button size="sm" variant="outline" onClick={onEdit}>
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Edit
-                                </Button>
-                                <Button size="sm" variant="destructive" onClick={onDelete}>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                </Button>
-                            </div>
-                        </div>
-                    </TableCell>
-                </TableRow>
-            )}
-        </>
-    )
-}
-
-// Mobile User Card Component
-interface MobileUserCardProps {
-    onRevoke?: () => void
-    user: ClientsOutput
-    isExpanded: boolean
-    subUrl?: string
-    onToggle: () => void
-    onEdit: () => void
-    onDelete: () => void
-    onResetUsage: () => void
-    onShowQr: (user: ClientsOutput) => void
-    onToggleStatus: () => void
-}
-
-function MobileUserCard({
-    onRevoke,
-    user,
-    isExpanded,
-    subUrl,
-    onToggle,
-    onEdit,
-    onDelete,
-    onResetUsage,
-    onShowQr,
-    onToggleStatus,
-}: MobileUserCardProps) {
-    const trafficUsed = user.used_data
-    const trafficPercent = (trafficUsed / user.data_limit) * 100
-    const online = lastOnlineInfo(user.online_at)
-
-    return (
-        <div className="border rounded-lg overflow-hidden">
-            {/* Compact View - Always visible */}
-            <button
-                onClick={onToggle}
-                className="w-full p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
-            >
-                {/* Left: Name & Traffic */}
-                <div className="flex-1 min-w-0">
-                    <span className="font-medium text-sm truncate block">{user.username}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                            {bytesToGB(trafficUsed).toFixed(1)} / {bytesToGB(user.data_limit).toFixed(1)} GB
-                        </span>
-                        <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                                className={cn(
-                                    'h-full bg-primary transition-[width] duration-500 ease-out',
-                                    trafficPercent > 80 && 'bg-destructive'
-                                )}
-                                style={{ width: `${Math.min(trafficPercent, 100)}%` }}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right: Status & Chevron */}
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                    {online.online ? (
-                        <Badge className="text-xs bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">Online</Badge>
-                    ) : (
-                        <Badge variant={user.status ? 'default' : 'destructive'} className="text-xs">
-                            {user.status ? 'Active' : 'Inactive'}
-                        </Badge>
-                    )}
-                    <ChevronDown
-                        className={cn(
-                            'h-4 w-4 text-muted-foreground transition-transform',
-                            isExpanded && 'transform rotate-180'
-                        )}
-                    />
-                </div>
-            </button>
-
-            {/* Expanded View */}
-            {isExpanded && (
-                <div className="border-t p-3 space-y-3 bg-muted/30">
-                    <div className="flex items-center gap-2 text-xs">
-                        <Wifi className={cn('h-3.5 w-3.5', online.online ? 'text-emerald-500' : 'text-muted-foreground')} />
-                        <span className="text-muted-foreground">Last online:</span>
-                        <span>{online.text}</span>
-                    </div>
-                    {/* Subscription Link */}
-                    {subUrl && user.sub_id && (
-                        <div className="p-3 bg-background rounded-md border overflow-hidden">
-                            <div className="text-xs text-muted-foreground mb-1">Subscription Link:</div>
-                            <div className="text-xs font-mono break-all">{buildSubUrl(subUrl, user.sub_id)}</div>
-                        </div>
-                    )}
-
-                    {/* Expiry */}
-                    <div className="text-sm">
-                        <p className="text-xs text-muted-foreground">Expiry Date</p>
-                        {user.expiry_date_unix ? (
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">{formatDate(user.expiry_date_unix)}</span>
-                                <span className={cn(
-                                    'text-xs',
-                                    formatExpiryWithDays(user.expiry_date_unix).isExpired
-                                        ? 'text-destructive'
-                                        : formatExpiryWithDays(user.expiry_date_unix).daysLeft <= 7
-                                            ? 'text-yellow-500'
-                                            : 'text-muted-foreground'
-                                )}>
-                                    ({formatExpiryWithDays(user.expiry_date_unix).text})
-                                </span>
-                            </div>
-                        ) : (
-                            <span className="text-muted-foreground">No expiry</span>
-                        )}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 min-w-[80px]"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onToggleStatus()
-                            }}
-                        >
-                            <Power className={cn("h-3 w-3 mr-1", user.status ? "text-green-500" : "text-gray-400")} />
-                            {user.status ? 'Disable' : 'Enable'}
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 min-w-[80px]"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onResetUsage()
-                            }}
-                        >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Reset
-                        </Button>
-                        {subUrl && user.sub_id && (
-                            <CopyButton
-                                text={buildSubUrl(subUrl, user.sub_id)}
-                                label="Copy Sub"
-                                iconClassName="h-3 w-3 mr-1"
-                                className="flex-1 min-w-[80px]"
-                                onClickCapture={(e) => e.stopPropagation()}
-                            />
-                        )}
-                        {onRevoke && <Button size="sm" variant="outline" className="flex-1 min-w-[80px]" onClick={onRevoke}>Revoke Subscription</Button>}
-                        {subUrl && user.sub_id && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 min-w-[80px]"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onShowQr(user)
-                                }}
-                            >
-                                <QrCode className="h-3 w-3 mr-1" />
-                                QR
-                            </Button>
-                        )}
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 min-w-[80px]"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onEdit()
-                            }}
-                        >
-                            <Edit2 className="h-3 w-3 mr-1" />
-                            Edit
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="destructive"
-                            className="flex-1 min-w-[80px]"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onDelete()
-                            }}
-                        >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Delete
-                        </Button>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-
 
 /** Usage-billed («ادمین ویژه») admins see what they used, not a balance. */
 function MeteredUsageCard({ usage }: { usage: MeteredUsage }) {
